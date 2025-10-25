@@ -97,7 +97,7 @@ class OpenCAD {
     handleMouseDown(e) {
         const pos = this.getMousePos(e);
 
-        // Pan with middle mouse or space + left click
+        // Pan with middle mouse or shift + left click
         if (e.button === 1 || (e.button === 0 && e.shiftKey)) {
             this.isPanning = true;
             this.lastMousePos = { x: e.clientX, y: e.clientY };
