@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenCAD - Simple CAD Application</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>OpenCAD</h1>
+            <p>A Simple CAD Application</p>
+        </header>
+        
+        <div class="toolbar">
+            <div class="tool-section">
+                <h3>Tools</h3>
+                <button id="line-tool" class="tool-btn active" title="Draw Line">
+                    <svg width="24" height="24" viewBox="0 0 24 24">
+                        <line x1="4" y1="20" x2="20" y2="4" stroke="currentColor" stroke-width="2"/>
+                    </svg>
+                    Line
+                </button>
+                <button id="rectangle-tool" class="tool-btn" title="Draw Rectangle">
+                    <svg width="24" height="24" viewBox="0 0 24 24">
+                        <rect x="4" y="4" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"/>
+                    </svg>
+                    Rectangle
+                </button>
+                <button id="circle-tool" class="tool-btn" title="Draw Circle">
+                    <svg width="24" height="24" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/>
+                    </svg>
+                    Circle
+                </button>
+            </div>
+            
+            <div class="tool-section">
+                <h3>Settings</h3>
+                <div class="setting">
+                    <label for="color-picker">Color:</label>
+                    <input type="color" id="color-picker" value="#000000">
+                </div>
+                <div class="setting">
+                    <label for="line-width">Width:</label>
+                    <input type="range" id="line-width" min="1" max="10" value="2">
+                    <span id="width-value">2</span>px
+                </div>
+            </div>
+            
+            <div class="tool-section">
+                <h3>Actions</h3>
+                <button id="clear-btn" class="action-btn">Clear Canvas</button>
+            </div>
+        </div>
+        
+        <div class="canvas-container">
+            <canvas id="canvas"></canvas>
+        </div>
+        
+        <footer>
+            <p>Click and drag on the canvas to draw shapes</p>
+        </footer>
+    </div>
+    
+    <script src="app.js"></script>
+</body>
+</html>
