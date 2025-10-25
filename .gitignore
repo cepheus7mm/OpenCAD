@@ -1,0 +1,21 @@
+# Temporary files
+*.tmp
+*.log
+*.swp
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.sublime-*
+
+# Node modules (if added in future)
+node_modules/
+
+# Build artifacts
+dist/
+build/
