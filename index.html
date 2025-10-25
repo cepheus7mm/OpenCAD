@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenCAD - Development UI</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>OpenCAD</h1>
+            <div class="header-controls">
+                <button id="newBtn" class="btn">New</button>
+                <button id="saveBtn" class="btn">Save</button>
+                <button id="loadBtn" class="btn">Load</button>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <div class="main-content">
+            <!-- Toolbar -->
+            <div class="toolbar">
+                <h3>Tools</h3>
+                <div class="tool-group">
+                    <button id="selectTool" class="tool-btn active" title="Select">
+                        <svg width="24" height="24" viewBox="0 0 24 24">
+                            <path d="M3 3 L3 21 L9 15 L12 20 L14 19 L11 14 L18 14 Z" fill="currentColor"/>
+                        </svg>
+                    </button>
+                    <button id="lineTool" class="tool-btn" title="Line">
+                        <svg width="24" height="24" viewBox="0 0 24 24">
+                            <line x1="4" y1="20" x2="20" y2="4" stroke="currentColor" stroke-width="2"/>
+                        </svg>
+                    </button>
+                    <button id="rectangleTool" class="tool-btn" title="Rectangle">
+                        <svg width="24" height="24" viewBox="0 0 24 24">
+                            <rect x="4" y="6" width="16" height="12" fill="none" stroke="currentColor" stroke-width="2"/>
+                        </svg>
+                    </button>
+                    <button id="circleTool" class="tool-btn" title="Circle">
+                        <svg width="24" height="24" viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/>
+                        </svg>
+                    </button>
+                    <button id="deleteTool" class="tool-btn" title="Delete">
+                        <svg width="24" height="24" viewBox="0 0 24 24">
+                            <path d="M6 6 L18 18 M18 6 L6 18" stroke="currentColor" stroke-width="2"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="tool-group">
+                    <h4>View</h4>
+                    <button id="zoomInBtn" class="btn-small">Zoom In</button>
+                    <button id="zoomOutBtn" class="btn-small">Zoom Out</button>
+                    <button id="fitBtn" class="btn-small">Fit to View</button>
+                    <button id="gridToggle" class="btn-small">Toggle Grid</button>
+                </div>
+            </div>
+
+            <!-- Canvas Area -->
+            <div class="canvas-container">
+                <canvas id="cadCanvas"></canvas>
+                <div class="canvas-info">
+                    <span id="mouseCoords">X: 0, Y: 0</span>
+                    <span id="zoomLevel">Zoom: 100%</span>
+                </div>
+            </div>
+
+            <!-- Properties Panel -->
+            <div class="properties-panel">
+                <h3>Properties</h3>
+                <div id="propertiesContent">
+                    <p class="no-selection">No object selected</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
