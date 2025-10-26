@@ -1,0 +1,17 @@
+﻿<Application x:Class="UI.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:UI"
+             StartupUri="MainWindow.xaml">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!-- Load theme first (will be changed dynamically) -->
+                <ResourceDictionary Source="Themes/LightTheme.xaml" />
+                <!-- Load custom styles after theme -->
+                <ResourceDictionary Source="Themes/WindowChrome.xaml" />
+                <ResourceDictionary Source="Themes/AvalonDockTheme.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

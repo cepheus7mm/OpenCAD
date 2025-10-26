@@ -1,0 +1,29 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Page Remove="Themes\AvalonDockTheme.xaml" />
+    <Page Remove="Themes\DarkTheme.xaml" />
+    <Page Remove="Themes\LightTheme.xaml" />
+    <Page Remove="Themes\WindowChrome.xaml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AvalonDock.Themes.VS2013" Version="2.0.0.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Themes\AvalonDockTheme.xaml" />
+    <Resource Include="Themes\DarkTheme.xaml" />
+    <Resource Include="Themes\LightTheme.xaml" />
+    <Resource Include="Themes\WindowChrome.xaml" />
+  </ItemGroup>
+
+</Project>
