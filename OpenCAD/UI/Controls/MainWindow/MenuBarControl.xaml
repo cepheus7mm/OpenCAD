@@ -1,0 +1,37 @@
+<UserControl x:Class="UI.Controls.MainWindow.MenuBarControl"
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+	xmlns:local="clr-namespace:UI.Controls.MainWindow"
+    mc:Ignorable="d"
+	d:DesignHeight="25" d:DesignWidth="800">
+	<Menu Height="25" Background="{DynamicResource MenuBackgroundBrush}"
+          Foreground="{DynamicResource PrimaryTextBrush}">
+		<MenuItem Header="_File">
+			<MenuItem Header="_New" Click="NewFile_Click" />
+			<MenuItem Header="New _Viewport" Click="NewViewport_Click" />
+			<MenuItem Header="_Open" />
+			<Separator />
+			<MenuItem Header="_Exit" Click="Exit_Click" />
+		</MenuItem>
+		<MenuItem Header="_Edit">
+			<MenuItem Header="_Cut" />
+			<MenuItem Header="_Copy" />
+			<MenuItem Header="_Paste" />
+		</MenuItem>
+		<MenuItem Header="_View">
+			<MenuItem Header="_Solution Explorer" />
+			<MenuItem Header="_Properties" />
+			<MenuItem Header="_Output" />
+			<Separator />
+			<MenuItem Header="_Theme">
+				<MenuItem Header="_Light Theme" Name="LightThemeMenuItem" Click="LightTheme_Click" IsCheckable="True" IsChecked="True" />
+				<MenuItem Header="_Dark Theme" Name="DarkThemeMenuItem" Click="DarkTheme_Click" IsCheckable="True" />
+			</MenuItem>
+		</MenuItem>
+		<MenuItem Header="_Help">
+			<MenuItem Header="_About" />
+		</MenuItem>
+	</Menu>
+</UserControl>

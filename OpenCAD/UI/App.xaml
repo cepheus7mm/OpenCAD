@@ -8,9 +8,8 @@
             <ResourceDictionary.MergedDictionaries>
                 <!-- Load theme first (will be changed dynamically) -->
                 <ResourceDictionary Source="Themes/LightTheme.xaml" />
-                <!-- Load custom styles after theme -->
+                <!-- Load custom window chrome styles -->
                 <ResourceDictionary Source="Themes/WindowChrome.xaml" />
-                <ResourceDictionary Source="Themes/AvalonDockTheme.xaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>

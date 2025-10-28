@@ -1,9 +1,13 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
-VisualStudioVersion = 17.14.36429.23 d17.14
+VisualStudioVersion = 17.14.36429.23
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UI", "UI\UI.csproj", "{64420011-E309-4C76-973D-DD8F5E77FCAB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenCAD", "OpenCAD\OpenCAD.csproj", "{3A83C910-6108-4A08-879F-C674D6E0FE93}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GraphicsEngine", "GraphicsEngine\GraphicsEngine.csproj", "{8E695C06-CB82-4942-BA92-3FF1F8D028B6}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,6 +19,14 @@ Global
 		{64420011-E309-4C76-973D-DD8F5E77FCAB}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{64420011-E309-4C76-973D-DD8F5E77FCAB}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{64420011-E309-4C76-973D-DD8F5E77FCAB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3A83C910-6108-4A08-879F-C674D6E0FE93}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3A83C910-6108-4A08-879F-C674D6E0FE93}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3A83C910-6108-4A08-879F-C674D6E0FE93}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3A83C910-6108-4A08-879F-C674D6E0FE93}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8E695C06-CB82-4942-BA92-3FF1F8D028B6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8E695C06-CB82-4942-BA92-3FF1F8D028B6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8E695C06-CB82-4942-BA92-3FF1F8D028B6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8E695C06-CB82-4942-BA92-3FF1F8D028B6}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

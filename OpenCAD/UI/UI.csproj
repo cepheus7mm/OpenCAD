@@ -6,10 +6,10 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
 
   <ItemGroup>
-    <Page Remove="Themes\AvalonDockTheme.xaml" />
     <Page Remove="Themes\DarkTheme.xaml" />
     <Page Remove="Themes\LightTheme.xaml" />
     <Page Remove="Themes\WindowChrome.xaml" />
@@ -17,10 +17,16 @@
 
   <ItemGroup>
     <PackageReference Include="AvalonDock.Themes.VS2013" Version="2.0.0.5" />
+    <PackageReference Include="OpenTK.Graphics" Version="4.9.4" />
+    <PackageReference Include="OpenTK.Windowing.Common" Version="4.9.4" />
   </ItemGroup>
 
   <ItemGroup>
-    <Resource Include="Themes\AvalonDockTheme.xaml" />
+    <ProjectReference Include="..\GraphicsEngine\GraphicsEngine.csproj" />
+    <ProjectReference Include="..\OpenCAD\OpenCAD.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Resource Include="Themes\DarkTheme.xaml" />
     <Resource Include="Themes\LightTheme.xaml" />
     <Resource Include="Themes\WindowChrome.xaml" />

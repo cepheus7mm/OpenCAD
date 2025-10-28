@@ -1,0 +1,61 @@
+# Build results
+[Bb]in/
+[Oo]bj/
+*.user
+*.suo
+*.cache
+*.ilk
+*.log
+*.pdb
+*.vspscc
+*.vssscc
+*.dbmdl
+*.dbproj.schemaview
+*.jfm
+
+# Visual Studio folders
+**/.vs/
+**/.vscode/
+
+# NuGet packages
+*.nupkg
+packages/
+*.snupkg
+
+# Resharper
+*.DotSettings.user
+
+# Rider
+.idea/
+
+# User-specific files
+*.user
+*.userosscache
+*.sln.docstates
+
+# Web projects
+App_Data/
+*.publish.xml
+
+# WPF and WinForms designer files
+*.Designer.cs
+*.g.cs
+*.g.i.cs
+
+# Entity Framework
+Migrations/
+
+# Others
+TestResults/
+*.vsix
+*.psess
+*.vsp
+*.coverage
+*.coveragexml
+*.orig
+*.tmp
+*.bak
+*.swp
+
+# Ignore local secrets
+secrets.json

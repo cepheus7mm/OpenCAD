@@ -1,206 +1,30 @@
 ﻿<Window x:Class="UI.MainWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:UI"
-        xmlns:xcad="http://schemas.xceed.com/wpf/xaml/avalondock"
-        mc:Ignorable="d"
-        Title="OpenCAD" Height="600" Width="1000"
-        WindowState="Maximized"
-        Background="{DynamicResource PrimaryBackgroundBrush}"
-        Style="{DynamicResource ThemedWindowStyle}">
-    
-    <Grid Background="{DynamicResource PrimaryBackgroundBrush}">
-        <DockPanel>
-            <!-- Menu Bar -->
-            <Menu DockPanel.Dock="Top" Height="25" Background="{DynamicResource MenuBackgroundBrush}" 
-                  Foreground="{DynamicResource PrimaryTextBrush}">
-                <MenuItem Header="_File">
-                    <MenuItem Header="_New" Click="NewFile_Click" />
-                    <MenuItem Header="_Open" />
-                    <Separator />
-                    <MenuItem Header="_Exit" Click="Exit_Click" />
-                </MenuItem>
-                <MenuItem Header="_Edit">
-                    <MenuItem Header="_Cut" />
-                    <MenuItem Header="_Copy" />
-                    <MenuItem Header="_Paste" />
-                </MenuItem>
-                <MenuItem Header="_View">
-                    <MenuItem Header="_Solution Explorer" />
-                    <MenuItem Header="_Properties" />
-                    <MenuItem Header="_Output" />
-                    <Separator />
-                    <MenuItem Header="_Theme">
-                        <MenuItem Header="_Light Theme" Name="LightThemeMenuItem" Click="LightTheme_Click" IsCheckable="True" IsChecked="True" />
-                        <MenuItem Header="_Dark Theme" Name="DarkThemeMenuItem" Click="DarkTheme_Click" IsCheckable="True" />
-                    </MenuItem>
-                </MenuItem>
-                <MenuItem Header="_Help">
-                    <MenuItem Header="_About" />
-                </MenuItem>
-            </Menu>
-            
-            <!-- Toolbar -->
-            <ToolBarTray DockPanel.Dock="Top" Background="{DynamicResource ToolBarBackgroundBrush}">
-                <ToolBar Band="1" BandIndex="1" Background="{DynamicResource ToolBarBackgroundBrush}">
-                    <Button Content="New" Click="NewFile_Click" Style="{StaticResource ToolBarButtonStyle}" />
-                    <Button Content="Open" Style="{StaticResource ToolBarButtonStyle}" />
-                    <Button Content="Save" Style="{StaticResource ToolBarButtonStyle}" />
-                    <Separator />
-                    <Button Content="Cut" Style="{StaticResource ToolBarButtonStyle}" />
-                    <Button Content="Copy" Style="{StaticResource ToolBarButtonStyle}" />
-                    <Button Content="Paste" Style="{StaticResource ToolBarButtonStyle}" />
-                </ToolBar>
-            </ToolBarTray>
-            
-            <!-- Status Bar -->
-            <StatusBar DockPanel.Dock="Bottom" Height="25" Background="{DynamicResource StatusBarBackgroundBrush}"
-                       Foreground="{DynamicResource PrimaryTextBrush}">
-                <StatusBarItem>
-                    <TextBlock Text="Ready" />
-                </StatusBarItem>
-                <StatusBarItem HorizontalAlignment="Right">
-                    <TextBlock Text="Line 1, Col 1" />
-                </StatusBarItem>
-            </StatusBar>
-            
-            <!-- Main Docking Area -->
-            <xcad:DockingManager x:Name="dockingManager" AllowMixedOrientation="True"
-                                 Background="{DynamicResource PrimaryBackgroundBrush}"
-                                 Foreground="{DynamicResource PrimaryTextBrush}">
-                <!-- Layout Root -->
-                <xcad:LayoutRoot>
-                    <xcad:LayoutPanel Orientation="Horizontal">
-                        
-                        <!-- Left Panel - Solution Explorer, etc. -->
-                        <xcad:LayoutAnchorablePane DockWidth="250">
-                            <xcad:LayoutAnchorable ContentId="solutionExplorer" Title="Solution Explorer" CanHide="True" CanClose="False">
-                                <TreeView Background="{DynamicResource SecondaryBackgroundBrush}" 
-                                         Foreground="{DynamicResource PrimaryTextBrush}">
-                                    <TreeViewItem Header="Solution 'OpenCAD' (1 project)" IsExpanded="True">
-                                        <TreeViewItem Header="UI" IsExpanded="True">
-                                            <TreeViewItem Header="References" />
-                                            <TreeViewItem Header="MainWindow.xaml">
-                                                <TreeViewItem Header="MainWindow.xaml.cs" />
-                                            </TreeViewItem>
-                                            <TreeViewItem Header="App.xaml">
-                                                <TreeViewItem Header="App.xaml.cs" />
-                                            </TreeViewItem>
-                                        </TreeViewItem>
-                                    </TreeViewItem>
-                                </TreeView>
-                            </xcad:LayoutAnchorable>
-                        </xcad:LayoutAnchorablePane>
-                        
-                        <xcad:LayoutPanel Orientation="Vertical">
-                            <!-- Center Panel - Document Area -->
-                            <xcad:LayoutDocumentPane>
-                                <xcad:LayoutDocument ContentId="document1" Title="MainWindow.xaml" CanClose="True">
-                                    <TextBox AcceptsReturn="True" AcceptsTab="True" VerticalScrollBarVisibility="Auto" 
-                                            HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="12"
-                                            Background="{DynamicResource PrimaryBackgroundBrush}"
-                                            Foreground="{DynamicResource PrimaryTextBrush}"
-                                            Text="&lt;Window x:Class=&quot;UI.MainWindow&quot;&#x0A;        xmlns=&quot;http://schemas.microsoft.com/winfx/2006/xaml/presentation&quot;&#x0A;        xmlns:x=&quot;http://schemas.microsoft.com/winfx/2006/xaml&quot;&gt;&#x0A;    &lt;Grid&gt;&#x0A;        &lt;!-- Your content here --&gt;&#x0A;    &lt;/Grid&gt;&#x0A;&lt;/Window&gt;" />
-                                </xcad:LayoutDocument>
-                                <xcad:LayoutDocument ContentId="document2" Title="MainWindow.xaml.cs" CanClose="True">
-                                    <TextBox AcceptsReturn="True" AcceptsTab="True" VerticalScrollBarVisibility="Auto" 
-                                            HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="12"
-                                            Background="{DynamicResource PrimaryBackgroundBrush}"
-                                            Foreground="{DynamicResource PrimaryTextBrush}"
-                                            Text="using System.Windows;&#x0A;&#x0A;namespace UI&#x0A;{&#x0A;    public partial class MainWindow : Window&#x0A;    {&#x0A;        public MainWindow()&#x0A;        {&#x0A;            InitializeComponent();&#x0A;        }&#x0A;    }&#x0A;}" />
-                                </xcad:LayoutDocument>
-                            </xcad:LayoutDocumentPane>
-                            
-                            <!-- Bottom Panel - Output, Error List, etc. -->
-                            <xcad:LayoutAnchorablePane DockHeight="150">
-                                <xcad:LayoutAnchorable ContentId="output" Title="Output" CanHide="True" CanClose="False">
-                                    <TextBox IsReadOnly="True" VerticalScrollBarVisibility="Auto" 
-                                            FontFamily="Consolas" FontSize="11" 
-                                            Background="{DynamicResource OutputBackgroundBrush}" 
-                                            Foreground="{DynamicResource OutputForegroundBrush}"
-                                            Text="Build started...&#x0A;1&gt;------ Build started: Project: UI, Configuration: Debug Any CPU ------&#x0A;1&gt;  UI -&gt; bin\Debug\net8.0-windows\UI.exe&#x0A;========== Build: 1 succeeded, 0 failed, 0 up-to-date, 0 skipped ==========&#x0A;" />
-                                </xcad:LayoutAnchorable>
-                                <xcad:LayoutAnchorable ContentId="errorList" Title="Error List" CanHide="True" CanClose="False">
-                                    <DataGrid AutoGenerateColumns="False" IsReadOnly="True"
-                                             Background="{DynamicResource SecondaryBackgroundBrush}"
-                                             Foreground="{DynamicResource PrimaryTextBrush}">
-                                        <DataGrid.Columns>
-                                            <DataGridTextColumn Header="" Width="20" />
-                                            <DataGridTextColumn Header="Description" Width="*" />
-                                            <DataGridTextColumn Header="File" Width="150" />
-                                            <DataGridTextColumn Header="Line" Width="50" />
-                                        </DataGrid.Columns>
-                                    </DataGrid>
-                                </xcad:LayoutAnchorable>
-                            </xcad:LayoutAnchorablePane>
-                        </xcad:LayoutPanel>
-                        
-                        <!-- Right Panel - Properties, etc. -->
-                        <xcad:LayoutAnchorablePane DockWidth="250">
-                            <xcad:LayoutAnchorable ContentId="properties" Title="Properties" CanHide="True" CanClose="False">
-                                <Grid Background="{DynamicResource SecondaryBackgroundBrush}">
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="*" />
-                                    </Grid.RowDefinitions>
-                                    
-                                    <ComboBox Grid.Row="0" Margin="5" Height="25"
-                                             Background="{DynamicResource PrimaryBackgroundBrush}"
-                                             Foreground="{DynamicResource PrimaryTextBrush}">
-                                        <ComboBoxItem Content="MainWindow" IsSelected="True" />
-                                    </ComboBox>
-                                    
-                                    <ListView Grid.Row="1" Background="{DynamicResource SecondaryBackgroundBrush}"
-                                             Foreground="{DynamicResource PrimaryTextBrush}">
-                                        <ListViewItem>
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="100" />
-                                                    <ColumnDefinition Width="*" />
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="Name" />
-                                                <TextBlock Grid.Column="1" Text="MainWindow" />
-                                            </Grid>
-                                        </ListViewItem>
-                                        <ListViewItem>
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="100" />
-                                                    <ColumnDefinition Width="*" />
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="Title" />
-                                                <TextBlock Grid.Column="1" Text="OpenCAD" />
-                                            </Grid>
-                                        </ListViewItem>
-                                        <ListViewItem>
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="100" />
-                                                    <ColumnDefinition Width="*" />
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="Width" />
-                                                <TextBlock Grid.Column="1" Text="1000" />
-                                            </Grid>
-                                        </ListViewItem>
-                                        <ListViewItem>
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="100" />
-                                                    <ColumnDefinition Width="*" />
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="Height" />
-                                                <TextBlock Grid.Column="1" Text="600" />
-                                            </Grid>
-                                        </ListViewItem>
-                                    </ListView>
-                                </Grid>
-                            </xcad:LayoutAnchorable>
-                        </xcad:LayoutAnchorablePane>
-                    </xcad:LayoutPanel>
-                </xcad:LayoutRoot>
-            </xcad:DockingManager>
-        </DockPanel>
-    </Grid>
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+	xmlns:local="clr-namespace:UI"
+	xmlns:xcad="http://schemas.xceed.com/wpf/xaml/avalondock"
+	xmlns:controls="clr-namespace:UI.Controls.MainWindow"
+	mc:Ignorable="d"
+	Title="OpenCAD" Height="600" Width="1000"
+	WindowState="Maximized"
+	Background="{DynamicResource PrimaryBackgroundBrush}"
+	Style="{DynamicResource ThemedWindowStyle}">
+
+	<Grid Background="{DynamicResource PrimaryBackgroundBrush}">
+		<DockPanel>
+			<!-- Menu Bar -->
+			<controls:MenuBarControl x:Name="menuBar" DockPanel.Dock="Top" />
+
+			<!-- Toolbar -->
+			<controls:ToolBarControl x:Name="toolBar" DockPanel.Dock="Top" />
+
+			<!-- Status Bar -->
+			<controls:StatusBarControl x:Name="statusBar" DockPanel.Dock="Bottom" />
+
+			<!-- Main Docking Area -->
+			<controls:DockingAreaControl x:Name="dockingArea" />
+		</DockPanel>
+	</Grid>
 </Window>

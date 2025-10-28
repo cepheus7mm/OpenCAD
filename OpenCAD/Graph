@@ -1,0 +1,53 @@
+icsEngine\GraphicsEngine.cs
+/// <summary>
+/// Renderer for Line geometry
+/// </summary>
+public class LineRenderer : IRenderer
+{
+    public bool CanRender(OpenCADObject obj)
+    {
+        return obj is Line;
+    }
+
+    public void Render(OpenCADObject obj, Matrix4x4 viewMatrix, Matrix4x4 projectionMatrix)
+    {
+        if (obj is not Line line) return;
+
+        var start = line.Start;
+        var end = line.End;
+
+        System.Diagnostics.Debug.WriteLine($"Rendering line: ({start.X},{start.Y},{start.Z}) to ({end.X},{end.Y},{end.Z})");
+
+        // Use legacy OpenGL compatibility mode
+        GL.MatrixMode(MatrixMode.Projection);
+        LoadMatrix(projectionMatrix);
+        
+        GL.MatrixMode(MatrixMode.Modelview);
+        LoadMatrix(viewMatrix);
+        
+        // Set line properties
+        GL.Color3(1.0f, 1.0f, 1.0f); // White lines
+        GL.LineWidth(2.0f);
+        
+        // Draw line
+        GL.Begin(PrimitiveType.Lines);
+        GL.Vertex3(start.X, start.Y, start.Z);
+        GL.Vertex3(end.X, end.Y, end.Z);
+        GL.End();
+        
+        System.Diagnostics.Debug.WriteLine("Line rendered");
+    }
+
+    private void LoadMatrix(Matrix4x4 matrix)
+    {
+        // OpenGL uses column-major order
+        float[] matrixArray = new float[16]
+        {
+            matrix.M11, matrix.M21, matrix.M31, matrix.M41,
+            matrix.M12, matrix.M22, matrix.M32, matrix.M42,
+            matrix.M13, matrix.M23, matrix.M33, matrix.M43,
+            matrix.M14, matrix.M24, matrix.M34, matrix.M44
+        };
+        GL.LoadMatrix(matrixArray);
+    }
+}

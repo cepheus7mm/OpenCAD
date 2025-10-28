@@ -1,0 +1,11 @@
+{
+  "profiles": {
+    "UI": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "OPENCAD_SMOKE_TEST": "0"
+      },
+      "remoteDebugEnabled": true
+    }
+  }
+}

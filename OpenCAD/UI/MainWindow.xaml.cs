@@ -9,6 +9,10 @@ using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
 using Xceed.Wpf.AvalonDock.Layout;
+using UI.Controls.Viewport;
+using OpenCAD.Geometry;
+
+using OCad = OpenCAD.Geometry;
 
 namespace UI
 {
@@ -22,8 +26,25 @@ namespace UI
             InitializeComponent();
             InitializeDockingSystem();
             
+            // Hook up menu bar events
+            menuBar.NewFileRequested += (s, e) => NewFile_Click(s!, new RoutedEventArgs());
+            menuBar.ExitRequested += (s, e) => Exit_Click(s!, new RoutedEventArgs());
+            menuBar.LightThemeRequested += (s, e) => LightTheme_Click(s!, new RoutedEventArgs());
+            menuBar.DarkThemeRequested += (s, e) => DarkTheme_Click(s!, new RoutedEventArgs());
+            
+            // Hook up toolbar events
+            toolBar.NewFileRequested += (s, e) => NewFile_Click(s!, new RoutedEventArgs());
+            toolBar.OpenRequested += (s, e) => Open_Click(s!, new RoutedEventArgs());
+            toolBar.SaveRequested += (s, e) => Save_Click(s!, new RoutedEventArgs());
+            toolBar.CutRequested += (s, e) => Cut_Click(s!, new RoutedEventArgs());
+            toolBar.CopyRequested += (s, e) => Copy_Click(s!, new RoutedEventArgs());
+            toolBar.PasteRequested += (s, e) => Paste_Click(s!, new RoutedEventArgs());
+            
             // Hook up titlebar button events when the window is loaded
             this.Loaded += MainWindow_Loaded;
+            
+            // Hook up menu bar viewport event
+            menuBar.NewViewportRequested += (s, e) => CreateViewport_Click(s!, new RoutedEventArgs());
         }
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -88,40 +109,42 @@ namespace UI
 
         private void InitializeDockingSystem()
         {
-            // You can programmatically add more dock panels here
-            // For example, add event handlers for opening/closing panels
+            // The docking system is now initialized in the DockingAreaControl
+            // You can add additional initialization here if needed
         }
 
         #region Menu Event Handlers
 
         private void NewFile_Click(object sender, RoutedEventArgs e)
         {
-            // Add a new document tab
-            var documentPane = dockingManager.Layout.RootPanel.Children[0] as LayoutPanel;
-            var docPaneGroup = documentPane?.Children[1] as LayoutPanel;
-            var docPane = docPaneGroup?.Children[0] as LayoutDocumentPane;
-            
+            // Create new document content
+            var newTextBox = new TextBox
+            {
+                AcceptsReturn = true,
+                AcceptsTab = true,
+                FontFamily = new FontFamily("Consolas"),
+                FontSize = 12,
+                Text = "// New document"
+            };
+
+            // Apply current theme to the new document
+            ApplyThemeToTextBox(newTextBox);
+
+            // Get the document pane and add the new document
+            var docPane = dockingArea.GetDocumentPane();
             if (docPane != null)
             {
-                var newDoc = new LayoutDocument
+                var newDoc = dockingArea.AddDocument(
+                    $"Document{docPane.Children.Count + 1}",
+                    $"doc{docPane.Children.Count + 1}",
+                    newTextBox
+                );
+
+                if (newDoc != null)
                 {
-                    Title = $"Document{docPane.Children.Count + 1}",
-                    ContentId = $"doc{docPane.Children.Count + 1}",
-                    Content = new TextBox 
-                    { 
-                        AcceptsReturn = true, 
-                        AcceptsTab = true,
-                        FontFamily = new FontFamily("Consolas"),
-                        FontSize = 12,
-                        Text = "// New document"
-                    }
-                };
-                
-                // Apply current theme to the new document
-                ApplyThemeToTextBox(newDoc.Content as TextBox);
-                
-                docPane.Children.Add(newDoc);
-                newDoc.IsSelected = true;
+                    // Update status bar
+                    statusBar.UpdateStatus($"Created new document: {newDoc.Title}");
+                }
             }
         }
 
@@ -132,20 +155,69 @@ namespace UI
 
         #endregion
 
+        #region Toolbar Event Handlers
+
+        private void Open_Click(object sender, RoutedEventArgs e)
+        {
+            // TODO: Implement file open functionality
+            statusBar.UpdateStatus("Opening file...");
+            MessageBox.Show("Open file functionality not yet implemented.", "Open File", 
+            MessageBoxButton.OK, MessageBoxImage.Information);
+            statusBar.UpdateStatus("Ready");
+        }
+
+        private void Save_Click(object sender, RoutedEventArgs e)
+        {
+            // TODO: Implement file save functionality
+            statusBar.UpdateStatus("Saving file...");
+            MessageBox.Show("Save file functionality not yet implemented.", "Save File", 
+       MessageBoxButton.OK, MessageBoxImage.Information);
+    statusBar.UpdateStatus("Ready");
+        }
+
+        private void Cut_Click(object sender, RoutedEventArgs e)
+        {
+            // TODO: Implement cut functionality
+            statusBar.UpdateStatus("Cut operation");
+   MessageBox.Show("Cut functionality not yet implemented.", "Cut", 
+      MessageBoxButton.OK, MessageBoxImage.Information);
+   statusBar.UpdateStatus("Ready");
+        }
+
+        private void Copy_Click(object sender, RoutedEventArgs e)
+ {
+            // TODO: Implement copy functionality
+     statusBar.UpdateStatus("Copy operation");
+     MessageBox.Show("Copy functionality not yet implemented.", "Copy", 
+            MessageBoxButton.OK, MessageBoxImage.Information);
+            statusBar.UpdateStatus("Ready");
+ }
+
+        private void Paste_Click(object sender, RoutedEventArgs e)
+   {
+            // TODO: Implement paste functionality
+       statusBar.UpdateStatus("Paste operation");
+     MessageBox.Show("Paste functionality not yet implemented.", "Paste", 
+   MessageBoxButton.OK, MessageBoxImage.Information);
+      statusBar.UpdateStatus("Ready");
+        }
+
+        #endregion
+
         #region Theme Event Handlers
 
         private void LightTheme_Click(object sender, RoutedEventArgs e)
         {
             ApplyTheme("Themes/LightTheme.xaml");
-            LightThemeMenuItem.IsChecked = true;
-            DarkThemeMenuItem.IsChecked = false;
+            menuBar.UpdateThemeSelection(isLightTheme: true);
+            statusBar.UpdateStatus("Light theme applied");
         }
 
         private void DarkTheme_Click(object sender, RoutedEventArgs e)
         {
             ApplyTheme("Themes/DarkTheme.xaml");
-            LightThemeMenuItem.IsChecked = false;
-            DarkThemeMenuItem.IsChecked = true;
+            menuBar.UpdateThemeSelection(isLightTheme: false);
+            statusBar.UpdateStatus("Dark theme applied");
         }
 
         #endregion
@@ -195,20 +267,8 @@ namespace UI
 
         private void ApplyThemeToExistingDocuments()
         {
-            // Find all LayoutDocuments and apply theme to their TextBox content
-            var layoutRoot = dockingManager.Layout;
-            if (layoutRoot?.RootPanel?.Children[0] is LayoutPanel mainPanel &&
-                mainPanel.Children[1] is LayoutPanel centerPanel &&
-                centerPanel.Children[0] is LayoutDocumentPane docPane)
-            {
-                foreach (var document in docPane.Children.OfType<LayoutDocument>())
-                {
-                    if (document.Content is TextBox textBox)
-                    {
-                        ApplyThemeToTextBox(textBox);
-                    }
-                }
-            }
+            // Use the DockingAreaControl's method to apply theme
+            dockingArea.ApplyThemeToDocuments();
         }
 
         private void ApplyThemeToTextBox(TextBox? textBox)
@@ -218,6 +278,60 @@ namespace UI
             // Apply theme resources to TextBox
             textBox.SetResourceReference(Control.BackgroundProperty, "PrimaryBackgroundBrush");
             textBox.SetResourceReference(Control.ForegroundProperty, "PrimaryTextBrush");
+        }
+
+        #endregion
+
+        #region Viewport Event Handlers
+
+        private void CreateViewport_Click(object sender, RoutedEventArgs e)
+        {
+            // Create viewport control
+            var viewport = new ViewportControl();
+            
+            // Wire up the status bar
+            viewport.SetStatusBar(statusBar);
+
+            // Add some sample geometry for testing
+            var line1 = new OCad.Line(
+                new Point3D(0, 0, 0),
+                new Point3D(5, 5, 5)
+            );
+            viewport.AddObject(line1);
+
+            var line2 = new OCad.Line(
+                new Point3D(-3, 0, 0),
+                new Point3D(3, 0, 0)
+            );
+            viewport.AddObject(line2);
+
+            var line3 = new OCad.Line(
+                new Point3D(0, -3, 0),
+                new Point3D(0, 3, 0)
+            );
+            viewport.AddObject(line3);
+
+            var line4 = new OCad.Line(
+                new Point3D(0, 0, -3),
+                new Point3D(0, 0, 3)
+            );
+            viewport.AddObject(line4);
+
+            // Get the document pane and add the viewport
+            var docPane = dockingArea.GetDocumentPane();
+            if (docPane != null)
+            {
+                var newDoc = dockingArea.AddDocument(
+                    $"Viewport {docPane.Children.Count + 1}",
+                    $"viewport{docPane.Children.Count + 1}",
+                    viewport
+                );
+
+                if (newDoc != null)
+                {
+                    statusBar.UpdateStatus($"Created new viewport: {newDoc.Title}");
+                }
+            }
         }
 
         #endregion
