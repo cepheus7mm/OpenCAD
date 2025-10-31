@@ -7,6 +7,6 @@
              mc:Ignorable="d" 
              d:DesignHeight="450" d:DesignWidth="800">
     <Grid Background="{DynamicResource PrimaryBackgroundBrush}">
-        <wpf:GLWpfControl x:Name="GlControl" />
+        <wpf:GLWpfControl x:Name="GlWPFControl" />
     </Grid>
 </UserControl>

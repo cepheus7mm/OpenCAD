@@ -11,6 +11,7 @@ using System.Windows.Shapes;
 using Xceed.Wpf.AvalonDock.Layout;
 using UI.Controls.Viewport;
 using OpenCAD.Geometry;
+using OpenCAD;
 
 using OCad = OpenCAD.Geometry;
 
@@ -21,6 +22,8 @@ namespace UI
     /// </summary>
     public partial class MainWindow : Window
     {
+        private int _documentCounter = 0;
+
         public MainWindow()
         {
             InitializeComponent();
@@ -45,6 +48,9 @@ namespace UI
             
             // Hook up menu bar viewport event
             menuBar.NewViewportRequested += (s, e) => CreateViewport_Click(s!, new RoutedEventArgs());
+            
+            // Hook up command input event
+            dockingArea.CommandInput.GeometryCreated += CommandInput_GeometryCreated;
         }
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -113,37 +119,65 @@ namespace UI
             // You can add additional initialization here if needed
         }
 
+        #region Command Input Handlers
+
+        private void CommandInput_GeometryCreated(object? sender, UI.Controls.MainWindow.GeometryCreatedEventArgs e)
+        {
+            // Get the currently selected document
+            var docPane = dockingArea.GetDocumentPane();
+            if (docPane != null)
+            {
+                var selectedDoc = docPane.SelectedContent as LayoutDocument;
+                if (selectedDoc?.Content is ViewportControl viewport)
+                {
+                    // Add the geometry to the current document via the viewport
+                    viewport.AddObject(e.Geometry);
+                    
+                    statusBar.UpdateStatus($"Geometry added to {selectedDoc.Title}");
+                }
+                else
+                {
+                    statusBar.UpdateStatus("No active document. Create a new document first.");
+                }
+            }
+        }
+
+        #endregion
+
         #region Menu Event Handlers
 
         private void NewFile_Click(object sender, RoutedEventArgs e)
         {
-            // Create new document content
-            var newTextBox = new TextBox
-            {
-                AcceptsReturn = true,
-                AcceptsTab = true,
-                FontFamily = new FontFamily("Consolas"),
-                FontSize = 12,
-                Text = "// New document"
-            };
+            _documentCounter++;
+            
+            // Create a new OpenCAD document
+            var document = new OpenCADDocument(
+                $"Document{_documentCounter}.cad",
+                $"New document created {DateTime.Now:yyyy-MM-dd HH:mm:ss}"
+            );
 
-            // Apply current theme to the new document
-            ApplyThemeToTextBox(newTextBox);
+            // Create viewport control for the document, passing the document to the constructor
+            var viewport = new ViewportControl(document);
+            
+            // Wire up the status bar
+            viewport.SetStatusBar(statusBar);
 
-            // Get the document pane and add the new document
+            // **ADD THIS: Set the document in the command input control**
+            dockingArea.CommandInput.SetDocument(document);
+
+            // Get the document pane and add the viewport with the document
             var docPane = dockingArea.GetDocumentPane();
             if (docPane != null)
             {
                 var newDoc = dockingArea.AddDocument(
-                    $"Document{docPane.Children.Count + 1}",
-                    $"doc{docPane.Children.Count + 1}",
-                    newTextBox
+                    document.Filename,
+                    $"doc{_documentCounter}",
+                    viewport
                 );
 
                 if (newDoc != null)
                 {
-                    // Update status bar
-                    statusBar.UpdateStatus($"Created new document: {newDoc.Title}");
+                    statusBar.UpdateStatus($"Created new document: {document.Filename}");
                 }
             }
         }
@@ -170,36 +204,66 @@ namespace UI
         {
             // TODO: Implement file save functionality
             statusBar.UpdateStatus("Saving file...");
-            MessageBox.Show("Save file functionality not yet implemented.", "Save File", 
-       MessageBoxButton.OK, MessageBoxImage.Information);
-    statusBar.UpdateStatus("Ready");
+            
+            // Get the currently selected document
+            var docPane = dockingArea.GetDocumentPane();
+            if (docPane != null)
+            {
+                var selectedDoc = docPane.SelectedContent as LayoutDocument;
+                if (selectedDoc?.Content is ViewportControl viewport)
+                {
+                    // Access the OpenCADDocument through the viewport
+                    var openCADDoc = viewport.ObjectToDisplay as OpenCADDocument;
+                    if (openCADDoc != null)
+                    {
+                        // TODO: Implement actual save logic here
+                        MessageBox.Show(
+                            $"Saving: {openCADDoc.Filename}\nDescription: {openCADDoc.Description}", 
+                            "Save File", 
+                            MessageBoxButton.OK, 
+                            MessageBoxImage.Information);
+                    }
+                    else
+                    {
+                        MessageBox.Show("No document to save.", "Save File", 
+                            MessageBoxButton.OK, MessageBoxImage.Warning);
+                    }
+                }
+                else
+                {
+                    MessageBox.Show("No document selected.", "Save File", 
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
+            }
+            
+            statusBar.UpdateStatus("Ready");
         }
 
         private void Cut_Click(object sender, RoutedEventArgs e)
         {
             // TODO: Implement cut functionality
             statusBar.UpdateStatus("Cut operation");
-   MessageBox.Show("Cut functionality not yet implemented.", "Cut", 
-      MessageBoxButton.OK, MessageBoxImage.Information);
-   statusBar.UpdateStatus("Ready");
+            MessageBox.Show("Cut functionality not yet implemented.", "Cut", 
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            statusBar.UpdateStatus("Ready");
         }
 
         private void Copy_Click(object sender, RoutedEventArgs e)
- {
+        {
             // TODO: Implement copy functionality
-     statusBar.UpdateStatus("Copy operation");
-     MessageBox.Show("Copy functionality not yet implemented.", "Copy", 
-            MessageBoxButton.OK, MessageBoxImage.Information);
+            statusBar.UpdateStatus("Copy operation");
+            MessageBox.Show("Copy functionality not yet implemented.", "Copy", 
+                MessageBoxButton.OK, MessageBoxImage.Information);
             statusBar.UpdateStatus("Ready");
- }
+        }
 
         private void Paste_Click(object sender, RoutedEventArgs e)
-   {
+        {
             // TODO: Implement paste functionality
-       statusBar.UpdateStatus("Paste operation");
-     MessageBox.Show("Paste functionality not yet implemented.", "Paste", 
-   MessageBoxButton.OK, MessageBoxImage.Information);
-      statusBar.UpdateStatus("Ready");
+            statusBar.UpdateStatus("Paste operation");
+            MessageBox.Show("Paste functionality not yet implemented.", "Paste", 
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            statusBar.UpdateStatus("Ready");
         }
 
         #endregion
@@ -286,36 +350,39 @@ namespace UI
 
         private void CreateViewport_Click(object sender, RoutedEventArgs e)
         {
-            // Create viewport control
-            var viewport = new ViewportControl();
-            
-            // Wire up the status bar
-            viewport.SetStatusBar(statusBar);
+            // Create a temporary OpenCADObject to hold test geometry
+            var testContainer = new OpenCADObject();
 
             // Add some sample geometry for testing
             var line1 = new OCad.Line(
                 new Point3D(0, 0, 0),
                 new Point3D(5, 5, 5)
             );
-            viewport.AddObject(line1);
+            testContainer.Add(line1);
 
             var line2 = new OCad.Line(
                 new Point3D(-3, 0, 0),
                 new Point3D(3, 0, 0)
             );
-            viewport.AddObject(line2);
+            testContainer.Add(line2);
 
             var line3 = new OCad.Line(
                 new Point3D(0, -3, 0),
                 new Point3D(0, 3, 0)
             );
-            viewport.AddObject(line3);
+            testContainer.Add(line3);
 
             var line4 = new OCad.Line(
                 new Point3D(0, 0, -3),
                 new Point3D(0, 0, 3)
             );
-            viewport.AddObject(line4);
+            testContainer.Add(line4);
+
+            // Create viewport control with the test container
+            var viewport = new ViewportControl(testContainer);
+            
+            // Wire up the status bar
+            viewport.SetStatusBar(statusBar);
 
             // Get the document pane and add the viewport
             var docPane = dockingArea.GetDocumentPane();

@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using UI.Controls.Viewport;
 using Xceed.Wpf.AvalonDock;
 using Xceed.Wpf.AvalonDock.Layout;
 
@@ -14,12 +15,21 @@ namespace UI.Controls.MainWindow
 		public DockingAreaControl()
 		{
 			InitializeComponent();
+
+			// Wire up the viewport provider so commands can dynamically access the active viewport
+			CommandInput.SetActiveViewportProvider(() => GetActiveViewport());
+			System.Diagnostics.Debug.WriteLine("DockingAreaControl: Viewport provider wired to CommandInput");
 		}
 
 		/// <summary>
 		/// Gets the DockingManager instance for programmatic access
 		/// </summary>
 		public DockingManager DockingManager => dockingManager;
+
+		/// <summary>
+		/// Gets the CommandInputControl for wiring up events
+		/// </summary>
+		public CommandInputControl CommandInput => commandInputControl;
 
 		/// <summary>
 		/// Gets the document pane where document tabs are displayed
@@ -109,6 +119,52 @@ namespace UI.Controls.MainWindow
 		{
 			textBox.SetResourceReference(Control.BackgroundProperty, "PrimaryBackgroundBrush");
 			textBox.SetResourceReference(Control.ForegroundProperty, "PrimaryTextBrush");
+		}
+    
+		/// <summary>
+		/// Get the currently active viewport control from the document pane
+		/// </summary>
+		public ViewportControl? GetActiveViewport()
+		{
+			var docPane = GetDocumentPane();
+			if (docPane == null)
+			{
+				System.Diagnostics.Debug.WriteLine("GetActiveViewport: No document pane found");
+				return null;
+			}
+
+			System.Diagnostics.Debug.WriteLine($"GetActiveViewport: Document pane has {docPane.Children.Count} children");
+
+			// Find the selected document in the document pane
+			var selectedDoc = docPane.Children.OfType<LayoutDocument>()
+				.FirstOrDefault(d => d.IsSelected);
+
+			if (selectedDoc == null)
+			{
+				System.Diagnostics.Debug.WriteLine("GetActiveViewport: No selected document found");
+				
+				// Log what documents exist
+				foreach (var doc in docPane.Children.OfType<LayoutDocument>())
+				{
+					System.Diagnostics.Debug.WriteLine($"  Document: '{doc.Title}', Content type: {doc.Content?.GetType().Name ?? "null"}");
+				}
+				
+				return null;
+			}
+
+			System.Diagnostics.Debug.WriteLine($"GetActiveViewport: Selected document is '{selectedDoc.Title}', Content type: {selectedDoc.Content?.GetType().Name ?? "null"}");
+
+			// Check if the selected document contains a ViewportControl
+			if (selectedDoc.Content is ViewportControl viewport)
+			{
+				System.Diagnostics.Debug.WriteLine($"GetActiveViewport: Found active viewport for '{selectedDoc.Title}'");
+				return viewport;
+			}
+			else
+			{
+				System.Diagnostics.Debug.WriteLine($"GetActiveViewport: Selected document '{selectedDoc.Title}' does not contain a ViewportControl (contains {selectedDoc.Content?.GetType().Name ?? "null"})");
+				return null;
+			}
 		}
 	}
 }

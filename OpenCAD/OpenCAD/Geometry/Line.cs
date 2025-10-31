@@ -8,10 +8,13 @@ namespace OpenCAD.Geometry
 {
     public class Line : GeometryBase
     {
+        
+
         public Line(Point3D start, Point3D end)
         {
             properties.TryAdd(0, new Property(PropertyType.PointStart, start));
             properties.TryAdd(1, new Property(PropertyType.PointEnd, end));
+            _isDrawable = true;
         }
 
         public Point3D Start => (Point3D)properties[0].Value;

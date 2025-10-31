@@ -53,8 +53,11 @@
 						</xcad:LayoutDocument>
 					</xcad:LayoutDocumentPane>
 
-					<!-- Bottom Panel - Output, Error List, etc. -->
+					<!-- Bottom Panel - Command Input, Output, Error List, etc. -->
 					<xcad:LayoutAnchorablePane DockHeight="150">
+						<xcad:LayoutAnchorable x:Name="commandInputAnchorable" ContentId="commandInput" Title="Command Input" CanHide="True" CanClose="False">
+							<local:CommandInputControl x:Name="commandInputControl"/>
+						</xcad:LayoutAnchorable>
 						<xcad:LayoutAnchorable ContentId="output" Title="Output" CanHide="True" CanClose="False">
 							<TextBox IsReadOnly="True" VerticalScrollBarVisibility="Auto" 
 									FontFamily="Consolas" FontSize="11" 

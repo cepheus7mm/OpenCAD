@@ -79,7 +79,8 @@ namespace GraphicsEngine
 
             // Quick object/reporting checks
             int count = 0;
-            foreach (var obj in objects)
+            var drawableObjects = objects.Where(o => o.IsDrawable).ToList();
+            foreach (var obj in drawableObjects)
             {
                 count++;
                 RenderObject(obj);
