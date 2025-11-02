@@ -1,0 +1,11 @@
+{
+  "profiles": {
+    "OpenCAD": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "OPENCAD_DEBUG_TILT": "1",
+        "OPENCAD_CPU_ORTHO": "1"
+      }
+    }
+  }
+}

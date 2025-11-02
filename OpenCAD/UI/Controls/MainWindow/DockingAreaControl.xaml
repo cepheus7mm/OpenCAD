@@ -83,60 +83,16 @@
 				<!-- Right Panel - Properties, etc. -->
 				<xcad:LayoutAnchorablePane DockWidth="250">
 					<xcad:LayoutAnchorable ContentId="properties" Title="Properties" CanHide="True" CanClose="False">
-						<Grid Background="{DynamicResource SecondaryBackgroundBrush}">
-							<Grid.RowDefinitions>
-								<RowDefinition Height="Auto" />
-								<RowDefinition Height="*" />
-							</Grid.RowDefinitions>
-
-							<ComboBox Grid.Row="0" Margin="5" Height="25"
-									 Background="{DynamicResource PrimaryBackgroundBrush}"
-									 Foreground="{DynamicResource PrimaryTextBrush}">
-								<ComboBoxItem Content="MainWindow" IsSelected="True" />
-							</ComboBox>
-
-							<ListView Grid.Row="1" Background="{DynamicResource SecondaryBackgroundBrush}"
-									 Foreground="{DynamicResource PrimaryTextBrush}">
-								<ListViewItem>
-									<Grid>
-										<Grid.ColumnDefinitions>
-											<ColumnDefinition Width="100" />
-											<ColumnDefinition Width="*" />
-										</Grid.ColumnDefinitions>
-										<TextBlock Grid.Column="0" Text="Name" />
-										<TextBlock Grid.Column="1" Text="MainWindow" />
-									</Grid>
-								</ListViewItem>
-								<ListViewItem>
-									<Grid>
-										<Grid.ColumnDefinitions>
-											<ColumnDefinition Width="100" />
-											<ColumnDefinition Width="*" />
-										</Grid.ColumnDefinitions>
-										<TextBlock Grid.Column="0" Text="Title" />
-										<TextBlock Grid.Column="1" Text="OpenCAD" />
-									</Grid>
-								</ListViewItem>
-								<ListViewItem>
-									<Grid>
-										<Grid.ColumnDefinitions>
-											<ColumnDefinition Width="100" />
-											<ColumnDefinition Width="*" />
-										</Grid.ColumnDefinitions>
-										<TextBlock Grid.Column="0" Text="Width" />
-										<TextBlock Grid.Column="1" Text="1000" />
-									</Grid>
-								</ListViewItem>
-								<ListViewItem>
-									<Grid>
-										<Grid.ColumnDefinitions>
-											<ColumnDefinition Width="100" />
-											<ColumnDefinition Width="*" />
-										</Grid.ColumnDefinitions>
-										<TextBlock Grid.Column="0" Text="Height" />
-										<TextBlock Grid.Column="1" Text="600" />
-									</Grid>
-								</ListViewItem>
+						<Grid x:Name="propertiesGrid" Background="{DynamicResource SecondaryBackgroundBrush}">
+							<ListView Background="{DynamicResource SecondaryBackgroundBrush}"
+									 Foreground="{DynamicResource PrimaryTextBrush}"
+									 ItemsSource="{Binding}">
+								<ListView.View>
+									<GridView>
+										<GridViewColumn Header="Property" Width="100" DisplayMemberBinding="{Binding Property}" />
+										<GridViewColumn Header="Value" Width="145" DisplayMemberBinding="{Binding Value}" />
+									</GridView>
+								</ListView.View>
 							</ListView>
 						</Grid>
 					</xcad:LayoutAnchorable>

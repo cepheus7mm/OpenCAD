@@ -12,6 +12,7 @@ namespace UI.Commands
     {
         private readonly Dictionary<string, Type> _commands = new();
         private readonly Dictionary<string, (string description, string[] aliases)> _commandInfo = new();
+        private readonly Dictionary<string, string> _aliasToCanonical = new(); // Maps aliases to canonical names
 
         /// <summary>
         /// Discover and register all commands with InputCommandAttribute
@@ -27,14 +28,19 @@ namespace UI.Commands
             {
                 var attribute = type.GetCustomAttribute<InputCommandAttribute>()!;
                 
+                string canonicalName = attribute.Name.ToLower();
+                
                 // Register primary name
-                _commands[attribute.Name.ToLower()] = type;
-                _commandInfo[attribute.Name.ToLower()] = (attribute.Description, attribute.Aliases);
+                _commands[canonicalName] = type;
+                _commandInfo[canonicalName] = (attribute.Description, attribute.Aliases);
+                _aliasToCanonical[canonicalName] = canonicalName; // Map canonical to itself
 
                 // Register aliases
                 foreach (var alias in attribute.Aliases)
                 {
-                    _commands[alias.ToLower()] = type;
+                    string lowerAlias = alias.ToLower();
+                    _commands[lowerAlias] = type;
+                    _aliasToCanonical[lowerAlias] = canonicalName; // Map alias to canonical
                 }
             }
         }
@@ -46,6 +52,15 @@ namespace UI.Commands
         {
             _commands.TryGetValue(commandName.ToLower(), out var type);
             return type;
+        }
+
+        /// <summary>
+        /// Get the canonical (primary) command name from an alias or the name itself
+        /// </summary>
+        public string? GetCanonicalName(string commandName)
+        {
+            _aliasToCanonical.TryGetValue(commandName.ToLower(), out var canonicalName);
+            return canonicalName;
         }
 
         /// <summary>

@@ -29,6 +29,9 @@ namespace UI
             InitializeComponent();
             InitializeDockingSystem();
             
+            // **ADD THIS: Set up the viewport provider for command input**
+            dockingArea.CommandInput.SetActiveViewportProvider(() => dockingArea.GetActiveViewport());
+            
             // Hook up menu bar events
             menuBar.NewFileRequested += (s, e) => NewFile_Click(s!, new RoutedEventArgs());
             menuBar.ExitRequested += (s, e) => Exit_Click(s!, new RoutedEventArgs());
@@ -162,7 +165,7 @@ namespace UI
             // Wire up the status bar
             viewport.SetStatusBar(statusBar);
 
-            // **ADD THIS: Set the document in the command input control**
+            // Set the document in the command input control
             dockingArea.CommandInput.SetDocument(document);
 
             // Get the document pane and add the viewport with the document
