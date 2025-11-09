@@ -12,6 +12,12 @@ namespace UI.Commands
         private string _currentPrompt = string.Empty;
 
         public virtual bool IsMultiStep => false;
+        
+        /// <summary>
+        /// Gets whether this command requires selection mode to be enabled.
+        /// Override in derived classes for editing commands like Erase, Move, Copy, etc.
+        /// </summary>
+        public virtual bool RequiresSelection => false;
 
         public virtual string CurrentPrompt 
         { 

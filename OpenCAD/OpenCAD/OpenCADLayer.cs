@@ -1,5 +1,7 @@
 using System;
 using System.Drawing;
+using System.Text.Json.Serialization;
+using System.Xml.Serialization;
 
 namespace OpenCAD
 {
@@ -7,18 +9,21 @@ namespace OpenCAD
     /// Represents a layer in the CAD document.
     /// Layers organize drawable objects and define default visual properties.
     /// </summary>
-    public class Layer : OpenCADObject
+    public class OpenCADLayer : OpenCADObject
     {
         // Define property indices for the Boolean type (since we have multiple boolean properties)
         private const int VISIBLE_INDEX = 0;
         private const int LOCKED_INDEX = 1;
+        
+        // Property index for layer name in the String property collection
+        private const int LAYER_NAME_INDEX = 0;
 
         /// <summary>
-        /// Creates a new layer with default properties.
+        /// Parameterless constructor required for deserialization.
         /// </summary>
-        /// <param name="name">The name of the layer. Must be unique within the document.</param>
-        public Layer(string name) : this(name, Color.White, LineType.Continuous, LineWeight.Default)
+        public OpenCADLayer() : base()
         {
+            _isDrawable = false;
         }
 
         /// <summary>
@@ -28,53 +33,56 @@ namespace OpenCAD
         /// <param name="color">The default color for objects on this layer.</param>
         /// <param name="lineType">The default line type for objects on this layer.</param>
         /// <param name="lineWeight">The default line weight for objects on this layer.</param>
-        public Layer(string name, Color color, LineType lineType, LineWeight lineWeight)
+        public OpenCADLayer(string name, Color color, LineType lineType, LineWeight lineWeight, OpenCADDocument document) 
+            : base(document)
         {
             if (string.IsNullOrWhiteSpace(name))
                 throw new ArgumentException("Layer name cannot be null or empty.", nameof(name));
 
-            _isDrawable = false; // Layers themselves are not drawable
-
-            // Initialize properties using the collection-based system
-            properties.TryAdd((int)PropertyType.String, new Property(PropertyType.String, "Name", name));
-            properties.TryAdd((int)PropertyType.Color, new Property(PropertyType.Color, "Color", color));
-            properties.TryAdd((int)PropertyType.LineType, new Property(PropertyType.LineType, "LineType", lineType));
-            properties.TryAdd((int)PropertyType.LineWeight, new Property(PropertyType.LineWeight, "LineWeight", lineWeight));
+            _isDrawable = false;
+            
+            // Initialize layer name using the base Name property
+            Name = name;
+            
+            // Initialize layer-specific properties
+            properties.TryAdd((int)PropertyType.Color, new Property(PropertyType.Color, OpenCADStrings.LayerColor, color));
+            properties.TryAdd((int)PropertyType.LineType, new Property(PropertyType.LineType, OpenCADStrings.LayerLineType, lineType));
+            properties.TryAdd((int)PropertyType.LineWeight, new Property(PropertyType.LineWeight, OpenCADStrings.LayerLineWeight, lineWeight));
             
             // Store both boolean values in a single Boolean property
             properties.TryAdd((int)PropertyType.Boolean, new Property(PropertyType.Boolean, 
-                ("IsVisible", true),
-                ("IsLocked", false)
+                (OpenCADStrings.LayerIsVisible, true),
+                (OpenCADStrings.LayerIsLocked, false)
             ));
+            _document = document;
         }
 
         /// <summary>
         /// Gets or sets the layer name. Must be unique within the document.
+        /// This property shadows the base Name property to enforce validation for layers.
         /// </summary>
-        public string Name
+        [JsonIgnore, XmlIgnore]
+        public new string Name
         {
             get
             {
-                if (properties.TryGetValue((int)PropertyType.String, out var prop))
-                    return (string)prop.GetValue(0);
-                return string.Empty;
+                // Use base implementation
+                return base.Name ?? string.Empty;
             }
             set
             {
                 if (string.IsNullOrWhiteSpace(value))
                     throw new ArgumentException("Layer name cannot be null or empty.", nameof(value));
                 
-                properties.AddOrUpdate(
-                    (int)PropertyType.String,
-                    new Property(PropertyType.String, "Name", value),
-                    (key, oldValue) => new Property(PropertyType.String, "Name", value)
-                );
+                // Use base implementation
+                base.Name = value;
             }
         }
 
         /// <summary>
         /// Gets or sets the default color for objects on this layer.
         /// </summary>
+        [JsonIgnore, XmlIgnore]
         public Color Color
         {
             get
@@ -87,8 +95,8 @@ namespace OpenCAD
             {
                 properties.AddOrUpdate(
                     (int)PropertyType.Color,
-                    new Property(PropertyType.Color, "Color", value),
-                    (key, oldValue) => new Property(PropertyType.Color, "Color", value)
+                    new Property(PropertyType.Color, OpenCADStrings.LayerColor, value),
+                    (key, oldValue) => new Property(PropertyType.Color, OpenCADStrings.LayerColor, value)
                 );
             }
         }
@@ -96,20 +104,21 @@ namespace OpenCAD
         /// <summary>
         /// Gets or sets the default line type for objects on this layer.
         /// </summary>
-        public LineType LineType
+        [JsonIgnore, XmlIgnore]
+        public OpenCAD.LineType LineType
         {
             get
             {
                 if (properties.TryGetValue((int)PropertyType.LineType, out var prop))
-                    return (LineType)prop.GetValue(0);
-                return LineType.Continuous;
+                    return (OpenCAD.LineType)prop.GetValue(0);
+                return OpenCAD.LineType.Continuous;
             }
             set
             {
                 properties.AddOrUpdate(
                     (int)PropertyType.LineType,
-                    new Property(PropertyType.LineType, "LineType", value),
-                    (key, oldValue) => new Property(PropertyType.LineType, "LineType", value)
+                    new Property(PropertyType.LineType, OpenCADStrings.LayerLineType, value),
+                    (key, oldValue) => new Property(PropertyType.LineType, OpenCADStrings.LayerLineType, value)
                 );
             }
         }
@@ -117,20 +126,21 @@ namespace OpenCAD
         /// <summary>
         /// Gets or sets the default line weight for objects on this layer.
         /// </summary>
-        public LineWeight LineWeight
+        [JsonIgnore, XmlIgnore]
+        public OpenCAD.LineWeight LineWeight
         {
             get
             {
                 if (properties.TryGetValue((int)PropertyType.LineWeight, out var prop))
-                    return (LineWeight)prop.GetValue(0);
-                return LineWeight.Default;
+                    return (OpenCAD.LineWeight)prop.GetValue(0);
+                return OpenCAD.LineWeight.Default;
             }
             set
             {
                 properties.AddOrUpdate(
                     (int)PropertyType.LineWeight,
-                    new Property(PropertyType.LineWeight, "LineWeight", value),
-                    (key, oldValue) => new Property(PropertyType.LineWeight, "LineWeight", value)
+                    new Property(PropertyType.LineWeight, OpenCADStrings.LayerLineWeight, value),
+                    (key, oldValue) => new Property(PropertyType.LineWeight, OpenCADStrings.LayerLineWeight, value)
                 );
             }
         }
@@ -139,6 +149,7 @@ namespace OpenCAD
         /// Gets or sets whether the layer is visible.
         /// When false, objects on this layer will not be displayed.
         /// </summary>
+        [JsonIgnore, XmlIgnore]
         public bool IsVisible
         {
             get
@@ -156,7 +167,9 @@ namespace OpenCAD
                 else
                 {
                     // If property doesn't exist yet, create it with both boolean values
-                    properties.TryAdd((int)PropertyType.Boolean, new Property(PropertyType.Boolean, ("IsVisible", value), ("IsLocked", false)));
+                    properties.TryAdd((int)PropertyType.Boolean, new Property(PropertyType.Boolean, 
+                        (OpenCADStrings.LayerIsVisible, value), 
+                        (OpenCADStrings.LayerIsLocked, false)));
                 }
             }
         }
@@ -165,6 +178,7 @@ namespace OpenCAD
         /// Gets or sets whether the layer is locked.
         /// When true, objects on this layer cannot be edited or selected.
         /// </summary>
+        [JsonIgnore, XmlIgnore]
         public bool IsLocked
         {
             get
@@ -182,7 +196,9 @@ namespace OpenCAD
                 else
                 {
                     // If property doesn't exist yet, create it with both boolean values
-                    properties.TryAdd((int)PropertyType.Boolean, new Property(PropertyType.Boolean, ("IsVisible", true), ("IsLocked", value)));
+                    properties.TryAdd((int)PropertyType.Boolean, new Property(PropertyType.Boolean, 
+                        (OpenCADStrings.LayerIsVisible, true), 
+                        (OpenCADStrings.LayerIsLocked, value)));
                 }
             }
         }
@@ -194,7 +210,7 @@ namespace OpenCAD
 
         public override bool Equals(object? obj)
         {
-            if (obj is Layer other)
+            if (obj is OpenCADLayer other)
                 return ID == other.ID;
             return false;
         }

@@ -50,7 +50,7 @@ namespace GraphicsEngine
         private static void DebugCallback(DebugSource source, DebugType type, int id, DebugSeverity severity, int length, IntPtr message, IntPtr userParam)
         {
             var msg = System.Runtime.InteropServices.Marshal.PtrToStringAnsi(message, length);
-            System.Diagnostics.Debug.WriteLine($"[GL DEBUG] {severity} {type} ({id}): {msg}");
+            //System.Diagnostics.Debug.WriteLine($"[GL DEBUG] {severity} {type} ({id}): {msg}");
         }
 
         public static void DumpPipelineState(int vao, int vbo, int programId)

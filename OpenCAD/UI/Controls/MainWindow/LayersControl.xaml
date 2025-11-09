@@ -1,0 +1,169 @@
+﻿ <UserControl x:Class="UI.Controls.MainWindow.LayersControl"
+			 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+			 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+			 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+			 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+			 xmlns:opencad="clr-namespace:OpenCAD;assembly=OpenCAD"
+			 xmlns:converters="clr-namespace:UI.Converters"
+			 mc:Ignorable="d" 
+			 d:DesignHeight="450" d:DesignWidth="300"
+			 Background="{DynamicResource SecondaryBackgroundBrush}">
+    <UserControl.Resources>
+        <converters:DrawingColorToMediaColorConverter x:Key="ColorConverter"/>
+
+        <!-- Style for ComboBox in DataGrid -->
+        <Style x:Key="DataGridComboBoxStyle" TargetType="ComboBox">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="4,2"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource SecondaryBackgroundBrush}"/>
+                    <Setter Property="BorderThickness" Value="1"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource PrimaryTextBrush}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Toolbar -->
+        <ToolBarTray Grid.Row="0" Background="{DynamicResource SecondaryBackgroundBrush}">
+            <ToolBar Background="{DynamicResource SecondaryBackgroundBrush}">
+                <Button Command="{Binding NewLayerCommand}" 
+						ToolTip="{x:Static opencad:OpenCADStrings.NewLayerTooltip}"
+						Padding="5,2">
+                    <TextBlock Text="➕" FontSize="14"/>
+                </Button>
+                <Button Command="{Binding DeleteLayerCommand}" 
+						ToolTip="{x:Static opencad:OpenCADStrings.DeleteLayerTooltip}"
+						Padding="5,2">
+                    <TextBlock Text="🗑" FontSize="14"/>
+                </Button>
+                <Separator/>
+                <Button Command="{Binding SetCurrentLayerCommand}" 
+						ToolTip="{x:Static opencad:OpenCADStrings.SetCurrentLayerTooltip}"
+						Padding="5,2">
+                    <TextBlock Text="✓" FontSize="14"/>
+                </Button>
+                <Separator/>
+                <Button Command="{Binding RefreshCommand}" 
+						ToolTip="{x:Static opencad:OpenCADStrings.RefreshTooltip}"
+						Padding="5,2">
+                    <TextBlock Text="🔄" FontSize="14"/>
+                </Button>
+            </ToolBar>
+        </ToolBarTray>
+
+        <!-- Layers List -->
+        <DataGrid Grid.Row="1"
+				  x:Name="LayersDataGrid"
+				  ItemsSource="{Binding Layers}"
+				  SelectedItem="{Binding SelectedLayer}"
+				  AutoGenerateColumns="False"
+				  CanUserAddRows="False"
+				  CanUserDeleteRows="False"
+				  CanUserReorderColumns="False"
+				  SelectionMode="Single"
+				  Background="{DynamicResource SecondaryBackgroundBrush}"
+				  Foreground="{DynamicResource PrimaryTextBrush}"
+				  GridLinesVisibility="Horizontal"
+				  HeadersVisibility="Column"
+				  RowHeaderWidth="0"
+				  MouseDoubleClick="LayersDataGrid_MouseDoubleClick">
+            <DataGrid.Columns>
+                <!-- Current Column (renamed from Status) -->
+                <DataGridTextColumn Header="{x:Static opencad:OpenCADStrings.Current}" 
+									Width="60"
+									IsReadOnly="True"
+									Binding="{Binding CurrentIndicator}"/>
+
+                <!-- On / Off Column -->
+                <DataGridTextColumn Header="{x:Static opencad:OpenCADStrings.On_Off}" 
+									Width="60"
+									IsReadOnly="True"
+									Binding="{Binding VisibilityIndicator}"/>
+
+                <!-- Name Column - EDITABLE -->
+                <DataGridTextColumn Header="{x:Static opencad:OpenCADStrings.Name}" 
+									Width="*"
+									IsReadOnly="False"
+									Binding="{Binding Name, UpdateSourceTrigger=PropertyChanged}"/>
+
+                <!-- Color Column - Display as actual color with button to edit -->
+                <DataGridTemplateColumn Header="{x:Static opencad:OpenCADStrings.Color}" 
+										Width="80">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <Button BorderThickness="0"
+									Padding="2"
+									Cursor="Hand"
+									Click="ColorButton_Click"
+									Tag="{Binding}"
+									ToolTip="Click to change color">
+                                <Button.Background>
+                                    <SolidColorBrush Color="{Binding Color, Converter={StaticResource ColorConverter}}"/>
+                                </Button.Background>
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border Background="{TemplateBinding Background}"
+												BorderBrush="{DynamicResource PrimaryTextBrush}"
+												BorderThickness="1"
+												CornerRadius="2">
+                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- LineType Column - Dropdown -->
+                <DataGridTemplateColumn Header="{x:Static opencad:OpenCADStrings.LineType}" 
+										Width="100">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <ComboBox ItemsSource="{Binding DataContext.AvailableLineTypes, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+									  SelectedItem="{Binding LineType, UpdateSourceTrigger=PropertyChanged}"
+									  Style="{StaticResource DataGridComboBoxStyle}"
+									  ToolTip="Select line type">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- LineWeight Column - Dropdown -->
+                <DataGridTemplateColumn Header="{x:Static opencad:OpenCADStrings.LineWeight}" 
+										Width="100">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <ComboBox ItemsSource="{Binding DataContext.AvailableLineWeights, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+									  SelectedItem="{Binding LineWeight, UpdateSourceTrigger=PropertyChanged}"
+									  Style="{StaticResource DataGridComboBoxStyle}"
+									  ToolTip="Select line weight">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+            </DataGrid.Columns>
+        </DataGrid>
+    </Grid>
+</UserControl>

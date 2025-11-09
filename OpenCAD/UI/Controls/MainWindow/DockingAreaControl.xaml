@@ -80,21 +80,13 @@
 					</xcad:LayoutAnchorablePane>
 				</xcad:LayoutPanel>
 
-				<!-- Right Panel - Properties, etc. -->
+				<!-- Right Panel - Properties, Layers, etc. -->
 				<xcad:LayoutAnchorablePane DockWidth="250">
 					<xcad:LayoutAnchorable ContentId="properties" Title="Properties" CanHide="True" CanClose="False">
-						<Grid x:Name="propertiesGrid" Background="{DynamicResource SecondaryBackgroundBrush}">
-							<ListView Background="{DynamicResource SecondaryBackgroundBrush}"
-									 Foreground="{DynamicResource PrimaryTextBrush}"
-									 ItemsSource="{Binding}">
-								<ListView.View>
-									<GridView>
-										<GridViewColumn Header="Property" Width="100" DisplayMemberBinding="{Binding Property}" />
-										<GridViewColumn Header="Value" Width="145" DisplayMemberBinding="{Binding Value}" />
-									</GridView>
-								</ListView.View>
-							</ListView>
-						</Grid>
+						<local:PropertiesControl x:Name="propertiesControl"/>
+					</xcad:LayoutAnchorable>
+					<xcad:LayoutAnchorable ContentId="layers" Title="Layers" CanHide="True" CanClose="False">
+						<local:LayersControl x:Name="layersControl"/>
 					</xcad:LayoutAnchorable>
 				</xcad:LayoutAnchorablePane>
 			</xcad:LayoutPanel>

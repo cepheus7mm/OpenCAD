@@ -28,7 +28,7 @@ namespace UI.Controls.MainWindow
             // Forward events from ViewModel
             _viewModel.GeometryCreated += (s, e) => GeometryCreated?.Invoke(this, e);
             _viewModel.ScrollToEndRequested += (s, e) => historyScrollViewer.ScrollToEnd();
-            _viewModel.FocusRequested += (s, e) => commandTextBox.Focus();
+            _viewModel.FocusRequested += (s, e) => FocusCommandInput();
 
             // Setup bindings
             commandTextBox.SetBinding(TextBox.TextProperty, 
@@ -55,6 +55,15 @@ namespace UI.Controls.MainWindow
         }
 
         /// <summary>
+        /// Focus the command input text box
+        /// </summary>
+        public void FocusCommandInput()
+        {
+            commandTextBox.Focus();
+            Keyboard.Focus(commandTextBox);
+        }
+
+        /// <summary>
         /// Set the function to get the active viewport (called by DockingAreaControl)
         /// </summary>
         public void SetActiveViewportProvider(Func<ViewportControl?> getActiveViewport)
@@ -78,6 +87,30 @@ namespace UI.Controls.MainWindow
         private void CommandTextBox_KeyDown(object sender, KeyEventArgs e)
         {
             e.Handled = _viewModel.HandleKeyDown(e.Key);
+        }
+
+        /// <summary>
+        /// Execute a command programmatically (e.g., from keyboard shortcut)
+        /// </summary>
+        public void ExecuteCommandProgrammatically(string commandName)
+        {
+            _viewModel.ExecuteCommandProgrammatically(commandName);
+        }
+
+        /// <summary>
+        /// Wire up viewport selection events to restore focus
+        /// </summary>
+        public void WireUpViewportEvents(ViewportControl viewport)
+        {
+            if (viewport != null && viewport.DataContext is ViewportViewModel viewModel)
+            {
+                viewModel.SelectionChanged += (s, e) =>
+                {
+                    // Return focus to command input after selection
+                    FocusCommandInput();
+                    System.Diagnostics.Debug.WriteLine("Focus returned to command input after selection");
+                };
+            }
         }
     }
 

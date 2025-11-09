@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <PackageReference Include="AvalonDock.Themes.VS2013" Version="2.0.0.5" />
+    <PackageReference Include="Extended.Wpf.Toolkit" Version="5.0.0" />
     <PackageReference Include="OpenTK.Graphics" Version="4.9.4" />
     <PackageReference Include="OpenTK.Windowing.Common" Version="4.9.4" />
   </ItemGroup>

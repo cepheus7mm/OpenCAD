@@ -112,8 +112,8 @@ namespace GraphicsEngine
         /// </summary>
         public void Render(IEnumerable<OpenCADObject> objects)
         {
-            // Clear per frame to avoid accumulation/smearing
-            GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+            // Clearing is now handled by the caller to allow layered rendering
+            // GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 
             // Force a pure orthographic pipeline: no camera view in ortho
             _viewMatrix = (_projectionMode == ProjectionMode.Orthographic)
@@ -145,8 +145,8 @@ namespace GraphicsEngine
         /// </summary>
         public void Render(IEnumerable<OpenCADObject> objects, OpenCADObject? highlightedObject = null, IEnumerable<OpenCADObject>? selectedObjects = null)
         {
-            // Clear per frame to avoid accumulation/smearing
-            GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+            // Clearing is now handled by the caller to allow layered rendering
+            // GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 
             // Force a pure orthographic pipeline: no camera view in ortho
             _viewMatrix = (_projectionMode == ProjectionMode.Orthographic)

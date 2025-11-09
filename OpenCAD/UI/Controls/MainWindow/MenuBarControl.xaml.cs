@@ -14,6 +14,8 @@ namespace UI.Controls.MainWindow
         public event EventHandler? LightThemeRequested;
         public event EventHandler? DarkThemeRequested;
         public event EventHandler? NewViewportRequested;
+        public event EventHandler<bool>? LayersVisibilityChanged;
+        public event EventHandler? SaveAsRequested;
 
         public MenuBarControl()
         {
@@ -44,9 +46,14 @@ namespace UI.Controls.MainWindow
             DarkThemeRequested?.Invoke(this, EventArgs.Empty);
         }
 
-        private void NewViewport_Click(object sender, RoutedEventArgs e)
+        private void Layers_Click(object sender, RoutedEventArgs e)
         {
-            NewViewportRequested?.Invoke(this, EventArgs.Empty);
+            LayersVisibilityChanged?.Invoke(this, LayersMenuItem.IsChecked);
+        }
+
+        private void SaveAs_Click(object sender, RoutedEventArgs e)
+        {
+            SaveAsRequested?.Invoke(this, EventArgs.Empty);
         }
 
         /// <summary>
@@ -56,6 +63,14 @@ namespace UI.Controls.MainWindow
         {
             LightThemeMenuItem.IsChecked = isLightTheme;
             DarkThemeMenuItem.IsChecked = !isLightTheme;
+        }
+
+        /// <summary>
+        /// Updates the layers menu item to reflect visibility
+        /// </summary>
+        public void UpdateLayersVisibility(bool isVisible)
+        {
+            LayersMenuItem.IsChecked = isVisible;
         }
     }
 }

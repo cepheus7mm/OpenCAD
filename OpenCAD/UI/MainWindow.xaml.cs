@@ -12,8 +12,13 @@ using Xceed.Wpf.AvalonDock.Layout;
 using UI.Controls.Viewport;
 using OpenCAD.Geometry;
 using OpenCAD;
+using UI.Controls.MainWindow;
+using OpenCAD.Serialization;
+using Microsoft.Win32; // For file dialogs
+using System.Windows.Threading;
 
 using OCad = OpenCAD.Geometry;
+using System.ComponentModel;
 
 namespace UI
 {
@@ -23,6 +28,7 @@ namespace UI
     public partial class MainWindow : Window
     {
         private int _documentCounter = 0;
+        private DispatcherTimer? _autoSaveTimer;
 
         public MainWindow()
         {
@@ -37,6 +43,8 @@ namespace UI
             menuBar.ExitRequested += (s, e) => Exit_Click(s!, new RoutedEventArgs());
             menuBar.LightThemeRequested += (s, e) => LightTheme_Click(s!, new RoutedEventArgs());
             menuBar.DarkThemeRequested += (s, e) => DarkTheme_Click(s!, new RoutedEventArgs());
+            menuBar.LayersVisibilityChanged += MenuBar_LayersVisibilityChanged;
+            menuBar.SaveAsRequested += (s, e) => SaveAs_Click(s!, new RoutedEventArgs());
             
             // Hook up toolbar events
             toolBar.NewFileRequested += (s, e) => NewFile_Click(s!, new RoutedEventArgs());
@@ -49,17 +57,170 @@ namespace UI
             // Hook up titlebar button events when the window is loaded
             this.Loaded += MainWindow_Loaded;
             
-            // Hook up menu bar viewport event
-            menuBar.NewViewportRequested += (s, e) => CreateViewport_Click(s!, new RoutedEventArgs());
-            
             // Hook up command input event
             dockingArea.CommandInput.GeometryCreated += CommandInput_GeometryCreated;
+            
+            // ADD THIS: Hook up PreviewKeyDown for global keyboard routing
+            this.PreviewKeyDown += MainWindow_PreviewKeyDown;
+            
+            // Setup auto-save timer (every 5 minutes)
+            _autoSaveTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromMinutes(5)
+            };
+            _autoSaveTimer.Tick += AutoSave_Tick;
+            _autoSaveTimer.Start();
+        }
+
+        private void AutoSave_Tick(object? sender, EventArgs e)
+        {
+            var docPane = dockingArea.GetDocumentPane();
+            if (docPane != null)
+            {
+                foreach (var doc in docPane.Children.OfType<LayoutDocument>())
+                {
+                    if (doc.Content is ViewportControl viewport)
+                    {
+                        var openCADDoc = viewport.Document;
+                        if (openCADDoc?.HasUnsavedChanges == true)
+                        {
+                            try
+                            {
+                                DocumentSerializer.SaveToJson(openCADDoc, openCADDoc.Filename);
+                                openCADDoc.MarkAsSaved();
+                            }
+                            catch (Exception ex)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"Auto-save failed: {ex.Message}");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Handle keyboard input at the window level to route ESC and other keys
+        /// </summary>
+        private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            System.Diagnostics.Debug.WriteLine($"MainWindow.PreviewKeyDown: Key={e.Key}, Modifiers={Keyboard.Modifiers}");
+            
+            // Handle Ctrl+S for Save
+            if (e.Key == Key.S && Keyboard.Modifiers == ModifierKeys.Control)
+            {
+                Save_Click(this, new RoutedEventArgs());
+                e.Handled = true;
+                System.Diagnostics.Debug.WriteLine("Ctrl+S - Save executed");
+                return;
+            }
+            
+            // Handle Ctrl+Shift+S for Save As
+            if (e.Key == Key.S && Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
+            {
+                SaveAs_Click(this, new RoutedEventArgs());
+                e.Handled = true;
+                System.Diagnostics.Debug.WriteLine("Ctrl+Shift+S - Save As executed");
+                return;
+            }
+            
+            // Handle Ctrl+O for Open
+            if (e.Key == Key.O && Keyboard.Modifiers == ModifierKeys.Control)
+            {
+                Open_Click(this, new RoutedEventArgs());
+                e.Handled = true;
+                System.Diagnostics.Debug.WriteLine("Ctrl+O - Open executed");
+                return;
+            }
+            
+            // Handle ESC key - route to active viewport
+            if (e.Key == Key.Escape)
+            {
+                var viewport = dockingArea.GetActiveViewport();
+                if (viewport != null)
+                {
+                    // Try to handle ESC in the viewport
+                    if (viewport.HandleEscapeKey())
+                    {
+                        e.Handled = true;
+                        System.Diagnostics.Debug.WriteLine("ESC handled by viewport");
+                        return;
+                    }
+                }
+                
+                System.Diagnostics.Debug.WriteLine("ESC not handled by viewport - allowing default behavior");
+            }
+            
+            // Handle Delete key - execute the Erase command
+            if (e.Key == Key.Delete)
+            {
+                var viewport = dockingArea.GetActiveViewport();
+                if (viewport != null)
+                {
+                    var viewModel = viewport.DataContext as ViewportViewModel;
+                    
+                    // Only execute erase if there are selected objects
+                    if (viewModel != null && viewModel.SelectedObjects.Count > 0)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Delete key pressed - executing Erase command for {viewModel.SelectedObjects.Count} selected object(s)");
+                        
+                        // Execute the erase command programmatically
+                        dockingArea.CommandInput.ExecuteCommandProgrammatically("erase");
+                        
+                        e.Handled = true;
+                        System.Diagnostics.Debug.WriteLine("Delete handled - Erase command executed");
+                        return;
+                    }
+                }
+                
+                System.Diagnostics.Debug.WriteLine("Delete not handled - no selection");
+            }
+            
+            // Handle Ctrl+Z for Undo
+            if (e.Key == Key.Z && Keyboard.Modifiers == ModifierKeys.Control)
+            {
+                var undoManager = dockingArea.CommandInput.GetUndoRedoManager();
+                if (undoManager.CanUndo)
+                {
+                    undoManager.Undo();
+                    statusBar.UpdateStatus($"Undo: {undoManager.UndoDescription ?? "action"}");
+                    e.Handled = true;
+                    System.Diagnostics.Debug.WriteLine("Ctrl+Z - Undo executed");
+                }
+                return;
+            }
+            
+            // Handle Ctrl+Y for Redo
+            if (e.Key == Key.Y && Keyboard.Modifiers == ModifierKeys.Control)
+            {
+                var undoManager = dockingArea.CommandInput.GetUndoRedoManager();
+                if (undoManager.CanRedo)
+                {
+                    undoManager.Redo();
+                    statusBar.UpdateStatus($"Redo: {undoManager.RedoDescription ?? "action"}");
+                    e.Handled = true;
+                    System.Diagnostics.Debug.WriteLine("Ctrl+Y - Redo executed");
+                }
+                return;
+            }
+            
+            // Add other global keyboard shortcuts here as needed
+            // Example: F1 for help, Ctrl+S for save, etc.
         }
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
             // Find and hook up titlebar button events
             HookupTitleBarButtons();
+            
+            // Update menu to reflect initial layers visibility
+            menuBar.UpdateLayersVisibility(dockingArea.IsLayersPanelVisible());
+        }
+
+        private void MenuBar_LayersVisibilityChanged(object? sender, bool isVisible)
+        {
+            dockingArea.ShowLayersPanel(isVisible);
+            statusBar.UpdateStatus(isVisible ? "Layers panel shown" : "Layers panel hidden");
         }
 
         private void HookupTitleBarButtons()
@@ -162,8 +323,20 @@ namespace UI
             // Create viewport control for the document, passing the document to the constructor
             var viewport = new ViewportControl(document);
             
-            // Wire up the status bar
+            // Wire up the status bar - the viewport has its own ViewportSettings instance
             viewport.SetStatusBar(statusBar);
+            
+            // Get the ViewportSettings from the viewport
+            var viewportSettings = viewport.GetViewportSettings();
+            statusBar.SetViewportSettings(viewportSettings);
+            statusBar.ViewportSettingsChanged += (s, e) => 
+            {
+                // Update snapping state from settings
+                viewport.UpdateSnappingFromSettings();
+                
+                // Force viewport to refresh when settings change
+                viewport.Refresh();
+            };
 
             // Set the document in the command input control
             dockingArea.CommandInput.SetDocument(document);
@@ -181,6 +354,13 @@ namespace UI
                 if (newDoc != null)
                 {
                     statusBar.UpdateStatus($"Created new document: {document.Filename}");
+                    
+                    // Focus the command input after the UI has finished updating
+                    // Use Dispatcher to ensure the docking layout is complete first
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        dockingArea.CommandInput.FocusCommandInput();
+                    }), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
                 }
             }
         }
@@ -196,16 +376,103 @@ namespace UI
 
         private void Open_Click(object sender, RoutedEventArgs e)
         {
-            // TODO: Implement file open functionality
             statusBar.UpdateStatus("Opening file...");
-            MessageBox.Show("Open file functionality not yet implemented.", "Open File", 
-            MessageBoxButton.OK, MessageBoxImage.Information);
+            
+            // Show Open File Dialog
+            var openFileDialog = new OpenFileDialog
+            {
+                Filter = "OpenCAD Files (*.ocad)|*.ocad|JSON Files (*.json)|*.json|All Files (*.*)|*.*",
+                DefaultExt = ".ocad",
+                Title = "Open CAD Document",
+                CheckFileExists = true
+            };
+            
+            if (openFileDialog.ShowDialog() == true)
+            {
+                try
+                {
+                    // Load the document
+                    var loadedDocument = DocumentSerializer.LoadFromJson(openFileDialog.FileName);
+                    
+                    if (loadedDocument != null)
+                    {
+                        _documentCounter++;
+                        
+                        // Update filename to match loaded file
+                        loadedDocument.Filename = openFileDialog.FileName;
+                        
+                        // Create viewport for the loaded document
+                        var viewport = new ViewportControl(loadedDocument);
+                        
+                        // Wire up the status bar
+                        viewport.SetStatusBar(statusBar);
+                        
+                        // Get ViewportSettings and wire up events
+                        var viewportSettings = viewport.GetViewportSettings();
+                        statusBar.SetViewportSettings(viewportSettings);
+                        statusBar.ViewportSettingsChanged += (s, args) => 
+                        {
+                            viewport.UpdateSnappingFromSettings();
+                            viewport.Refresh();
+                        };
+
+                        // Set the document in the command input control
+                        dockingArea.CommandInput.SetDocument(loadedDocument);
+
+                        // Add to document pane
+                        var docPane = dockingArea.GetDocumentPane();
+                        if (docPane != null)
+                        {
+                            var newDoc = dockingArea.AddDocument(
+                                System.IO.Path.GetFileName(openFileDialog.FileName),
+                                $"doc{_documentCounter}",
+                                viewport
+                            );
+
+                            if (newDoc != null)
+                            {
+                                statusBar.UpdateStatus($"Opened: {openFileDialog.FileName}");
+                                System.Diagnostics.Debug.WriteLine($"Document opened: {openFileDialog.FileName}");
+                                
+                                // Focus command input
+                                Dispatcher.BeginInvoke(new Action(() =>
+                                {
+                                    dockingArea.CommandInput.FocusCommandInput();
+                                }), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        MessageBox.Show(
+                            "Failed to load document. The file may be corrupted or in an incompatible format.", 
+                            "Open File Error", 
+                            MessageBoxButton.OK, 
+                            MessageBoxImage.Error);
+                        statusBar.UpdateStatus("Open failed");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(
+                        $"Error opening file:\n{ex.Message}", 
+                        "Open File Error", 
+                        MessageBoxButton.OK, 
+                        MessageBoxImage.Error);
+                    statusBar.UpdateStatus("Open failed");
+                    System.Diagnostics.Debug.WriteLine($"Open error: {ex}");
+                }
+            }
+            else
+            {
+                statusBar.UpdateStatus("Open cancelled");
+            }
+            
             statusBar.UpdateStatus("Ready");
         }
 
         private void Save_Click(object sender, RoutedEventArgs e)
         {
-            // TODO: Implement file save functionality
             statusBar.UpdateStatus("Saving file...");
             
             // Get the currently selected document
@@ -216,15 +483,34 @@ namespace UI
                 if (selectedDoc?.Content is ViewportControl viewport)
                 {
                     // Access the OpenCADDocument through the viewport
-                    var openCADDoc = viewport.ObjectToDisplay as OpenCADDocument;
+                    var openCADDoc = viewport.Document;
                     if (openCADDoc != null)
                     {
-                        // TODO: Implement actual save logic here
-                        MessageBox.Show(
-                            $"Saving: {openCADDoc.Filename}\nDescription: {openCADDoc.Description}", 
-                            "Save File", 
-                            MessageBoxButton.OK, 
-                            MessageBoxImage.Information);
+                        try
+                        {
+                            // If filename is empty or default, prompt for Save As
+                            if (string.IsNullOrEmpty(openCADDoc.Filename) || 
+                                openCADDoc.Filename.StartsWith("Document"))
+                            {
+                                SaveAs_Click(sender, e);
+                                return;
+                            }
+                            
+                            // Save to existing filename
+                            DocumentSerializer.SaveToJson(openCADDoc, openCADDoc.Filename);
+                            statusBar.UpdateStatus($"Saved: {openCADDoc.Filename}");
+                            System.Diagnostics.Debug.WriteLine($"Document saved to: {openCADDoc.Filename}");
+                        }
+                        catch (Exception ex)
+                        {
+                            MessageBox.Show(
+                                $"Error saving file:\n{ex.Message}", 
+                                "Save Error", 
+                                MessageBoxButton.OK, 
+                                MessageBoxImage.Error);
+                            statusBar.UpdateStatus("Save failed");
+                            System.Diagnostics.Debug.WriteLine($"Save error: {ex}");
+                        }
                     }
                     else
                     {
@@ -236,6 +522,67 @@ namespace UI
                 {
                     MessageBox.Show("No document selected.", "Save File", 
                         MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
+            }
+            
+            statusBar.UpdateStatus("Ready");
+        }
+
+        // Add a Save As handler
+        private void SaveAs_Click(object sender, RoutedEventArgs e)
+        {
+            statusBar.UpdateStatus("Save As...");
+            
+            var docPane = dockingArea.GetDocumentPane();
+            if (docPane != null)
+            {
+                var selectedDoc = docPane.SelectedContent as LayoutDocument;
+                if (selectedDoc?.Content is ViewportControl viewport)
+                {
+                    var openCADDoc = viewport.Document;
+                    if (openCADDoc != null)
+                    {
+                        // Show Save File Dialog
+                        var saveFileDialog = new SaveFileDialog
+                        {
+                            Filter = "OpenCAD Files (*.ocad)|*.ocad|JSON Files (*.json)|*.json|All Files (*.*)|*.*",
+                            DefaultExt = ".ocad",
+                            FileName = openCADDoc.Filename,
+                            Title = "Save CAD Document"
+                        };
+                        
+                        if (saveFileDialog.ShowDialog() == true)
+                        {
+                            try
+                            {
+                                // Update document filename
+                                openCADDoc.Filename = saveFileDialog.FileName;
+                                
+                                // Save the document
+                                DocumentSerializer.SaveToJson(openCADDoc, saveFileDialog.FileName);
+                                
+                                // Update tab title
+                                selectedDoc.Title = System.IO.Path.GetFileName(saveFileDialog.FileName);
+                                
+                                statusBar.UpdateStatus($"Saved: {saveFileDialog.FileName}");
+                                System.Diagnostics.Debug.WriteLine($"Document saved to: {saveFileDialog.FileName}");
+                            }
+                            catch (Exception ex)
+                            {
+                                MessageBox.Show(
+                                    $"Error saving file:\n{ex.Message}", 
+                                    "Save Error", 
+                                    MessageBoxButton.OK, 
+                                    MessageBoxImage.Error);
+                                statusBar.UpdateStatus("Save failed");
+                                System.Diagnostics.Debug.WriteLine($"Save error: {ex}");
+                            }
+                        }
+                        else
+                        {
+                            statusBar.UpdateStatus("Save cancelled");
+                        }
+                    }
                 }
             }
             
@@ -353,66 +700,65 @@ namespace UI
 
         private void CreateViewport_Click(object sender, RoutedEventArgs e)
         {
-            // Create a temporary OpenCADObject to hold test geometry
-            var testContainer = new OpenCADObject();
-
-            // Add some sample geometry for testing
-            var line1 = new OCad.Line(
-                new Point3D(0, 0, 0),
-                new Point3D(5, 5, 5)
-            );
-            testContainer.Add(line1);
-
-            var line2 = new OCad.Line(
-                new Point3D(-3, 0, 0),
-                new Point3D(3, 0, 0)
-            );
-            testContainer.Add(line2);
-
-            var line3 = new OCad.Line(
-                new Point3D(0, -3, 0),
-                new Point3D(0, 3, 0)
-            );
-            testContainer.Add(line3);
-
-            var line4 = new OCad.Line(
-                new Point3D(0, 0, -3),
-                new Point3D(0, 0, 3)
-            );
-            testContainer.Add(line4);
-
-            // Create viewport control with the test container
-            var viewport = new ViewportControl(testContainer);
-            
-            // Wire up the status bar
-            viewport.SetStatusBar(statusBar);
-
-            // Get the document pane and add the viewport
-            var docPane = dockingArea.GetDocumentPane();
-            if (docPane != null)
-            {
-                var newDoc = dockingArea.AddDocument(
-                    $"Viewport {docPane.Children.Count + 1}",
-                    $"viewport{docPane.Children.Count + 1}",
-                    viewport
-                );
-
-                if (newDoc != null)
-                {
-                    statusBar.UpdateStatus($"Created new viewport: {newDoc.Title}");
-                }
-            }
         }
 
         #endregion
-    }
 
-    /// <summary>
-    /// Simple class to represent property items in the properties grid
-    /// </summary>
-    public class PropertyItem
-    {
-        public string Property { get; set; } = string.Empty;
-        public string Value { get; set; } = string.Empty;
+        protected override void OnClosing(CancelEventArgs e)
+        {
+            var docPane = dockingArea.GetDocumentPane();
+            if (docPane != null)
+            {
+                var unsavedDocs = new List<string>();
+                
+                foreach (var doc in docPane.Children.OfType<LayoutDocument>())
+                {
+                    if (doc.Content is ViewportControl viewport)
+                    {
+                        var openCADDoc = viewport.Document;
+                        if (openCADDoc?.HasUnsavedChanges == true)
+                        {
+                            unsavedDocs.Add(openCADDoc.Filename);
+                        }
+                    }
+                }
+                
+                if (unsavedDocs.Count > 0)
+                {
+                    var result = MessageBox.Show(
+                        $"You have {unsavedDocs.Count} unsaved document(s). Save before closing?",
+                        "Unsaved Changes",
+                        MessageBoxButton.YesNoCancel,
+                        MessageBoxImage.Warning);
+                    
+                    if (result == MessageBoxResult.Yes)
+                    {
+                        // Save all documents
+                        foreach (var doc in docPane.Children.OfType<LayoutDocument>())
+                        {
+                            if (doc.Content is ViewportControl vp && vp.Document?.HasUnsavedChanges == true)
+                            {
+                                try
+                                {
+                                    DocumentSerializer.SaveToJson(vp.Document, vp.Document.Filename);
+                                    vp.Document.MarkAsSaved();
+                                }
+                                catch (Exception ex)
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"Save failed: {ex.Message}");
+                                }
+                            }
+                        }
+                    }
+                    else if (result == MessageBoxResult.Cancel)
+                    {
+                        e.Cancel = true;
+                        return;
+                    }
+                }
+            }
+            
+            base.OnClosing(e);
+        }
     }
 }

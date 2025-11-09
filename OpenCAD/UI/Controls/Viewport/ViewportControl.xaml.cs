@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using OpenTK.Graphics.OpenGL;
@@ -9,6 +9,7 @@ using GraphicsEngine;
 using System.Numerics;
 using UI.Controls.MainWindow;
 using System.Windows.Media;
+using OpenCAD.Settings;
 
 namespace UI.Controls.Viewport
 {
@@ -19,8 +20,13 @@ namespace UI.Controls.Viewport
         private bool _isInitialized = false;
         private Point? _lastMousePosDip; // Track last mouse position in DIPs for delta calculation
         private Point? _currentMousePosDip; // Track current mouse position for crosshair rendering
-        private System.Drawing.Color _crosshairColor = System.Drawing.Color.White; // Adjustable crosshair color
-        private const double PICKBOX_SIZE = 5.0; // Pickbox size in world units (adjust as needed)
+
+        // Store the document directly
+        private readonly OpenCADDocument _document;
+
+        // Add a field for viewport settings
+        private readonly ViewportSettings _viewportSettings;
+        private bool _documentFullyLoaded = false;  // ✅ ADD THIS
 
         // Forward events from ViewModel
         public event EventHandler<PointPickedEventArgs>? PointPicked
@@ -40,25 +46,20 @@ namespace UI.Controls.Viewport
         /// </summary>
         public List<Point3D> TempPoints => _viewModel.TempPointsMutable;
 
-        /// <summary>
-        /// Gets or sets the crosshair color (default: White)
-        /// </summary>
-        public System.Drawing.Color CrosshairColor
+        public ViewportControl(OpenCADDocument document)
         {
-            get => _crosshairColor;
-            set
-            {
-                _crosshairColor = value;
-                Refresh();
-            }
-        }
+            if (document == null)
+                throw new ArgumentNullException(nameof(document));
 
-        public ViewportControl(OpenCADObject objectToDisplay)
-        {
-            if (objectToDisplay == null)
-                throw new ArgumentNullException(nameof(objectToDisplay));
-
-            _viewModel = new ViewportViewModel(objectToDisplay);
+            _document = document;
+            _viewportSettings = document.CurrentViewportSettings; // Create settings instance
+            
+            _viewModel = new ViewportViewModel(document);
+            _viewModel.SetViewportSettings(_viewportSettings); // Pass settings to ViewModel
+            
+            // Initialize snapping state from settings
+            _viewModel.UpdateSnappingFromSettings();
+            
             DataContext = _viewModel;
 
             InitializeComponent();
@@ -107,6 +108,19 @@ namespace UI.Controls.Viewport
             GlWPFControl.Focusable = true; // Make sure the control can receive keyboard focus
 
             System.Diagnostics.Debug.WriteLine("=== ViewportControl constructor completed ===");
+
+            // ✅ ADD: Verify document is fully loaded
+            try
+            {
+                var testLayer = document.CurrentLayer;
+                _documentFullyLoaded = true;
+                System.Diagnostics.Debug.WriteLine($"ViewportControl: Document fully loaded with current layer: {testLayer?.Name ?? "null"}");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"ViewportControl: Document NOT fully loaded: {ex.Message}");
+                _documentFullyLoaded = false;
+            }
         }
 
         #region Public API (delegates to ViewModel)
@@ -124,8 +138,28 @@ namespace UI.Controls.Viewport
         public void EnableSelectionMode() => _viewModel.EnableSelectionMode();
         public void DisableSelectionMode() => _viewModel.DisableSelectionMode();
         public void ClearSelection() => _viewModel.ClearSelection();
+        
+        /// <summary>
+        /// Gets the document being displayed in this viewport
+        /// </summary>
+        public OpenCADDocument Document => _document;
+        
+        /// <summary>
+        /// Gets the object to display (the document)
+        /// </summary>
         public OpenCADObject ObjectToDisplay => _viewModel.ObjectToDisplay;
+        
         public GLWpfControl GlControl => GlWPFControl;
+
+        /// <summary>
+        /// Gets the viewport settings for this viewport
+        /// </summary>
+        public ViewportSettings GetViewportSettings() => _viewportSettings;
+
+        /// <summary>
+        /// Update snapping state from settings (call when settings change)
+        /// </summary>
+        public void UpdateSnappingFromSettings() => _viewModel.UpdateSnappingFromSettings();
 
         #endregion
 
@@ -237,15 +271,41 @@ namespace UI.Controls.Viewport
 
         private void OnRender(TimeSpan delta)
         {
-            System.Diagnostics.Debug.WriteLine($"*** OnRender called at {DateTime.Now:HH:mm:ss.fff} ***");
+            //System.Diagnostics.Debug.WriteLine($"*** OnRender called at {DateTime.Now:HH:mm:ss.fff} ***");
     
             if (!_isInitialized || _renderEngine == null)
                 return;
 
+            // ✅ ADD: Don't render until document is fully loaded
+            if (!_documentFullyLoaded)
+            {
+                System.Diagnostics.Debug.WriteLine("OnRender: Document not fully loaded, skipping render");
+                
+                // Try to check again
+                try
+                {
+                    var testLayer = _document.CurrentLayer;
+                    _documentFullyLoaded = true;
+                    System.Diagnostics.Debug.WriteLine("OnRender: Document is now fully loaded!");
+                }
+                catch
+                {
+                    return; // Still not ready
+                }
+            }
+
             try
             {
-                // Do not clear here; RenderEngine.Render clears once per frame
-                RenderSceneFlat(ObjectToDisplay);
+                // Clear the framebuffer ONCE at the start of the frame
+                GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+
+                // Render grid first (background layer)
+                RenderGrid();
+
+                // Then render scene objects
+                RenderSceneFlat(_document);
+
+                // Finally render overlay (crosshair, preview lines, etc.)
                 RenderPreviewGeometry();
             }
             catch (Exception ex)
@@ -255,12 +315,12 @@ namespace UI.Controls.Viewport
             }
         }
 
-        private void RenderSceneFlat(OpenCADObject? root)
+        private void RenderSceneFlat(OpenCADDocument document)
         {
-            if (root == null || _renderEngine == null) return;
+            if (document == null || _renderEngine == null) return;
 
             var list = new List<OpenCADObject>();
-            CollectDrawable(root, list);
+            CollectDrawable(document, list);
             
             // Pass highlighting and selection information to the render engine
             _renderEngine.Render(list, _viewModel.HighlightedObject, _viewModel.SelectedObjects);
@@ -272,7 +332,27 @@ namespace UI.Controls.Viewport
             foreach (var child in children)
             {
                 if (child.IsDrawable)
-                    list.Add(child);
+                {
+                    // Check if the object is on a visible layer
+                    bool shouldRender = true;
+                    
+                    // Get the layer ID for this object
+                    var layerId = child.GetLayerId();
+                    if (layerId.HasValue)
+                    {
+                        // Resolve the layer from the document
+                        var layer = _document.GetLayer(layerId.Value);
+                        if (layer != null && !layer.IsVisible)
+                        {
+                            shouldRender = false;
+                        }
+                    }
+                    
+                    if (shouldRender)
+                    {
+                        list.Add(child);
+                    }
+                }
 
                 // Recurse to gather all nested drawables
                 CollectDrawable(child, list);
@@ -289,12 +369,12 @@ namespace UI.Controls.Viewport
             var previewPoint = _viewModel.PreviewPoint;
             var tempPoints = _viewModel.TempPoints;
 
-            System.Diagnostics.Debug.WriteLine($"RenderPreviewGeometry: previewPoint={(previewPoint != null ? "SET" : "null")}, tempPoints.Count={tempPoints.Count}");
+            //System.Diagnostics.Debug.WriteLine($"RenderPreviewGeometry: previewPoint={(previewPoint != null ? "SET" : "null")}, tempPoints.Count={tempPoints.Count}");
 
             if (previewPoint != null && tempPoints.Count > 0)
             {
                 var lastPoint = tempPoints[tempPoints.Count - 1];
-                var previewLine = new Line(lastPoint, previewPoint);
+                var previewLine = new Line(_document, lastPoint, previewPoint);
 
                 System.Diagnostics.Debug.WriteLine($"  Rendering preview line from ({lastPoint.X:F3}, {lastPoint.Y:F3}, {lastPoint.Z:F3}) to ({previewPoint.X:F3}, {previewPoint.Y:F3}, {previewPoint.Z:F3})");
 
@@ -327,7 +407,19 @@ namespace UI.Controls.Viewport
             if (worldPos == null)
                 return lines;
 
-            var centerPoint = new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z);
+            // Create the center point - apply snapping if in point picking mode
+            Point3D centerPoint;
+            if (_viewModel.IsPointPickingMode && _viewModel.SnappingEnabled)
+            {
+                // Snap the crosshair position to grid
+                var unsnappedPoint = new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z);
+                centerPoint = _viewModel.SnapToGrid(unsnappedPoint);
+            }
+            else
+            {
+                // No snapping - use raw world coordinates
+                centerPoint = new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z);
+            }
 
             // Calculate viewport bounds in world coordinates
             var dpi = VisualTreeHelper.GetDpi(GlWPFControl);
@@ -343,17 +435,16 @@ namespace UI.Controls.Viewport
                 // Horizontal crosshair line (extends to viewport edges)
                 var horizontalStart = new Point3D(topLeft.Value.X, centerPoint.Y, 0);
                 var horizontalEnd = new Point3D(topRight.HasValue ? topRight.Value.X : bottomRight.Value.X, centerPoint.Y, 0);
-                lines.Add(new Line(horizontalStart, horizontalEnd));
+                lines.Add(CreateCrosshairLine(horizontalStart, horizontalEnd));
 
                 // Vertical crosshair line (extends to viewport edges)
                 var verticalStart = new Point3D(centerPoint.X, topLeft.Value.Y, 0);
                 var verticalEnd = new Point3D(centerPoint.X, bottomLeft.HasValue ? bottomLeft.Value.Y : bottomRight.Value.Y, 0);
-                lines.Add(new Line(verticalStart, verticalEnd));
+                lines.Add(CreateCrosshairLine(verticalStart, verticalEnd));
             }
 
-            // Calculate pickbox size in world units based on screen pixels
-            // PICKBOX_SIZE is in pixels, we need to convert to world units at current zoom
-            double pickboxSizePixels = PICKBOX_SIZE;
+            // Get pickbox size from settings (in pixels)
+            double pickboxSizePixels = _viewportSettings.Crosshair?.PickboxSize ?? 5.0;
             
             // Calculate two points offset by the pickbox size in screen space
             var screenCenter = mousePosDip;
@@ -369,25 +460,25 @@ namespace UI.Controls.Viewport
                 double halfBox = worldPickboxSize;
                 
                 // Bottom edge
-                lines.Add(new Line(
+                lines.Add(CreateCrosshairLine(
                     new Point3D(centerPoint.X - halfBox, centerPoint.Y - halfBox, 0),
                     new Point3D(centerPoint.X + halfBox, centerPoint.Y - halfBox, 0)
                 ));
                 
                 // Right edge
-                lines.Add(new Line(
+                lines.Add(CreateCrosshairLine(
                     new Point3D(centerPoint.X + halfBox, centerPoint.Y - halfBox, 0),
                     new Point3D(centerPoint.X + halfBox, centerPoint.Y + halfBox, 0)
                 ));
                 
                 // Top edge
-                lines.Add(new Line(
+                lines.Add(CreateCrosshairLine(
                     new Point3D(centerPoint.X + halfBox, centerPoint.Y + halfBox, 0),
                     new Point3D(centerPoint.X - halfBox, centerPoint.Y + halfBox, 0)
                 ));
                 
                 // Left edge
-                lines.Add(new Line(
+                lines.Add(CreateCrosshairLine(
                     new Point3D(centerPoint.X - halfBox, centerPoint.Y + halfBox, 0),
                     new Point3D(centerPoint.X - halfBox, centerPoint.Y - halfBox, 0)
                 ));
@@ -396,9 +487,137 @@ namespace UI.Controls.Viewport
             return lines;
         }
 
+        /// <summary>
+        /// Creates a crosshair line with user-defined settings
+        /// </summary>
+        private Line CreateCrosshairLine(Point3D start, Point3D end)
+        {
+            // Crosshair lines have proper document context
+            var line = new Line(_document, start, end);
+            
+            // Apply user-defined crosshair visual settings
+            var crosshairSettings = _viewportSettings.Crosshair;
+            if (crosshairSettings != null)
+            {
+                line.Color = crosshairSettings.Color;
+                line.LineType = crosshairSettings.LineType;
+                line.LineWeight = crosshairSettings.LineWeight;
+            }
+            
+            return line;
+        }
+
+        /// <summary>
+        /// Renders the grid based on viewport settings
+        /// </summary>
+        private void RenderGrid()
+        {
+            if (_renderEngine == null) return;
+
+            var gridSettings = _viewportSettings.Grid;
+            if (gridSettings == null || !gridSettings.ShowGrid)
+                return;
+
+            var gridLines = CreateGridLines();
+            if (gridLines.Count > 0)
+            {
+                _renderEngine.RenderOverlay(gridLines);
+            }
+        }
+
+        /// <summary>
+        /// Creates grid lines based on viewport settings and current view bounds
+        /// </summary>
+        private List<Line> CreateGridLines()
+        {
+            if (_renderEngine == null)
+                return new List<Line>();
+
+            var lines = new List<Line>();
+            var gridSettings = _viewportSettings.Grid;
+            if (gridSettings == null)
+                return lines;
+
+            // Get viewport bounds in world coordinates
+            var topLeft = ScreenToWorld(new Point(0, 0));
+            var bottomRight = ScreenToWorld(new Point(GlWPFControl.ActualWidth, GlWPFControl.ActualHeight));
+
+            if (!topLeft.HasValue || !bottomRight.HasValue)
+                return lines;
+
+            double minX = topLeft.Value.X;
+            double maxX = bottomRight.Value.X;
+            double minY = bottomRight.Value.Y; // Note: Y is inverted in screen space
+            double maxY = topLeft.Value.Y;
+
+            // Get grid spacing
+            double majorSpacing = gridSettings.MajorSpacing;
+            double minorSpacing = gridSettings.MinorSpacing;
+
+            // Calculate grid line positions
+            // We'll draw minor grid lines
+            double startX = Math.Floor(minX / minorSpacing) * minorSpacing;
+            double startY = Math.Floor(minY / minorSpacing) * minorSpacing;
+
+            // Vertical grid lines
+            for (double x = startX; x <= maxX; x += minorSpacing)
+            {
+                bool isMajor = Math.Abs(x % majorSpacing) < 0.001;
+                var line = CreateGridLine(
+                    new Point3D(x, minY, 0),
+                    new Point3D(x, maxY, 0),
+                    isMajor
+                );
+                lines.Add(line);
+            }
+
+            // Horizontal grid lines
+            for (double y = startY; y <= maxY; y += minorSpacing)
+            {
+                bool isMajor = Math.Abs(y % majorSpacing) < 0.001;
+                var line = CreateGridLine(
+                    new Point3D(minX, y, 0),
+                    new Point3D(maxX, y, 0),
+                    isMajor
+                );
+                lines.Add(line);
+            }
+
+            return lines;
+        }
+
+        /// <summary>
+        /// Creates a single grid line with appropriate styling
+        /// </summary>
+        private Line CreateGridLine(Point3D start, Point3D end, bool isMajor)
+        {
+            var line = new Line(_document, start, end);
+            var gridSettings = _viewportSettings.Grid;
+
+            if (gridSettings != null)
+            {
+                // Make minor grid lines more subtle (50% transparency)
+                var color = gridSettings.Color;
+                if (!isMajor)
+                {
+                    color = System.Drawing.Color.FromArgb(
+                        (int)(color.A * 0.5), // 50% alpha
+                        color.R,
+                        color.G,
+                        color.B
+                    );
+                }
+
+                line.Color = color;
+                line.LineType = LineType.Continuous;
+                line.LineWeight = isMajor ? LineWeight.LineWeight015 : LineWeight.Hairline;
+            }
+
+            return line;
+        }
         public void Refresh()
         {
-            System.Diagnostics.Debug.WriteLine("*** Refresh() -> InvalidateVisual() called ***");
+            //System.Diagnostics.Debug.WriteLine("*** Refresh() -> InvalidateVisual() called ***");
             GlWPFControl?.InvalidateVisual();
         }
 
@@ -425,9 +644,9 @@ namespace UI.Controls.Viewport
 
         private void OnMouseDown(object sender, MouseButtonEventArgs e)
         {
-            // Give focus to the control so it can receive keyboard events
-            GlWPFControl.Focus();
-            
+            // DON'T steal focus - let command input keep it
+            // GlWPFControl.Focus();  // REMOVED
+
             var mousePos = e.GetPosition(GlWPFControl);
             _lastMousePosDip = mousePos; // start delta tracking
 
@@ -574,15 +793,26 @@ namespace UI.Controls.Viewport
         private void OnKeyDown(object sender, KeyEventArgs e)
         {
             System.Diagnostics.Debug.WriteLine($"ViewportControl.OnKeyDown: Key={e.Key}, IsSelectionMode={_viewModel.IsSelectionMode}, SelectedCount={_viewModel.SelectedObjects.Count}");
-            
-            // Handle ESC key to clear selection
+
+            // Handle ESC key
             if (e.Key == Key.Escape)
             {
+                // Priority 1: Cancel point picking mode if active
+                if (_viewModel.IsPointPickingMode)
+                {
+                    System.Diagnostics.Debug.WriteLine("ESC pressed - cancelling point picking mode");
+                    _viewModel.CancelPointPicking();
+                    e.Handled = true;
+                    return;
+                }
+
+                // Priority 2: Clear selection if there are selected objects
                 if (_viewModel.IsSelectionMode && _viewModel.SelectedObjects.Count > 0)
                 {
                     System.Diagnostics.Debug.WriteLine("ESC pressed - clearing selection");
                     _viewModel.ClearSelection();
                     e.Handled = true;
+                    return;
                 }
             }
         }
@@ -652,5 +882,61 @@ namespace UI.Controls.Viewport
         }
 
         #endregion
+
+        /// <summary>
+        /// Handle ESC key press (called from MainWindow PreviewKeyDown)
+        /// </summary>
+        /// <returns>True if ESC was handled, false otherwise</returns>
+        public bool HandleEscapeKey()
+        {
+            System.Diagnostics.Debug.WriteLine($"ViewportControl.HandleEscapeKey: IsPointPickingMode={_viewModel.IsPointPickingMode}, IsSelectionMode={_viewModel.IsSelectionMode}, SelectedCount={_viewModel.SelectedObjects.Count}");
+            
+            // Priority 1: Cancel point picking mode if active
+            if (_viewModel.IsPointPickingMode)
+            {
+                System.Diagnostics.Debug.WriteLine("ESC handled - cancelling point picking mode");
+                _viewModel.CancelPointPicking();
+                return true;
+            }
+            
+            // Priority 2: Clear selection if there are selected objects
+            if (_viewModel.IsSelectionMode && _viewModel.SelectedObjects.Count > 0)
+            {
+                System.Diagnostics.Debug.WriteLine("ESC handled - clearing selection");
+                _viewModel.ClearSelection();
+                return true;
+            }
+            
+            return false;
+        }
+        /// <summary>
+        /// Handle Delete key press to erase selected objects (called from MainWindow PreviewKeyDown)
+        /// </summary>
+        /// <returns>True if Delete was handled (objects were deleted), false otherwise</returns>
+        public bool HandleDeleteKey()
+        {
+            // Only delete if in selection mode with selected objects
+            if (_viewModel.IsSelectionMode && _viewModel.SelectedObjects.Count > 0)
+            {
+                System.Diagnostics.Debug.WriteLine($"Delete key pressed - erasing {_viewModel.SelectedObjects.Count} selected object(s)");
+        
+                // Create a list to hold the objects to delete (to avoid modifying collection during iteration)
+                var objectsToDelete = _viewModel.SelectedObjects.ToList();
+        
+                // Remove each selected object
+                foreach (var obj in objectsToDelete)
+                {
+                    _viewModel.RemoveObject(obj);
+                    System.Diagnostics.Debug.WriteLine($"  Deleted: {obj.GetType().Name} (ID: {obj.ID})");
+                }
+        
+                // Clear the selection after deletion
+                _viewModel.ClearSelection();
+        
+                return true;
+            }
+    
+            return false;
+        }
     }
 }

@@ -91,6 +91,11 @@ namespace UI.Controls.MainWindow
         /// </summary>
         public bool HasActiveCommand => _activeCommand != null;
 
+        /// <summary>
+        /// Gets the currently active command (for checking RequiresSelection, etc.)
+        /// </summary>
+        public IInputCommand? ActiveCommand => _activeCommand;
+
         #endregion
 
         #region Events
@@ -217,6 +222,30 @@ namespace UI.Controls.MainWindow
         public void ClearHistory()
         {
             HistoryText = string.Empty;
+        }
+
+        /// <summary>
+        /// Execute a command programmatically without user typing it
+        /// </summary>
+        public void ExecuteCommandProgrammatically(string commandName)
+        {
+            System.Diagnostics.Debug.WriteLine($"=== ExecuteCommandProgrammatically: '{commandName}' ===");
+            
+            string resolvedCommand = ResolveCommandAlias(commandName);
+            System.Diagnostics.Debug.WriteLine($"  Resolved to: '{resolvedCommand}'");
+            
+            // Output to history to show the command was executed
+            AppendToHistory($"> {resolvedCommand}");
+            
+            try
+            {
+                ProcessNewCommand(resolvedCommand);
+            }
+            catch (Exception ex)
+            {
+                AppendToHistory($"Error: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"  ERROR executing command: {ex.Message}");
+            }
         }
 
         #endregion
@@ -385,6 +414,9 @@ namespace UI.Controls.MainWindow
             UpdatePrompt();
             OnPropertyChanged(nameof(HasActiveCommand));
             ActiveCommandChanged?.Invoke(this, EventArgs.Empty);
+            
+            // Request focus back to command input after command completes
+            FocusRequested?.Invoke(this, EventArgs.Empty);
         }
 
         private void CancelCurrentCommand()

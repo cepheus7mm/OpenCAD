@@ -10,7 +10,6 @@
           Foreground="{DynamicResource PrimaryTextBrush}">
 		<MenuItem Header="_File">
 			<MenuItem Header="_New" Click="NewFile_Click" />
-			<MenuItem Header="New _Viewport" Click="NewViewport_Click" />
 			<MenuItem Header="_Open" />
 			<Separator />
 			<MenuItem Header="_Exit" Click="Exit_Click" />
@@ -23,6 +22,7 @@
 		<MenuItem Header="_View">
 			<MenuItem Header="_Solution Explorer" />
 			<MenuItem Header="_Properties" />
+			<MenuItem Header="_Layers" Name="LayersMenuItem" Click="Layers_Click" IsCheckable="True" IsChecked="True" />
 			<MenuItem Header="_Output" />
 			<Separator />
 			<MenuItem Header="_Theme">

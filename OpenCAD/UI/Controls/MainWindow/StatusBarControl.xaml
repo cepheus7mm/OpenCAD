@@ -6,11 +6,66 @@
         xmlns:local="clr-namespace:UI.Controls.MainWindow"
    mc:Ignorable="d" 
      d:DesignHeight="25" d:DesignWidth="800">
+    <UserControl.Resources>
+        <!-- Style for toggle buttons in status bar -->
+        <Style x:Key="StatusBarToggleButtonStyle" TargetType="ToggleButton">
+            <Setter Property="Padding" Value="8,2"/>
+            <Setter Property="Margin" Value="2,0"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource PrimaryTextBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border Background="{TemplateBinding Background}" 
+                                BorderBrush="{TemplateBinding BorderBrush}" 
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+                                <Setter Property="Foreground" Value="White"/>
+                                <Setter Property="FontWeight" Value="Bold"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+    
     <StatusBar Height="25" Background="{DynamicResource StatusBarBackgroundBrush}"
                Foreground="{DynamicResource PrimaryTextBrush}">
      <StatusBarItem>
       <TextBlock x:Name="statusTextBlock" Text="Ready" />
         </StatusBarItem>
+        
+        <!-- Grid toggle button -->
+        <StatusBarItem>
+            <ToggleButton x:Name="gridToggleButton" 
+                          Style="{StaticResource StatusBarToggleButtonStyle}"
+                          Content="GRID"
+                          ToolTip="Toggle grid display (ON/OFF)"
+                          Click="GridToggleButton_Click"/>
+        </StatusBarItem>
+        
+        <!-- Snap toggle button -->
+        <StatusBarItem>
+            <ToggleButton x:Name="snapToggleButton" 
+                          Style="{StaticResource StatusBarToggleButtonStyle}"
+                          Content="SNAP"
+                          ToolTip="Toggle snap to grid (ON/OFF)"
+                          Click="SnapToggleButton_Click"/>
+        </StatusBarItem>
+        
         <StatusBarItem HorizontalAlignment="Right">
      <TextBlock x:Name="positionTextBlock" Text="Line 1, Col 1" />
         </StatusBarItem>

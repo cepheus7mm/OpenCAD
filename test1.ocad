@@ -1,0 +1,756 @@
+{
+  "SerializedProperties": {
+    "1": {
+      "Type": 1,
+      "Values": [
+        {
+          "Name": "Layers Container ID",
+          "SerializedValue": "4f3bd06a-7e6b-4723-8637-1972598aec8d",
+          "SerializedValueType": "Guid"
+        },
+        {
+          "Name": "Viewport Settings Container ID",
+          "SerializedValue": "c672f469-066f-4e16-b818-9d9ffee454ff",
+          "SerializedValueType": "Guid"
+        }
+      ],
+      "Count": 2
+    },
+    "3": {
+      "Type": 3,
+      "Values": [
+        {
+          "Name": "Filename",
+          "SerializedValue": "D:\\Visual Studio 2022\\OpenCAD\\test1.ocad",
+          "SerializedValueType": "String"
+        },
+        {
+          "Name": "Description",
+          "SerializedValue": "New document created 2025-11-09 11:59:11",
+          "SerializedValueType": "String"
+        }
+      ],
+      "Count": 2
+    },
+    "12": {
+      "Type": 12,
+      "Values": [
+        {
+          "Name": "Current Layer ID",
+          "SerializedValue": "814908eb-c2db-4063-ba92-1f6a61626f6b",
+          "SerializedValueType": "Guid"
+        }
+      ],
+      "Count": 1
+    }
+  },
+  "SerializedChildren": {
+    "c672f469-066f-4e16-b818-9d9ffee454ff": {
+      "$type": "viewportSettings",
+      "Crosshair": {
+        "Color": -5383962,
+        "LineType": 0,
+        "LineWeight": 1,
+        "PickboxSize": 5,
+        "SerializedProperties": {
+          "4": {
+            "Type": 4,
+            "Values": [
+              {
+                "Name": "Crosshair Color",
+                "SerializedValue": -5383962,
+                "SerializedValueType": "Color"
+              }
+            ],
+            "Count": 1
+          },
+          "13": {
+            "Type": 13,
+            "Values": [
+              {
+                "Name": "Crosshair Line Type",
+                "SerializedValue": 0,
+                "SerializedValueType": "LineType"
+              }
+            ],
+            "Count": 1
+          },
+          "14": {
+            "Type": 14,
+            "Values": [
+              {
+                "Name": "Crosshair Line Weight",
+                "SerializedValue": 1,
+                "SerializedValueType": "LineWeight"
+              }
+            ],
+            "Count": 1
+          },
+          "15": {
+            "Type": 15,
+            "Values": [
+              {
+                "Name": "Pickbox Size",
+                "SerializedValue": 5,
+                "SerializedValueType": "Double"
+              }
+            ],
+            "Count": 1
+          }
+        },
+        "SerializedChildren": {},
+        "ID": "b353cc5b-c3ff-4a87-abe4-842aea34c69f",
+        "IsDrawable": false
+      },
+      "Grid": {
+        "Color": -8355712,
+        "ShowGrid": true,
+        "MajorSpacing": 10,
+        "MinorSpacing": 1,
+        "MinorLinesPerMajor": 10,
+        "SerializedProperties": {
+          "0": {
+            "Type": 0,
+            "Values": [
+              {
+                "Name": "Show Grid",
+                "SerializedValue": true,
+                "SerializedValueType": "Boolean"
+              }
+            ],
+            "Count": 1
+          },
+          "1": {
+            "Type": 1,
+            "Values": [
+              {
+                "Name": "Minor Lines Per Major",
+                "SerializedValue": 10,
+                "SerializedValueType": "Int32"
+              }
+            ],
+            "Count": 1
+          },
+          "2": {
+            "Type": 2,
+            "Values": [
+              {
+                "Name": "Major Spacing",
+                "SerializedValue": 10,
+                "SerializedValueType": "Double"
+              },
+              {
+                "Name": "Minor Spacing",
+                "SerializedValue": 1,
+                "SerializedValueType": "Double"
+              }
+            ],
+            "Count": 2
+          },
+          "4": {
+            "Type": 4,
+            "Values": [
+              {
+                "Name": "Grid Color",
+                "SerializedValue": -8355712,
+                "SerializedValueType": "Color"
+              }
+            ],
+            "Count": 1
+          }
+        },
+        "SerializedChildren": {},
+        "ID": "d59309dc-8e5b-4000-91bd-c6eefd567997",
+        "IsDrawable": false
+      },
+      "Snap": {
+        "SnapEnabled": true,
+        "GridSnapEnabled": true,
+        "ObjectSnapEnabled": true,
+        "SnapSpacing": 0.25,
+        "ApertureSize": 10,
+        "SerializedProperties": {
+          "0": {
+            "Type": 0,
+            "Values": [
+              {
+                "Name": "Snap Enabled",
+                "SerializedValue": true,
+                "SerializedValueType": "Boolean"
+              },
+              {
+                "Name": "Grid Snap",
+                "SerializedValue": true,
+                "SerializedValueType": "Boolean"
+              },
+              {
+                "Name": "Object Snap",
+                "SerializedValue": true,
+                "SerializedValueType": "Boolean"
+              }
+            ],
+            "Count": 3
+          },
+          "2": {
+            "Type": 2,
+            "Values": [
+              {
+                "Name": "Snap Spacing",
+                "SerializedValue": 0.25,
+                "SerializedValueType": "Double"
+              }
+            ],
+            "Count": 1
+          },
+          "15": {
+            "Type": 15,
+            "Values": [
+              {
+                "Name": "Aperture Size",
+                "SerializedValue": 10,
+                "SerializedValueType": "Double"
+              }
+            ],
+            "Count": 1
+          }
+        },
+        "SerializedChildren": {},
+        "ID": "1bc35f05-91e6-4163-bebd-c0a693403554",
+        "IsDrawable": false
+      },
+      "SerializedProperties": {},
+      "SerializedChildren": {
+        "d59309dc-8e5b-4000-91bd-c6eefd567997": {
+          "$type": "gridSettings",
+          "Color": -8355712,
+          "ShowGrid": true,
+          "MajorSpacing": 10,
+          "MinorSpacing": 1,
+          "MinorLinesPerMajor": 10,
+          "SerializedProperties": {
+            "0": {
+              "Type": 0,
+              "Values": [
+                {
+                  "Name": "Show Grid",
+                  "SerializedValue": true,
+                  "SerializedValueType": "Boolean"
+                }
+              ],
+              "Count": 1
+            },
+            "1": {
+              "Type": 1,
+              "Values": [
+                {
+                  "Name": "Minor Lines Per Major",
+                  "SerializedValue": 10,
+                  "SerializedValueType": "Int32"
+                }
+              ],
+              "Count": 1
+            },
+            "2": {
+              "Type": 2,
+              "Values": [
+                {
+                  "Name": "Major Spacing",
+                  "SerializedValue": 10,
+                  "SerializedValueType": "Double"
+                },
+                {
+                  "Name": "Minor Spacing",
+                  "SerializedValue": 1,
+                  "SerializedValueType": "Double"
+                }
+              ],
+              "Count": 2
+            },
+            "4": {
+              "Type": 4,
+              "Values": [
+                {
+                  "Name": "Grid Color",
+                  "SerializedValue": -8355712,
+                  "SerializedValueType": "Color"
+                }
+              ],
+              "Count": 1
+            }
+          },
+          "SerializedChildren": {},
+          "ID": "d59309dc-8e5b-4000-91bd-c6eefd567997",
+          "IsDrawable": false
+        },
+        "b353cc5b-c3ff-4a87-abe4-842aea34c69f": {
+          "$type": "crosshairSettings",
+          "Color": -5383962,
+          "LineType": 0,
+          "LineWeight": 1,
+          "PickboxSize": 5,
+          "SerializedProperties": {
+            "4": {
+              "Type": 4,
+              "Values": [
+                {
+                  "Name": "Crosshair Color",
+                  "SerializedValue": -5383962,
+                  "SerializedValueType": "Color"
+                }
+              ],
+              "Count": 1
+            },
+            "13": {
+              "Type": 13,
+              "Values": [
+                {
+                  "Name": "Crosshair Line Type",
+                  "SerializedValue": 0,
+                  "SerializedValueType": "LineType"
+                }
+              ],
+              "Count": 1
+            },
+            "14": {
+              "Type": 14,
+              "Values": [
+                {
+                  "Name": "Crosshair Line Weight",
+                  "SerializedValue": 1,
+                  "SerializedValueType": "LineWeight"
+                }
+              ],
+              "Count": 1
+            },
+            "15": {
+              "Type": 15,
+              "Values": [
+                {
+                  "Name": "Pickbox Size",
+                  "SerializedValue": 5,
+                  "SerializedValueType": "Double"
+                }
+              ],
+              "Count": 1
+            }
+          },
+          "SerializedChildren": {},
+          "ID": "b353cc5b-c3ff-4a87-abe4-842aea34c69f",
+          "IsDrawable": false
+        },
+        "1bc35f05-91e6-4163-bebd-c0a693403554": {
+          "$type": "snapSettings",
+          "SnapEnabled": true,
+          "GridSnapEnabled": true,
+          "ObjectSnapEnabled": true,
+          "SnapSpacing": 0.25,
+          "ApertureSize": 10,
+          "SerializedProperties": {
+            "0": {
+              "Type": 0,
+              "Values": [
+                {
+                  "Name": "Snap Enabled",
+                  "SerializedValue": true,
+                  "SerializedValueType": "Boolean"
+                },
+                {
+                  "Name": "Grid Snap",
+                  "SerializedValue": true,
+                  "SerializedValueType": "Boolean"
+                },
+                {
+                  "Name": "Object Snap",
+                  "SerializedValue": true,
+                  "SerializedValueType": "Boolean"
+                }
+              ],
+              "Count": 3
+            },
+            "2": {
+              "Type": 2,
+              "Values": [
+                {
+                  "Name": "Snap Spacing",
+                  "SerializedValue": 0.25,
+                  "SerializedValueType": "Double"
+                }
+              ],
+              "Count": 1
+            },
+            "15": {
+              "Type": 15,
+              "Values": [
+                {
+                  "Name": "Aperture Size",
+                  "SerializedValue": 10,
+                  "SerializedValueType": "Double"
+                }
+              ],
+              "Count": 1
+            }
+          },
+          "SerializedChildren": {},
+          "ID": "1bc35f05-91e6-4163-bebd-c0a693403554",
+          "IsDrawable": false
+        }
+      },
+      "ID": "c672f469-066f-4e16-b818-9d9ffee454ff",
+      "IsDrawable": false
+    },
+    "12301c04-9d8b-4827-9caf-741ed20e0d66": {
+      "$type": "line",
+      "SerializedProperties": {
+        "5": {
+          "Type": 5,
+          "Values": [
+            {
+              "Name": "Start Point",
+              "SerializedValue": {
+                "X": 2.75,
+                "Y": -1.25,
+                "Z": 0
+              },
+              "SerializedValueType": "Point3D"
+            },
+            {
+              "Name": "End Point",
+              "SerializedValue": {
+                "X": -8,
+                "Y": -3,
+                "Z": 0
+              },
+              "SerializedValueType": "Point3D"
+            }
+          ],
+          "Count": 2
+        },
+        "12": {
+          "Type": 12,
+          "Values": [
+            {
+              "Name": "Layer",
+              "SerializedValue": "814908eb-c2db-4063-ba92-1f6a61626f6b",
+              "SerializedValueType": "Guid"
+            }
+          ],
+          "Count": 1
+        }
+      },
+      "SerializedChildren": {},
+      "ID": "12301c04-9d8b-4827-9caf-741ed20e0d66",
+      "IsDrawable": true
+    },
+    "c7ba7553-bddc-4e58-bbc3-be698a46a684": {
+      "$type": "line",
+      "SerializedProperties": {
+        "5": {
+          "Type": 5,
+          "Values": [
+            {
+              "Name": "Start Point",
+              "SerializedValue": {
+                "X": -0.5,
+                "Y": 3.5,
+                "Z": 0
+              },
+              "SerializedValueType": "Point3D"
+            },
+            {
+              "Name": "End Point",
+              "SerializedValue": {
+                "X": 2.75,
+                "Y": -1.25,
+                "Z": 0
+              },
+              "SerializedValueType": "Point3D"
+            }
+          ],
+          "Count": 2
+        },
+        "12": {
+          "Type": 12,
+          "Values": [
+            {
+              "Name": "Layer",
+              "SerializedValue": "5bdc7995-77b9-4d6c-a9f3-5cf8f521e2ab",
+              "SerializedValueType": "Guid"
+            }
+          ],
+          "Count": 1
+        }
+      },
+      "SerializedChildren": {},
+      "ID": "c7ba7553-bddc-4e58-bbc3-be698a46a684",
+      "IsDrawable": true
+    },
+    "4f3bd06a-7e6b-4723-8637-1972598aec8d": {
+      "SerializedProperties": {
+        "3": {
+          "Type": 3,
+          "Values": [
+            {
+              "Name": "Name",
+              "SerializedValue": "Layers Container",
+              "SerializedValueType": "String"
+            }
+          ],
+          "Count": 1
+        }
+      },
+      "SerializedChildren": {
+        "5bdc7995-77b9-4d6c-a9f3-5cf8f521e2ab": {
+          "$type": "layer",
+          "SerializedProperties": {
+            "0": {
+              "Type": 0,
+              "Values": [
+                {
+                  "Name": "Layer IsVisible",
+                  "SerializedValue": true,
+                  "SerializedValueType": "Boolean"
+                },
+                {
+                  "Name": "Layer IsLocked",
+                  "SerializedValue": false,
+                  "SerializedValueType": "Boolean"
+                }
+              ],
+              "Count": 2
+            },
+            "3": {
+              "Type": 3,
+              "Values": [
+                {
+                  "Name": "Name",
+                  "SerializedValue": "Layer1",
+                  "SerializedValueType": "String"
+                }
+              ],
+              "Count": 1
+            },
+            "4": {
+              "Type": 4,
+              "Values": [
+                {
+                  "Name": "Layer Color",
+                  "SerializedValue": -65536,
+                  "SerializedValueType": "Color"
+                }
+              ],
+              "Count": 1
+            },
+            "13": {
+              "Type": 13,
+              "Values": [
+                {
+                  "Name": "Layer LineType",
+                  "SerializedValue": 5,
+                  "SerializedValueType": "LineType"
+                }
+              ],
+              "Count": 1
+            },
+            "14": {
+              "Type": 14,
+              "Values": [
+                {
+                  "Name": "Layer LineWeight",
+                  "SerializedValue": 100,
+                  "SerializedValueType": "LineWeight"
+                }
+              ],
+              "Count": 1
+            }
+          },
+          "SerializedChildren": {},
+          "ID": "5bdc7995-77b9-4d6c-a9f3-5cf8f521e2ab",
+          "IsDrawable": false
+        },
+        "1aeed4cc-8bfb-4ffe-9cab-77de29b72e5a": {
+          "$type": "layer",
+          "SerializedProperties": {
+            "0": {
+              "Type": 0,
+              "Values": [
+                {
+                  "Name": "Layer IsVisible",
+                  "SerializedValue": true,
+                  "SerializedValueType": "Boolean"
+                },
+                {
+                  "Name": "Layer IsLocked",
+                  "SerializedValue": false,
+                  "SerializedValueType": "Boolean"
+                }
+              ],
+              "Count": 2
+            },
+            "3": {
+              "Type": 3,
+              "Values": [
+                {
+                  "Name": "Name",
+                  "SerializedValue": "0",
+                  "SerializedValueType": "String"
+                }
+              ],
+              "Count": 1
+            },
+            "4": {
+              "Type": 4,
+              "Values": [
+                {
+                  "Name": "Layer Color",
+                  "SerializedValue": -1,
+                  "SerializedValueType": "Color"
+                }
+              ],
+              "Count": 1
+            },
+            "13": {
+              "Type": 13,
+              "Values": [
+                {
+                  "Name": "Layer LineType",
+                  "SerializedValue": 0,
+                  "SerializedValueType": "LineType"
+                }
+              ],
+              "Count": 1
+            },
+            "14": {
+              "Type": 14,
+              "Values": [
+                {
+                  "Name": "Layer LineWeight",
+                  "SerializedValue": 0,
+                  "SerializedValueType": "LineWeight"
+                }
+              ],
+              "Count": 1
+            }
+          },
+          "SerializedChildren": {},
+          "ID": "1aeed4cc-8bfb-4ffe-9cab-77de29b72e5a",
+          "IsDrawable": false
+        },
+        "814908eb-c2db-4063-ba92-1f6a61626f6b": {
+          "$type": "layer",
+          "SerializedProperties": {
+            "0": {
+              "Type": 0,
+              "Values": [
+                {
+                  "Name": "Layer IsVisible",
+                  "SerializedValue": true,
+                  "SerializedValueType": "Boolean"
+                },
+                {
+                  "Name": "Layer IsLocked",
+                  "SerializedValue": false,
+                  "SerializedValueType": "Boolean"
+                }
+              ],
+              "Count": 2
+            },
+            "3": {
+              "Type": 3,
+              "Values": [
+                {
+                  "Name": "Name",
+                  "SerializedValue": "Layer2",
+                  "SerializedValueType": "String"
+                }
+              ],
+              "Count": 1
+            },
+            "4": {
+              "Type": 4,
+              "Values": [
+                {
+                  "Name": "Layer Color",
+                  "SerializedValue": -256,
+                  "SerializedValueType": "Color"
+                }
+              ],
+              "Count": 1
+            },
+            "13": {
+              "Type": 13,
+              "Values": [
+                {
+                  "Name": "Layer LineType",
+                  "SerializedValue": 7,
+                  "SerializedValueType": "LineType"
+                }
+              ],
+              "Count": 1
+            },
+            "14": {
+              "Type": 14,
+              "Values": [
+                {
+                  "Name": "Layer LineWeight",
+                  "SerializedValue": 200,
+                  "SerializedValueType": "LineWeight"
+                }
+              ],
+              "Count": 1
+            }
+          },
+          "SerializedChildren": {},
+          "ID": "814908eb-c2db-4063-ba92-1f6a61626f6b",
+          "IsDrawable": false
+        }
+      },
+      "ID": "4f3bd06a-7e6b-4723-8637-1972598aec8d",
+      "IsDrawable": false
+    },
+    "d842c75c-a6d6-4b80-8fcf-0c3f5db1d57d": {
+      "$type": "line",
+      "SerializedProperties": {
+        "5": {
+          "Type": 5,
+          "Values": [
+            {
+              "Name": "Start Point",
+              "SerializedValue": {
+                "X": -8,
+                "Y": -3,
+                "Z": 0
+              },
+              "SerializedValueType": "Point3D"
+            },
+            {
+              "Name": "End Point",
+              "SerializedValue": {
+                "X": -0.5,
+                "Y": 3.5,
+                "Z": 0
+              },
+              "SerializedValueType": "Point3D"
+            }
+          ],
+          "Count": 2
+        },
+        "12": {
+          "Type": 12,
+          "Values": [
+            {
+              "Name": "Layer",
+              "SerializedValue": "1aeed4cc-8bfb-4ffe-9cab-77de29b72e5a",
+              "SerializedValueType": "Guid"
+            }
+          ],
+          "Count": 1
+        }
+      },
+      "SerializedChildren": {},
+      "ID": "d842c75c-a6d6-4b80-8fcf-0c3f5db1d57d",
+      "IsDrawable": true
+    }
+  },
+  "ID": "cdcbfb6a-ea49-4a54-97d8-87786c49220c",
+  "IsDrawable": false
+}

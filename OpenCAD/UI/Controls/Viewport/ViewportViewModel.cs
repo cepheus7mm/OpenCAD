@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Input;
 using OpenCAD;
 using OpenCAD.Geometry;
+using OpenCAD.Settings;
 using UI.Controls.MainWindow;
 
 namespace UI.Controls.Viewport
@@ -32,7 +33,6 @@ namespace UI.Controls.Viewport
         private bool _isSelectionMode = false;
         private OpenCADObject? _highlightedObject;
         private readonly List<OpenCADObject> _selectedObjects = new();
-        private const double PICKBOX_SIZE = 5.0; // 5 pixels in each direction
         
         // Snapping state
         private bool _snappingEnabled = false;
@@ -43,6 +43,8 @@ namespace UI.Controls.Viewport
         
         // Cursor state
         private Cursor _cursor = Cursors.Arrow;
+
+        private ViewportSettings? _viewportSettings;
 
         #endregion
 
@@ -219,6 +221,11 @@ namespace UI.Controls.Viewport
         /// </summary>
         public event EventHandler<ObjectEventArgs>? ObjectRemoved;
 
+        /// <summary>
+        /// Event raised when the selection changes (object selected or deselected)
+        /// </summary>
+        public event EventHandler? SelectionChanged;
+
         #endregion
 
         #region Constructor
@@ -266,9 +273,13 @@ namespace UI.Controls.Viewport
         /// </summary>
         public void ClearSelection()
         {
-            _selectedObjects.Clear();
-            OnPropertyChanged(nameof(SelectedObjects));
-            RefreshRequested?.Invoke(this, EventArgs.Empty);
+            if (_selectedObjects.Count > 0)  // Only raise event if there were selections
+            {
+                _selectedObjects.Clear();
+                OnPropertyChanged(nameof(SelectedObjects));
+                RefreshRequested?.Invoke(this, EventArgs.Empty);
+                SelectionChanged?.Invoke(this, EventArgs.Empty);  // ADD THIS LINE
+            }
         }
 
         /// <summary>
@@ -282,6 +293,7 @@ namespace UI.Controls.Viewport
                 OnPropertyChanged(nameof(SelectedObjects));
                 ObjectSelected?.Invoke(this, new ObjectSelectedEventArgs(obj));
                 RefreshRequested?.Invoke(this, EventArgs.Empty);
+                SelectionChanged?.Invoke(this, EventArgs.Empty);  // ADD THIS LINE
                 System.Diagnostics.Debug.WriteLine($"Object selected: {obj.GetType().Name}");
             }
         }
@@ -295,6 +307,7 @@ namespace UI.Controls.Viewport
             {
                 OnPropertyChanged(nameof(SelectedObjects));
                 RefreshRequested?.Invoke(this, EventArgs.Empty);
+                SelectionChanged?.Invoke(this, EventArgs.Empty);  // ADD THIS LINE
                 System.Diagnostics.Debug.WriteLine($"Object deselected: {obj.GetType().Name}");
             }
         }
@@ -381,6 +394,24 @@ namespace UI.Controls.Viewport
             PreviewPoint = point;
         }
 
+        /// <summary>
+        /// Cancel point picking mode and raise the cancellation event
+        /// </summary>
+        public void CancelPointPicking()
+        {
+            if (!IsPointPickingMode)
+                return;
+            
+            System.Diagnostics.Debug.WriteLine("CancelPointPicking called - raising PointPickingCancelled event");
+            
+            // Raise the cancelled event BEFORE disabling the mode
+            // This allows commands to clean up properly
+            PointPickingCancelled?.Invoke(this, EventArgs.Empty);
+            
+            // Now disable the mode
+            DisablePointPickingMode();
+        }
+
         #endregion
 
         #region Public Methods - Snapping
@@ -435,8 +466,24 @@ namespace UI.Controls.Viewport
         /// </summary>
         public void RemoveObject(OpenCADObject obj)
         {
-            ObjectToDisplay?.Remove(obj);
-            ObjectRemoved?.Invoke(this, new ObjectEventArgs(obj));
+            // Remove from the document's children
+            ObjectToDisplay.Remove(obj);
+            
+            // If the object is currently selected, remove it from selection
+            if (_selectedObjects.Contains(obj))
+            {
+                _selectedObjects.Remove(obj);
+                OnPropertyChanged(nameof(SelectedObjects));
+                SelectionChanged?.Invoke(this, EventArgs.Empty);
+            }
+            
+            // If the object is highlighted, clear the highlight
+            if (HighlightedObject == obj)
+            {
+                HighlightedObject = null;
+            }
+            
+            // Request a refresh
             RefreshRequested?.Invoke(this, EventArgs.Empty);
         }
 
@@ -573,93 +620,107 @@ namespace UI.Controls.Viewport
         }
 
         /// <summary>
-        /// Handle mouse move event
-        /// </summary>
-        public MouseHandlingResult HandleMouseMove(Point currentPos, Vector3? worldPos, MouseButtonState middleButton, MouseButtonState rightButton, bool isShiftPressed, float panScale, out CameraOperation? cameraOp)
+/// Handle mouse move event
+/// </summary>
+public MouseHandlingResult HandleMouseMove(Point currentPos, Vector3? worldPos, MouseButtonState middleButton, MouseButtonState rightButton, bool isShiftPressed, float panScale, out CameraOperation? cameraOp)
+{
+    cameraOp = null;
+    double dx = currentPos.X - _lastMousePos.X;
+    double dy = currentPos.Y - _lastMousePos.Y;
+
+    // Update status bar
+    if (worldPos.HasValue)
+    {
+        // If in point picking mode with snapping enabled, show snapped coordinates
+        if (IsPointPickingMode && SnappingEnabled)
         {
-            cameraOp = null;
-            double dx = currentPos.X - _lastMousePos.X;
-            double dy = currentPos.Y - _lastMousePos.Y;
-
-            // Update status bar
-            if (worldPos.HasValue)
-            {
-                UpdateStatusBarWithWorldCoordinates(worldPos);
-
-                // Call preview callback during point picking AND update preview point
-                if (IsPointPickingMode && _previewCallback != null)
-                {
-                    var previewPoint = new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z);
-
-                    // Apply snapping if enabled
-                    if (SnappingEnabled)
-                    {
-                        previewPoint = SnapToGrid(previewPoint);
-                    }
-
-                    // Update the preview point for rendering
-                    PreviewPoint = previewPoint;
-                    
-                    // Also call the callback for command logic
-                    _previewCallback(previewPoint);
-                }
-            }
-            else
-            {
-                UpdateStatusBarWithScreenCoordinates(currentPos);
-            }
-
-            // Don't do camera manipulation in point picking mode
-            if (IsPointPickingMode)
-            {
-                _lastMousePos = currentPos;
-                return new MouseHandlingResult { Handled = false, NeedsRefresh = false, CaptureMouse = false };
-            }
-
-            bool needsRefresh = false;
-
-            // Only allow camera operations if not in point picking or selection mode
-            if (middleButton == MouseButtonState.Pressed)
-            {
-                // Middle mouse button: Pan normally, Orbit with Shift
-                if (isShiftPressed)
-                {
-                    // Shift + Middle = Orbit
-                    cameraOp = new CameraOperation
-                    {
-                        Type = CameraOperationType.Orbit,
-                        DeltaX = (float)dx * 0.01f,
-                        DeltaY = (float)dy * 0.01f
-                    };
-                }
-                else
-                {
-                    // Middle = Pan (use provided pan scale)
-                    cameraOp = new CameraOperation
-                    {
-                        Type = CameraOperationType.Pan,
-                        DeltaX = (float)-dx * panScale,
-                        DeltaY = (float)dy * panScale
-                    };
-                }
-                needsRefresh = true;
-            }
-            else if (rightButton == MouseButtonState.Pressed)
-            {
-                // Right mouse button pans (use provided pan scale)
-                cameraOp = new CameraOperation
-                {
-                    Type = CameraOperationType.Pan,
-                    DeltaX = (float)-dx * panScale,
-                    DeltaY = (float)dy * panScale
-                };
-                needsRefresh = true;
-            }
-
-            _lastMousePos = currentPos;
-
-            return new MouseHandlingResult { Handled = false, NeedsRefresh = needsRefresh, CaptureMouse = false };
+            var rawPoint = new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z);
+            var snappedPoint = SnapToGrid(rawPoint);
+            
+            // Update status bar with snapped coordinates
+            var snappedVector = new Vector3((float)snappedPoint.X, (float)snappedPoint.Y, (float)snappedPoint.Z);
+            UpdateStatusBarWithWorldCoordinates(snappedVector);
         }
+        else
+        {
+            // Show raw world coordinates
+            UpdateStatusBarWithWorldCoordinates(worldPos);
+        }
+
+        // Call preview callback during point picking AND update preview point
+        if (IsPointPickingMode && _previewCallback != null)
+        {
+            var previewPoint = new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z);
+
+            // Apply snapping if enabled
+            if (SnappingEnabled)
+            {
+                previewPoint = SnapToGrid(previewPoint);
+            }
+
+            // Update the preview point for rendering
+            PreviewPoint = previewPoint;
+            
+            // Also call the callback for command logic
+            _previewCallback(previewPoint);
+        }
+    }
+    else
+    {
+        UpdateStatusBarWithScreenCoordinates(currentPos);
+    }
+
+    // Don't do camera manipulation in point picking mode
+    if (IsPointPickingMode)
+    {
+        _lastMousePos = currentPos;
+        return new MouseHandlingResult { Handled = false, NeedsRefresh = false, CaptureMouse = false };
+    }
+
+    bool needsRefresh = false;
+
+    // Only allow camera operations if not in point picking or selection mode
+    if (middleButton == MouseButtonState.Pressed)
+    {
+        // Middle mouse button: Pan normally, Orbit with Shift
+        if (isShiftPressed)
+        {
+            // Shift + Middle = Orbit
+            cameraOp = new CameraOperation
+            {
+                Type = CameraOperationType.Orbit,
+                DeltaX = (float)dx * 0.01f,
+                DeltaY = (float)dy * 0.01f
+            };
+        }
+        else
+        {
+            // Middle = Pan (use provided pan scale)
+            cameraOp = new CameraOperation
+            {
+                Type = CameraOperationType.Pan,
+                DeltaX = (float)-dx * panScale,
+                DeltaY = (float)dy * panScale
+            };
+        }
+        needsRefresh = true;
+    }
+    else if (rightButton == MouseButtonState.Pressed)
+    {
+        // Right mouse button pans (use provided pan scale)
+        cameraOp = new CameraOperation
+        {
+            Type = CameraOperationType.Pan,
+            DeltaX = (float)-dx * panScale,
+            DeltaY = (float)dy * panScale
+        };
+        needsRefresh = true;
+    }
+
+    _lastMousePos = currentPos;
+
+    return new MouseHandlingResult { Handled = false, NeedsRefresh = needsRefresh, CaptureMouse = false };
+}
 
         /// <summary>
         /// Handle mouse wheel event
@@ -681,12 +742,13 @@ namespace UI.Controls.Viewport
         public OpenCADObject? HitTest(Point screenPos, Func<Point, Vector3?> screenToWorld)
         {
             // Create pickbox boundary (5 pixels in each direction)
+            double pickboxSize = _viewportSettings?.Crosshair?.PickboxSize ?? 5.0;
             var pickboxPoints = new[]
             {
-                new Point(screenPos.X - PICKBOX_SIZE, screenPos.Y - PICKBOX_SIZE),
-                new Point(screenPos.X + PICKBOX_SIZE, screenPos.Y - PICKBOX_SIZE),
-                new Point(screenPos.X + PICKBOX_SIZE, screenPos.Y + PICKBOX_SIZE),
-                new Point(screenPos.X - PICKBOX_SIZE, screenPos.Y + PICKBOX_SIZE),
+                new Point(screenPos.X - pickboxSize, screenPos.Y - pickboxSize),
+                new Point(screenPos.X + pickboxSize, screenPos.Y - pickboxSize),
+                new Point(screenPos.X + pickboxSize, screenPos.Y + pickboxSize),
+                new Point(screenPos.X - pickboxSize, screenPos.Y + pickboxSize),
                 new Point(screenPos.X, screenPos.Y) // Center point
             };
 
@@ -703,7 +765,7 @@ namespace UI.Controls.Viewport
                     foreach (var pickPoint in pickboxPoints)
                     {
                         var worldPos = screenToWorld(pickPoint);
-                        if (worldPos.HasValue && IsPointNearLine(worldPos.Value, line, PICKBOX_SIZE / 100.0))
+                        if (worldPos.HasValue && IsPointNearLine(worldPos.Value, line, pickboxSize / 100.0))
                         {
                             return obj;
                         }
@@ -781,6 +843,38 @@ namespace UI.Controls.Viewport
         protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+
+        #endregion
+
+        #region Viewport Settings
+
+        /// <summary>
+        /// Set the viewport settings
+        /// </summary>
+        public void SetViewportSettings(ViewportSettings settings)
+        {
+            _viewportSettings = settings;
+            
+            // Initialize snapping from settings
+            if (_viewportSettings?.Snap != null)
+            {
+                SnappingEnabled = _viewportSettings.Snap.SnapEnabled;
+                GridSize = _viewportSettings.Snap.SnapSpacing;
+            }
+        }
+
+        /// <summary>
+        /// Update snapping state from settings
+        /// </summary>
+        public void UpdateSnappingFromSettings()
+        {
+            if (_viewportSettings?.Snap != null)
+            {
+                SnappingEnabled = _viewportSettings.Snap.SnapEnabled;
+                GridSize = _viewportSettings.Snap.SnapSpacing;
+                System.Diagnostics.Debug.WriteLine($"Snapping updated from settings: Enabled={SnappingEnabled}, GridSize={GridSize}");
+            }
         }
 
         #endregion
