@@ -1,19 +1,15 @@
-using System.Drawing;
 using OpenCAD;
+using System.Drawing;
+using System.Text.Json.Serialization;
+using System.Xml.Serialization;
 
 namespace OpenCAD.Settings // CHANGED
 {
     /// <summary>
     /// Settings for grid display.
     /// </summary>
-    public class GridSettings : OpenCADObject
+    public class GridSettings : ObservableSettings
     {
-        private const int COLOR_INDEX = 0;
-        private const int VISIBLE_INDEX = 0;
-        private const int MAJORSPACING_INDEX = 0;
-        private const int MINORSPACING_INDEX = 1;
-        private const int MINORLINES_INDEX = 0;
-
         public GridSettings() : this(null!)
         {
         }
@@ -21,19 +17,11 @@ namespace OpenCAD.Settings // CHANGED
         public GridSettings(OpenCADDocument document)
         {
             // Initialize default grid values using properties
-            properties.TryAdd((int)PropertyType.Color, 
-                new Property(PropertyType.Color, "Grid Color", Color.Gray));
+            Color = Color.Gray;
+            ShowGrid = true;
+            MajorSpacing = 10.0;
+            MinorSpacing = 1.0;
             
-            properties.TryAdd((int)PropertyType.Boolean, 
-                new Property(PropertyType.Boolean, "Show Grid", true));
-            
-            properties.TryAdd((int)PropertyType.Double, 
-                new Property(PropertyType.Double, 
-                    ("Major Spacing", 10.0),
-                    ("Minor Spacing", 1.0)));
-            
-            properties.TryAdd((int)PropertyType.Integer, 
-                new Property(PropertyType.Integer, "Minor Lines Per Major", 10));
             _document = document;
         }
 
@@ -41,21 +29,14 @@ namespace OpenCAD.Settings // CHANGED
         /// Gets or sets the color of the grid lines.
         /// Default: Gray
         /// </summary>
+        [JsonIgnore, XmlIgnore]
         public Color Color
         {
-            get
-            {
-                if (properties.TryGetValue((int)PropertyType.Color, out var prop))
-                    return (Color)prop.GetValue(COLOR_INDEX);
-                return Color.Gray;
-            }
+            get => GetPropertyValue<Color>(PropertyType.Color, nameof(Color));
             set
             {
-                properties.AddOrUpdate(
-                    (int)PropertyType.Color,
-                    new Property(PropertyType.Color, "Grid Color", value),
-                    (key, oldValue) => new Property(PropertyType.Color, "Grid Color", value)
-                );
+                SetPropertyValue(PropertyType.Color, nameof(Color), OpenCADStrings.GridColor, value);
+                OnPropertyChanged();
             }
         }
 
@@ -63,21 +44,14 @@ namespace OpenCAD.Settings // CHANGED
         /// Gets or sets whether the grid is visible.
         /// Default: true
         /// </summary>
+        [JsonIgnore, XmlIgnore]
         public bool ShowGrid
         {
-            get
-            {
-                if (properties.TryGetValue((int)PropertyType.Boolean, out var prop))
-                    return (bool)prop.GetValue(VISIBLE_INDEX);
-                return true;
-            }
+            get => GetPropertyValue<bool>(PropertyType.Boolean, nameof(ShowGrid));
             set
             {
-                properties.AddOrUpdate(
-                    (int)PropertyType.Boolean,
-                    new Property(PropertyType.Boolean, "Show Grid", value),
-                    (key, oldValue) => new Property(PropertyType.Boolean, "Show Grid", value)
-                );
+                SetPropertyValue(PropertyType.Boolean, nameof(ShowGrid), OpenCADStrings.ShowGrid, value);
+                OnPropertyChanged();
             }
         }
 
@@ -85,41 +59,14 @@ namespace OpenCAD.Settings // CHANGED
         /// Gets or sets the spacing between major grid lines.
         /// Default: 10.0 units
         /// </summary>
+        [JsonIgnore, XmlIgnore]
         public double MajorSpacing
         {
-            get
-            {
-                if (properties.TryGetValue((int)PropertyType.Double, out var prop))
-                    return (double)prop.GetValue(MAJORSPACING_INDEX);
-                return 10.0;
-            }
+            get => GetPropertyValue<double>(PropertyType.Double, nameof(MajorSpacing));
             set
             {
-                if (properties.TryGetValue((int)PropertyType.Double, out var prop))
-                {
-                    var minorSpacing = (double)prop.GetValue(MINORSPACING_INDEX);
-                    properties.AddOrUpdate(
-                        (int)PropertyType.Double,
-                        new Property(PropertyType.Double, 
-                            ("Major Spacing", value),
-                            ("Minor Spacing", minorSpacing)),
-                        (key, oldValue) => new Property(PropertyType.Double, 
-                            ("Major Spacing", value),
-                            ("Minor Spacing", minorSpacing))
-                    );
-                }
-                else
-                {
-                    properties.AddOrUpdate(
-                        (int)PropertyType.Double,
-                        new Property(PropertyType.Double, 
-                            ("Major Spacing", value),
-                            ("Minor Spacing", 1.0)),
-                        (key, oldValue) => new Property(PropertyType.Double, 
-                            ("Major Spacing", value),
-                            ("Minor Spacing", 1.0))
-                    );
-                }
+                SetPropertyValue(PropertyType.Double, nameof(MajorSpacing), OpenCADStrings.MajorSpacing, value);
+                OnPropertyChanged();
             }
         }
 
@@ -127,63 +74,14 @@ namespace OpenCAD.Settings // CHANGED
         /// Gets or sets the spacing between minor grid lines.
         /// Default: 1.0 units
         /// </summary>
+        [JsonIgnore, XmlIgnore]
         public double MinorSpacing
         {
-            get
-            {
-                if (properties.TryGetValue((int)PropertyType.Double, out var prop))
-                    return (double)prop.GetValue(MINORSPACING_INDEX);
-                return 1.0;
-            }
+            get => GetPropertyValue<double>(PropertyType.Double, nameof(MinorSpacing));
             set
             {
-                if (properties.TryGetValue((int)PropertyType.Double, out var prop))
-                {
-                    var majorSpacing = (double)prop.GetValue(MAJORSPACING_INDEX);
-                    properties.AddOrUpdate(
-                        (int)PropertyType.Double,
-                        new Property(PropertyType.Double, 
-                            ("Major Spacing", majorSpacing),
-                            ("Minor Spacing", value)),
-                        (key, oldValue) => new Property(PropertyType.Double, 
-                            ("Major Spacing", majorSpacing),
-                            ("Minor Spacing", value))
-                    );
-                }
-                else
-                {
-                    properties.AddOrUpdate(
-                        (int)PropertyType.Double,
-                        new Property(PropertyType.Double, 
-                            ("Major Spacing", 10.0),
-                            ("Minor Spacing", value)),
-                        (key, oldValue) => new Property(PropertyType.Double, 
-                            ("Major Spacing", 10.0),
-                            ("Minor Spacing", value))
-                    );
-                }
-            }
-        }
-
-        /// <summary>
-        /// Gets or sets the number of minor grid lines between major grid lines.
-        /// Default: 10
-        /// </summary>
-        public int MinorLinesPerMajor
-        {
-            get
-            {
-                if (properties.TryGetValue((int)PropertyType.Integer, out var prop))
-                    return (int)prop.GetValue(MINORLINES_INDEX);
-                return 10;
-            }
-            set
-            {
-                properties.AddOrUpdate(
-                    (int)PropertyType.Integer,
-                    new Property(PropertyType.Integer, "Minor Lines Per Major", value),
-                    (key, oldValue) => new Property(PropertyType.Integer, "Minor Lines Per Major", value)
-                );
+                SetPropertyValue(PropertyType.Double, nameof(MinorSpacing), OpenCADStrings.MinorSpacing, value);
+                OnPropertyChanged();
             }
         }
     }

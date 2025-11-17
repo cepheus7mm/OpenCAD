@@ -15,6 +15,7 @@ namespace UI.Controls.MainWindow
         public event EventHandler? DarkThemeRequested;
         public event EventHandler? NewViewportRequested;
         public event EventHandler<bool>? LayersVisibilityChanged;
+        public event EventHandler<bool>? SettingsVisibilityChanged;
         public event EventHandler? SaveAsRequested;
 
         public MenuBarControl()
@@ -49,6 +50,14 @@ namespace UI.Controls.MainWindow
         private void Layers_Click(object sender, RoutedEventArgs e)
         {
             LayersVisibilityChanged?.Invoke(this, LayersMenuItem.IsChecked);
+        }
+
+        private void Settings_Click(object sender, RoutedEventArgs e)
+        {
+            // Show the settings panel via DockingAreaControl
+            SettingsVisibilityChanged?.Invoke(this, !SettingsMenuItem.IsChecked);
+            if (sender is MenuItem menuItem)
+                menuItem.IsChecked = !SettingsMenuItem.IsChecked;
         }
 
         private void SaveAs_Click(object sender, RoutedEventArgs e)

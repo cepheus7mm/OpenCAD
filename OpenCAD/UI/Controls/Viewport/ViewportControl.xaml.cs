@@ -52,13 +52,13 @@ namespace UI.Controls.Viewport
                 throw new ArgumentNullException(nameof(document));
 
             _document = document;
-            _viewportSettings = document.CurrentViewportSettings; // Create settings instance
+            _viewportSettings = document.GetViewportSettings(); // Create settings instance
             
             _viewModel = new ViewportViewModel(document);
             _viewModel.SetViewportSettings(_viewportSettings); // Pass settings to ViewModel
             
-            // Initialize snapping state from settings
-            _viewModel.UpdateSnappingFromSettings();
+            //// Initialize snapping state from settings
+            //_viewModel.UpdateSnappingFromSettings();
             
             DataContext = _viewModel;
 
@@ -164,6 +164,14 @@ namespace UI.Controls.Viewport
         #endregion
 
         #region OpenGL Initialization
+
+        public new void InvalidateVisual()
+        {
+            base.InvalidateVisual();
+            Refresh();
+            _viewModel.UpdateStatusBarButtons();
+        }
+
 
         private void ViewportControl_Loaded(object sender, RoutedEventArgs e)
         {
@@ -696,10 +704,17 @@ namespace UI.Controls.Viewport
                     _viewModel.HighlightedObject = hitObject;
                 }
             }
+            var vector3D = new Vector3D();
+            if (worldPos.HasValue)
+            {
+                vector3D.X = worldPos.Value.X;
+                vector3D.Y = worldPos.Value.Y;
+                vector3D.Z = worldPos.Value.Z;
+            }
 
             var result = _viewModel.HandleMouseMove(
                 currentPosDip,
-                worldPos,
+                vector3D,
                 e.MiddleButton,
                 e.RightButton,
                 isShiftPressed,

@@ -1,6 +1,8 @@
 using OpenCAD;
+using System.Text.Json.Serialization;
+using System.Xml.Serialization;
 
-namespace OpenCAD.Settings // CHANGED
+namespace OpenCAD.Settings
 {
     /// <summary>
     /// Contains user-definable settings for viewport display elements.
@@ -25,12 +27,17 @@ namespace OpenCAD.Settings // CHANGED
             // Create and add the snap settings group
             var snapSettings = new SnapSettings(document);
             Add(snapSettings);
+
+            // Create and add the unit settings group
+            var unitSettings = new UnitSettings(document);
+            Add(unitSettings);
             _document = document;
         }
 
         /// <summary>
         /// Gets the crosshair display settings.
         /// </summary>
+        [JsonIgnore, XmlIgnore]
         public CrosshairSettings? Crosshair
         {
             get => GetChildren().OfType<CrosshairSettings>().FirstOrDefault();
@@ -39,6 +46,7 @@ namespace OpenCAD.Settings // CHANGED
         /// <summary>
         /// Gets the grid display settings.
         /// </summary>
+        [JsonIgnore, XmlIgnore]
         public GridSettings? Grid
         {
             get => GetChildren().OfType<GridSettings>().FirstOrDefault();
@@ -47,9 +55,19 @@ namespace OpenCAD.Settings // CHANGED
         /// <summary>
         /// Gets the snap settings.
         /// </summary>
+        [JsonIgnore, XmlIgnore]
         public SnapSettings? Snap
         {
             get => GetChildren().OfType<SnapSettings>().FirstOrDefault();
+        }
+
+        /// <summary>
+        /// Gets the unit settings.
+        /// </summary>
+        [JsonIgnore, XmlIgnore]
+        public UnitSettings? Unit
+        {
+            get => GetChildren().OfType<UnitSettings>().FirstOrDefault();
         }
     }
 }

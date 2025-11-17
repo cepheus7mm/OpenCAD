@@ -10,11 +10,11 @@ namespace OpenCAD.Interfaces
         /// <summary>
         /// Gets the starting point of the linear geometry.
         /// </summary>
-        Point3D Start { get; }
+        Point3D StartPoint { get; }
 
         /// <summary>
         /// Gets the ending point of the linear geometry.
         /// </summary>
-        Point3D End { get; }
+        Point3D EndPoint { get; }
     }
 }

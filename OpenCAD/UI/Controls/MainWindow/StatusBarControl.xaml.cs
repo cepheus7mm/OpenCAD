@@ -50,18 +50,61 @@ namespace UI.Controls.MainWindow
         /// <param name="settings">The viewport settings object</param>
         public void SetViewportSettings(ViewportSettings settings)
         {
+            if (_viewportSettings?.Snap != null)
+                _viewportSettings.Snap.PropertyChanged -= OnSnapSettingsChanged;
+            if (_viewportSettings?.Grid != null)
+                _viewportSettings.Grid.PropertyChanged -= OnGridSettingsChanged;
+
             _viewportSettings = settings;
-            
-            // Initialize toggle button states from settings
-            if (_viewportSettings.Grid != null)
-            {
-                gridToggleButton.IsChecked = _viewportSettings.Grid.ShowGrid;
-            }
-            
-            if (_viewportSettings.Snap != null)
+
+            if (_viewportSettings?.Snap != null)
+                _viewportSettings.Snap.PropertyChanged += OnSnapSettingsChanged;
+            if (_viewportSettings?.Grid != null)
+                _viewportSettings.Grid.PropertyChanged += OnGridSettingsChanged;
+
+            UpdateSnapButton();
+            UpdateGridButton();
+        }
+
+        public void UpdateButtons()
+        {
+            UpdateSnapButton();
+            UpdateGridButton();
+        }
+
+        private void OnSnapSettingsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(SnapSettings.SnapEnabled))
+                UpdateSnapButton();
+        }
+
+        private void OnGridSettingsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(GridSettings.ShowGrid))
+                UpdateGridButton();
+        }
+
+        private void UpdateSnapButton()
+        {
+            // Update the snap button's IsChecked or visual state based on _viewportSettings.Snap.SnapEnabled
+            if (_viewportSettings?.Snap != null)
             {
                 snapToggleButton.IsChecked = _viewportSettings.Snap.SnapEnabled;
             }
+        }
+
+        private void UpdateGridButton()
+        {
+            // Update the grid button's IsChecked or visual state based on _viewportSettings.Grid.ShowGrid
+            if (_viewportSettings?.Grid != null)
+            {
+                gridToggleButton.IsChecked = _viewportSettings.Grid.ShowGrid;
+                // Update status message
+                UpdateStatus(_viewportSettings.Grid.ShowGrid ? "Grid ON" : "Grid OFF");
+            }
+
+            // Raise the event to trigger viewport refresh
+            ViewportSettingsChanged?.Invoke(this, EventArgs.Empty);
         }
 
         /// <summary>

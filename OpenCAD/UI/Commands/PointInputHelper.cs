@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using UI.Controls.Viewport;
+using UI.Helpers;
 
 namespace UI.Commands
 {
@@ -23,22 +24,22 @@ namespace UI.Commands
 
     /// <summary>
     /// Helper class to get point input from user via keyboard coordinates or mouse click
+    /// Uses ViewportViewModel for separation of concerns and better testability
     /// </summary>
     public class PointInputHelper
     {
         private readonly ICommandContext _context;
-        private readonly ViewportControl? _viewport;
-        private TaskCompletionSource<Point3D?>? _pointTaskSource;
+        private readonly ViewportViewModel? _viewModel;
         private TaskCompletionSource<PointOrKeywordResult>? _pointOrKeywordTaskSource;
         private EventHandler<PointPickedEventArgs>? _pointPickedHandler;
         private Point3D? _basePoint; // For preview line from base point
         private bool _allowLastPoint; // Store for keyboard input handling
         private string[]? _keywords; // Valid keywords for this input
 
-        public PointInputHelper(ICommandContext context, ViewportControl? viewport)
+        public PointInputHelper(ICommandContext context, ViewportViewModel? viewModel)
         {
             _context = context ?? throw new ArgumentNullException(nameof(context));
-            _viewport = viewport;
+            _viewModel = viewModel;
         }
 
         /// <summary>
@@ -105,17 +106,17 @@ namespace UI.Commands
             }
 
             // If viewport is available, enable mouse picking
-            if (_viewport != null)
+            if (_viewModel != null)
             {
                 System.Diagnostics.Debug.WriteLine(OpenCADStrings.PointInputHelperEnablingPickingMode);
                 _pointOrKeywordTaskSource = new TaskCompletionSource<PointOrKeywordResult>();
 
                 // Set up point picked handler
                 _pointPickedHandler = (sender, e) => OnPointPicked(e.Point);
-                _viewport.PointPicked += _pointPickedHandler;
+                _viewModel.PointPicked += _pointPickedHandler;
                 
                 // Enable picking mode
-                _viewport.EnablePointPickingMode();
+                _viewModel.EnablePointPickingMode();
 
                 // Enable preview mode if we have a base point (for rubberband line)
                 if (_basePoint != null)
@@ -123,11 +124,11 @@ namespace UI.Commands
                     System.Diagnostics.Debug.WriteLine(OpenCADStrings.LineCommandEnablingPreviewMode);
                     
                     // Add base point to temp points for preview rendering
-                    _viewport.TempPoints.Clear();
-                    _viewport.TempPoints.Add(_basePoint);
+                    _viewModel.ClearTempPoints();
+                    _viewModel.AddTempPoint(_basePoint);
                     
                     // Enable preview mode with callback
-                    _viewport.EnablePreviewMode(OnPreviewPointChanged);
+                    _viewModel.EnablePreviewMode(OnPreviewPointChanged);
                 }
 
                 try
@@ -145,17 +146,17 @@ namespace UI.Commands
                     // Disable preview mode
                     if (_basePoint != null)
                     {
-                        _viewport.DisablePreviewMode();
-                        _viewport.TempPoints.Clear();
+                        _viewModel.DisablePreviewMode();
+                        _viewModel.ClearTempPoints();
                     }
                     
                     // Disable picking mode
-                    _viewport.DisablePointPickingMode();
+                    _viewModel.DisablePointPickingMode();
                     
                     // Clean up event handler
                     if (_pointPickedHandler != null)
                     {
-                        _viewport.PointPicked -= _pointPickedHandler;
+                        _viewModel.PointPicked -= _pointPickedHandler;
                         _pointPickedHandler = null;
                     }
                     
@@ -199,20 +200,10 @@ namespace UI.Commands
             var point = ParsePointInput(input, _allowLastPoint);
             
             // If we got a valid point and there's a base point (rubberband mode),
-            // trigger a preview update and refresh to show the rubberband line
-            if (point != null && _basePoint != null && _viewport != null)
+            // set the preview point
+            if (point != null && _basePoint != null && _viewModel != null)
             {
-                // Set the preview point
-                _viewport.SetPreviewPoint(point);
-                
-                // Schedule a refresh on the UI thread
-                System.Windows.Application.Current?.Dispatcher.InvokeAsync(() => 
-                {
-                    _viewport.Refresh();
-                }, System.Windows.Threading.DispatcherPriority.Render);
-                
-                // Small delay to allow the render to complete before continuing
-                System.Threading.Tasks.Task.Delay(50).Wait();
+                _viewModel.SetPreviewPoint(point);
             }
             
             // Complete the task with the result
@@ -254,7 +245,17 @@ namespace UI.Commands
 
             // Parse coordinates
             var parsedPoint = ParsePoint(input);
-            
+
+            if (parsedPoint == null) 
+            {
+                var polarInputHelper = new PolarInputHelper(input);
+                if(polarInputHelper.IsValid)
+                {
+                    Point3D basePoint = _basePoint ?? _context.GetLastPoint() ?? new Point3D(0, 0, 0);
+                    parsedPoint = basePoint + polarInputHelper.Vector;
+                }
+            }
+
             // If we successfully parsed a point, set it as the last point
             if (parsedPoint != null)
             {
@@ -284,19 +285,19 @@ namespace UI.Commands
                 _pointOrKeywordTaskSource.TrySetResult(new PointOrKeywordResult { IsCancelled = true });
                 
                 // Disable preview mode
-                if (_viewport != null && _basePoint != null)
+                if (_viewModel != null && _basePoint != null)
                 {
-                    _viewport.DisablePreviewMode();
-                    _viewport.TempPoints.Clear();
+                    _viewModel.DisablePreviewMode();
+                    _viewModel.ClearTempPoints();
                 }
                 
                 // Disable picking mode
-                _viewport?.DisablePointPickingMode();
+                _viewModel?.DisablePointPickingMode();
                 
                 // Clean up event handler
-                if (_viewport != null && _pointPickedHandler != null)
+                if (_viewModel != null && _pointPickedHandler != null)
                 {
-                    _viewport.PointPicked -= _pointPickedHandler;
+                    _viewModel.PointPicked -= _pointPickedHandler;
                     _pointPickedHandler = null;
                 }
                 
@@ -334,7 +335,7 @@ namespace UI.Commands
         private void OnPreviewPointChanged(Point3D previewPoint)
         {
             // Update the viewport's preview point for rubberband line rendering
-            _viewport?.SetPreviewPoint(previewPoint);
+            _viewModel?.SetPreviewPoint(previewPoint);
             
             System.Diagnostics.Debug.WriteLine(
                 string.Format(

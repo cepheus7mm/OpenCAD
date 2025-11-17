@@ -34,57 +34,67 @@
 					</xcad:LayoutAnchorable>
 				</xcad:LayoutAnchorablePane>
 
-				<xcad:LayoutPanel Orientation="Vertical">
-					<!-- Center Panel - Document Area -->
-					<xcad:LayoutDocumentPane>
-						<xcad:LayoutDocument ContentId="document1" Title="MainWindow.xaml" CanClose="True">
-							<TextBox AcceptsReturn="True" AcceptsTab="True" VerticalScrollBarVisibility="Auto" 
+                <xcad:LayoutPanel Orientation="Vertical">
+                    <!-- Center Panel - Document Area -->
+                    <xcad:LayoutDocumentPane>
+                        <xcad:LayoutDocument ContentId="document1" Title="MainWindow.xaml" CanClose="True">
+                            <TextBox AcceptsReturn="True" AcceptsTab="True" VerticalScrollBarVisibility="Auto" 
 									HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="12"
 									Background="{DynamicResource PrimaryBackgroundBrush}"
 									Foreground="{DynamicResource PrimaryTextBrush}"
 									Text="&lt;Window x:Class=&quot;UI.MainWindow&quot;&#x0A;      xmlns=&quot;http://schemas.microsoft.com/winfx/2006/xaml/presentation&quot;&#x0A;   xmlns:x=&quot;http://schemas.microsoft.com/winfx/2006/xaml&quot;&gt;&#x0A;    &lt;Grid&gt;&#x0A;        &lt;!-- Your content here --&gt;&#x0A;    &lt;/Grid&gt;&#x0A;&lt;/Window&gt;" />
-						</xcad:LayoutDocument>
-						<xcad:LayoutDocument ContentId="document2" Title="MainWindow.xaml.cs" CanClose="True">
-							<TextBox AcceptsReturn="True" AcceptsTab="True" VerticalScrollBarVisibility="Auto" 
+                        </xcad:LayoutDocument>
+                        <xcad:LayoutDocument ContentId="document2" Title="MainWindow.xaml.cs" CanClose="True">
+                            <TextBox AcceptsReturn="True" AcceptsTab="True" VerticalScrollBarVisibility="Auto" 
 									HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="12"
 									Background="{DynamicResource PrimaryBackgroundBrush}"
 									Foreground="{DynamicResource PrimaryTextBrush}"
 									Text="using System.Windows;&#x0A;&#x0A;namespace UI&#x0A;{&#x0A;    public partial class MainWindow : Window&#x0A;    {&#x0A;        public MainWindow()&#x0A;        {&#x0A;  InitializeComponent();&#x0A;  }&#x0A;    }&#x0A;}" />
-						</xcad:LayoutDocument>
-					</xcad:LayoutDocumentPane>
+                        </xcad:LayoutDocument>
+                    </xcad:LayoutDocumentPane>
 
-					<!-- Bottom Panel - Command Input, Output, Error List, etc. -->
-					<xcad:LayoutAnchorablePane DockHeight="150">
-						<xcad:LayoutAnchorable x:Name="commandInputAnchorable" ContentId="commandInput" Title="Command Input" CanHide="True" CanClose="False">
-							<local:CommandInputControl x:Name="commandInputControl"/>
-						</xcad:LayoutAnchorable>
-						<xcad:LayoutAnchorable ContentId="output" Title="Output" CanHide="True" CanClose="False">
-							<TextBox IsReadOnly="True" VerticalScrollBarVisibility="Auto" 
+                    <!-- Bottom Panel - Command Input, Output, Error List, etc. -->
+                    <xcad:LayoutAnchorablePane DockHeight="150">
+                        <xcad:LayoutAnchorable x:Name="commandInputAnchorable" ContentId="commandInput" Title="Command Input" CanHide="True" CanClose="False">
+                            <local:CommandInputControl x:Name="commandInputControl"/>
+                        </xcad:LayoutAnchorable>
+                        <xcad:LayoutAnchorable ContentId="output" Title="Output" CanHide="True" CanClose="False">
+                            <TextBox IsReadOnly="True" VerticalScrollBarVisibility="Auto" 
 									FontFamily="Consolas" FontSize="11" 
 									Background="{DynamicResource OutputBackgroundBrush}" 
 									Foreground="{DynamicResource OutputForegroundBrush}"
 									Text="Build started...&#x0A;1&gt;------ Build started: Project: UI, Configuration: Debug Any CPU ------&#x0A;1&gt;  UI -&gt; bin\Debug\net8.0-windows\UI.exe&#x0A;========== Build: 1 succeeded, 0 failed, 0 up-to-date, 0 skipped ==========&#x0A;" />
-						</xcad:LayoutAnchorable>
-						<xcad:LayoutAnchorable ContentId="errorList" Title="Error List" CanHide="True" CanClose="False">
-							<DataGrid AutoGenerateColumns="False" IsReadOnly="True"
+                        </xcad:LayoutAnchorable>
+                        <xcad:LayoutAnchorable ContentId="errorList" Title="Error List" CanHide="True" CanClose="False">
+                            <DataGrid AutoGenerateColumns="False" IsReadOnly="True"
 									 Background="{DynamicResource SecondaryBackgroundBrush}"
 									 Foreground="{DynamicResource PrimaryTextBrush}">
-								<DataGrid.Columns>
-									<DataGridTextColumn Header="" Width="20" />
-									<DataGridTextColumn Header="Description" Width="*" />
-									<DataGridTextColumn Header="File" Width="150" />
-									<DataGridTextColumn Header="Line" Width="50" />
-								</DataGrid.Columns>
-							</DataGrid>
-						</xcad:LayoutAnchorable>
-					</xcad:LayoutAnchorablePane>
-				</xcad:LayoutPanel>
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="" Width="20" />
+                                    <DataGridTextColumn Header="Description" Width="*" />
+                                    <DataGridTextColumn Header="File" Width="150" />
+                                    <DataGridTextColumn Header="Line" Width="50" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </xcad:LayoutAnchorable>
+                    </xcad:LayoutAnchorablePane>
+                </xcad:LayoutPanel>
 
-				<!-- Right Panel - Properties, Layers, etc. -->
+                <!-- Right Panel - Properties, Layers, etc. -->
 				<xcad:LayoutAnchorablePane DockWidth="250">
-					<xcad:LayoutAnchorable ContentId="properties" Title="Properties" CanHide="True" CanClose="False">
-						<local:PropertiesControl x:Name="propertiesControl"/>
-					</xcad:LayoutAnchorable>
+                    <!-- Properties Panel -->
+                    <xcad:LayoutAnchorable ContentId="properties" Title="Properties" CanHide="True" CanClose="False">
+                        <local:PropertiesControl x:Name="propertiesControl"
+                             DataContext="{Binding PropertiesViewModelInstance}" 
+                             DockPanel.Dock="Left" />
+                    </xcad:LayoutAnchorable>
+
+                    <!-- Settings Panel -->
+                    <xcad:LayoutAnchorable ContentId="settings" Title="Settings" CanHide="True" CanClose="False">
+                        <local:PropertiesControl x:Name="settingsControl"
+                            DataContext="{Binding SettingsViewModelInstance}" 
+                            DockPanel.Dock="Right" />
+                    </xcad:LayoutAnchorable>
 					<xcad:LayoutAnchorable ContentId="layers" Title="Layers" CanHide="True" CanClose="False">
 						<local:LayersControl x:Name="layersControl"/>
 					</xcad:LayoutAnchorable>

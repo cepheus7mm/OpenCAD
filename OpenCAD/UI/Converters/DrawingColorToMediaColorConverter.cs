@@ -2,6 +2,8 @@ using System;
 using System.Globalization;
 using System.Windows.Data;
 using System.Windows.Media;
+using DrawingColor = System.Drawing.Color;
+using MediaColor = System.Windows.Media.Color;
 
 namespace UI.Converters
 {
@@ -12,31 +14,26 @@ namespace UI.Converters
 	{
 		public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
 		{
-			if (value is System.Drawing.Color drawingColor)
+			if (value is DrawingColor drawingColor)
 			{
-				return Color.FromArgb(
-					drawingColor.A,
-					drawingColor.R,
-					drawingColor.G,
-					drawingColor.B);
+				// Special case: #00000000 means "ByLayer" - show as gray to indicate special state
+				if (drawingColor.A == 0 && drawingColor.R == 0 && drawingColor.G == 0 && drawingColor.B == 0)
+				{
+					return Colors.LightGray; // Visual indicator that it's "ByLayer"
+				}
+				
+				return MediaColor.FromArgb(drawingColor.A, drawingColor.R, drawingColor.G, drawingColor.B);
 			}
-			
-			// Default to white if conversion fails
 			return Colors.White;
 		}
 
 		public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
 		{
-			if (value is Color mediaColor)
+			if (value is MediaColor mediaColor)
 			{
-				return System.Drawing.Color.FromArgb(
-					mediaColor.A,
-					mediaColor.R,
-					mediaColor.G,
-					mediaColor.B);
+				return DrawingColor.FromArgb(mediaColor.A, mediaColor.R, mediaColor.G, mediaColor.B);
 			}
-			
-			return System.Drawing.Color.White;
+			return DrawingColor.White;
 		}
 	}
 }

@@ -11,7 +11,7 @@ namespace OpenCAD
     public class OpenCADObject : IJsonOnDeserialized
     {
         [JsonIgnore, XmlIgnore]
-        protected ConcurrentDictionary<int, Property> properties = new();
+        protected ConcurrentDictionary<int, List<Property>> properties = new();
 
         [JsonIgnore, XmlIgnore]
         protected ConcurrentDictionary<Guid, OpenCADObject> children = new();
@@ -28,14 +28,14 @@ namespace OpenCAD
         [JsonIgnore, XmlIgnore]
         private Guid _id = Guid.NewGuid();
 
-        public Dictionary<int, Property> SerializedProperties
+        public Dictionary<int, List<Property>> SerializedProperties
         {
             get => properties.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
             set
             {
                 properties = value != null
-                    ? new ConcurrentDictionary<int, Property>(value)
-                    : new ConcurrentDictionary<int, Property>();
+                    ? new ConcurrentDictionary<int, List<Property>>(value)
+                    : new ConcurrentDictionary<int, List<Property>>();
             }
         }
 
@@ -62,79 +62,27 @@ namespace OpenCAD
             set => _isDrawable = value;
         }
 
+        private readonly object _propertyLock = new();
+
         [JsonIgnore, XmlIgnore]
         public string? Name
         {
-            get
-            {
-                if (properties.TryGetValue((int)PropertyType.String, out var prop))
-                {
-                    var nameValue = prop.Values.FirstOrDefault(v => v.Name == OpenCADStrings.Name);
-                    return nameValue?.Value as string;
-                }
-                return null;
-            }
-            set
-            {
-                if (value != null)
-                {
-                    if (properties.TryGetValue((int)PropertyType.String, out var prop))
-                    {
-                        var existingNameValue = prop.Values.FirstOrDefault(v => v.Name == OpenCADStrings.Name);
-                        if (existingNameValue != null)
-                            existingNameValue.Value = value;
-                        else
-                            prop.AddValue(OpenCADStrings.Name, value);
-                    }
-                    else
-                    {
-                        properties.TryAdd((int)PropertyType.String,
-                            new Property(PropertyType.String, OpenCADStrings.Name, value));
-                    }
-                }
-                else
-                {
-                    if (properties.TryGetValue((int)PropertyType.String, out var prop))
-                    {
-                        var nameIndex = prop.Values.FindIndex(v => v.Name == OpenCADStrings.Name);
-                        if (nameIndex >= 0)
-                        {
-                            prop.RemoveValueAt(nameIndex);
-                            if (prop.Values.Count == 0)
-                                properties.TryRemove((int)PropertyType.String, out _);
-                        }
-                    }
-                }
-            }
+            get => GetPropertyValue<string>(PropertyType.String, nameof(Name));
+            set => SetPropertyValue(PropertyType.String, nameof(Name), OpenCADStrings.Name, value);
         }
 
         [JsonIgnore, XmlIgnore]
         public OpenCADLayer? Layer
         {
-            get
-            {
-                if (properties.TryGetValue((int)PropertyType.Layer, out var layerProp))
-                {
-                    var layerId = (Guid)layerProp.GetValue(0);
-                    return null;
-                }
-                return null;
-            }
-            set
-            {
-                if (value != null)
-                {
-                    properties.AddOrUpdate(
-                        (int)PropertyType.Layer,
-                        new Property(PropertyType.Layer, OpenCADStrings.Layer, value.ID),
-                        (_, _) => new Property(PropertyType.Layer, OpenCADStrings.Layer, value.ID)
-                    );
-                }
-                else
-                {
-                    properties.TryRemove((int)PropertyType.Layer, out _);
-                }
-            }
+            get => GetLayer();
+            set => SetPropertyValue(PropertyType.ID, nameof(LayerID), OpenCADStrings.LayerID, value?.ID);
+        }
+
+        [JsonIgnore, XmlIgnore]
+        public Guid LayerID
+        {
+            get => GetPropertyValue<Guid>(PropertyType.ID, nameof(LayerID));
+            set => SetPropertyValue(PropertyType.ID, nameof(LayerID), OpenCADStrings.LayerID, value);
         }
 
         [JsonIgnore, XmlIgnore]
@@ -162,7 +110,7 @@ namespace OpenCAD
         public void OnDeserialized()
         {
             // Ensure internal collections exist and clear cross-object refs.
-            properties ??= new ConcurrentDictionary<int, Property>(SerializedProperties ?? new Dictionary<int, Property>());
+            properties ??= new ConcurrentDictionary<int, List<Property>>(SerializedProperties ?? new Dictionary<int, List<Property>>());
             children ??= new ConcurrentDictionary<Guid, OpenCADObject>(SerializedChildren ?? new Dictionary<Guid, OpenCADObject>());
 
             _document = null;
@@ -208,147 +156,93 @@ namespace OpenCAD
 
         public Guid? GetLayerId()
         {
-            if (properties.TryGetValue((int)PropertyType.Layer, out var layerProp))
-                return (Guid)layerProp.GetValue(0);
-            return null;
+            return Layer?.ID;
         }
 
-        public IEnumerable<Property> GetProperties() => properties.Values;
+        public IEnumerable<Property> GetProperties() => GetAllProperties();
 
-        public Property? GetProperty(PropertyType propertyType)
-        {
-            properties.TryGetValue((int)propertyType, out var property);
-            return property;
-        }
+        //public void CompleteDeserialization()
+        //{
+        //    System.Diagnostics.Debug.WriteLine($"  CompleteDeserialization for {GetType().Name} (ID: {ID})");
 
-        public Color GetEffectiveColor()
-        {
-            if (properties.TryGetValue((int)PropertyType.Color, out var colorProp))
-                return (Color)colorProp.GetValue(0);
-            return Color.FromArgb(255, 255, 255, 255);
-        }
+        //    try
+        //    {
+        //        if (SerializedProperties != null && SerializedProperties.Count > 0)
+        //            properties = new ConcurrentDictionary<int, List<Property>>(SerializedProperties);
 
-        public Color GetEffectiveColor(OpenCADLayer? layer)
-        {
-            if (properties.TryGetValue((int)PropertyType.Color, out var colorProp))
-                return (Color)colorProp.GetValue(0);
-            return layer?.Color ?? Color.FromArgb(255, 255, 255, 255);
-        }
+        //        if (SerializedChildren != null && SerializedChildren.Count > 0)
+        //            children = new ConcurrentDictionary<Guid, OpenCADObject>(SerializedChildren);
 
-        public LineType GetEffectiveLineType()
+        //        _isDrawable = IsDrawable;
+        //        _id = ID;
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        System.Diagnostics.Debug.WriteLine($"    ERROR in CompleteDeserialization: {ex.Message}");
+        //        throw;
+        //    }
+        //}
+
+        protected T? GetPropertyValue<T>(PropertyType type, string compilerName)
         {
-            if (properties.TryGetValue((int)PropertyType.LineType, out var lineTypeProp))
+            if (properties.TryGetValue((int)type, out var propList))
             {
-                var lineType = (LineType)lineTypeProp.GetValue(0);
-                if (lineType != LineType.ByLayer) return lineType;
+                lock (_propertyLock)
+                {
+                    var prop = propList.FirstOrDefault(p => p.CompilerName == compilerName);
+                    if (prop != null && prop.Value is T tValue)
+                        return tValue;
+                }
             }
-            return LineType.Continuous;
+            return default;
         }
 
-        public LineType GetEffectiveLineType(OpenCADLayer? layer)
+        protected void SetPropertyValue<T>(PropertyType type, string compilerName, string displayName, T? value)
         {
-            if (properties.TryGetValue((int)PropertyType.LineType, out var lineTypeProp))
+            lock (_propertyLock)
             {
-                var lineType = (LineType)lineTypeProp.GetValue(0);
-                if (lineType != LineType.ByLayer) return lineType;
-            }
-            return layer?.LineType ?? LineType.Continuous;
-        }
-
-        public LineWeight GetEffectiveLineWeight()
-        {
-            if (properties.TryGetValue((int)PropertyType.LineWeight, out var lwProp))
-            {
-                var lw = (LineWeight)lwProp.GetValue(0);
-                if (lw != LineWeight.ByLayer) return lw;
-            }
-            return LineWeight.Default;
-        }
-
-        public LineWeight GetEffectiveLineWeight(OpenCADLayer? layer)
-        {
-            if (properties.TryGetValue((int)PropertyType.LineWeight, out var lwProp))
-            {
-                var lw = (LineWeight)lwProp.GetValue(0);
-                if (lw != LineWeight.ByLayer) return lw;
-            }
-            return layer?.LineWeight ?? LineWeight.Default;
-        }
-
-        public void SetColor(int red, int green, int blue) => SetColor(Color.FromArgb(255, red, green, blue));
-        public void SetColor(int alpha, int red, int green, int blue) => SetColor(Color.FromArgb(alpha, red, green, blue));
-
-        public void SetColor(Color? color)
-        {
-            if (color.HasValue)
-            {
-                properties.AddOrUpdate(
-                    (int)PropertyType.Color,
-                    new Property(PropertyType.Color, OpenCADStrings.Color, color.Value),
-                    (_, _) => new Property(PropertyType.Color, OpenCADStrings.Color, color.Value)
-                );
-            }
-            else
-            {
-                properties.TryRemove((int)PropertyType.Color, out _);
+                if (!properties.TryGetValue((int)type, out var propList))
+                {
+                    propList = new List<Property>();
+                    properties[(int)type] = propList;
+                }
+                var prop = propList.FirstOrDefault(p => p.CompilerName == compilerName);
+                if (value != null)
+                {
+                    if (prop != null)
+                        prop.Value = value;
+                    else
+                        propList.Add(new Property(type, displayName, value, compilerName));
+                }
+                else
+                {
+                    if (prop != null)
+                        propList.Remove(prop);
+                }
             }
         }
 
-        public void SetLineType(LineType? lineType)
+        public List<Property> GetAllProperties()
         {
-            if (lineType.HasValue)
+            List<Property> allProperties;
+            lock (_propertyLock)
             {
-                properties.AddOrUpdate(
-                    (int)PropertyType.LineType,
-                    new Property(PropertyType.LineType, OpenCADStrings.LineType, lineType.Value),
-                    (_, _) => new Property(PropertyType.LineType, OpenCADStrings.LineType, lineType.Value)
-                );
+                allProperties = properties.Values.SelectMany(list => list).ToList();
             }
-            else
-            {
-                properties.TryRemove((int)PropertyType.LineType, out _);
-            }
+            return allProperties;
         }
 
-        public void SetLineWeight(LineWeight? lineWeight)
+        private OpenCADLayer? GetLayer()
         {
-            if (lineWeight.HasValue)
+            var document = _parent;
+            while (document is not null && document is not OpenCADDocument)
             {
-                properties.AddOrUpdate(
-                    (int)PropertyType.LineWeight,
-                    new Property(PropertyType.LineWeight, OpenCADStrings.LineWeight, lineWeight.Value),
-                    (_, _) => new Property(PropertyType.LineWeight, OpenCADStrings.LineWeight, lineWeight.Value)
-                );
+                document = document?.Parent;
             }
-            else
-            {
-                properties.TryRemove((int)PropertyType.LineWeight, out _);
-            }
-        }
+            if (document is null)
+                return null;
 
-        public bool IsVisible(OpenCADLayer? layer = null) => layer == null || layer.IsVisible;
-        public bool IsSelectable(OpenCADLayer? layer = null) => layer == null || !layer.IsLocked;
-
-        public void CompleteDeserialization()
-        {
-            System.Diagnostics.Debug.WriteLine($"  CompleteDeserialization for {GetType().Name} (ID: {ID})");
-
-            try
-            {
-                if (SerializedProperties != null && SerializedProperties.Count > 0)
-                    properties = new ConcurrentDictionary<int, Property>(SerializedProperties);
-
-                if (SerializedChildren != null && SerializedChildren.Count > 0)
-                    children = new ConcurrentDictionary<Guid, OpenCADObject>(SerializedChildren);
-
-                _isDrawable = IsDrawable;
-                _id = ID;
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"    ERROR in CompleteDeserialization: {ex.Message}");
-                throw;
-            }
+            return ((OpenCADDocument)document).GetLayer(LayerID);
         }
     }
 }

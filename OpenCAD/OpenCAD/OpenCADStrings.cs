@@ -24,6 +24,11 @@
         public const string LineWeight = "LineWeight";
 
         /// <summary>
+        /// Property name for pickbox size properties
+        /// </summary>
+        public const string PickboxSize = "Pickbox Size";
+
+        /// <summary>
         /// Property name for filename property
         /// </summary>
         public const string Filename = "Filename";
@@ -34,9 +39,74 @@
         public const string Description = "Description";
 
         /// <summary>
+        /// Property name for current viewport settings ID
+        /// </summary>
+        public const string CurrentViewportSettingsID = "Current Viewport Settings ID";
+
+        /// <summary>
+        /// Property name for grid color properties
+        /// </summary>
+        public const string GridColor = "Grid Color";
+
+        /// <summary>
+        /// Property name for grid visibility
+        /// </summary>
+        public const string ShowGrid = "Show Grid";
+
+        /// <summary>
+        /// Property name for grid major lines properties
+        /// </summary>
+        public const string MajorSpacing = "Major Lines";
+
+        /// <summary>
+        /// Property name for grid minor lines properties
+        /// </summary>
+        public const string MinorSpacing = "Minor Lines";
+
+        /// <summary>
+        /// Property name for snap enabled state
+        /// </summary>
+        public const string SnapEnabled = "Snap Enabled";
+
+        /// <summary>
+        /// Property name for snap spacing
+        /// </summary>
+        public const string SnapSpacing = "Snap Spacing";
+
+        /// <summary>
+        /// Property name for linear units
+        /// </summary>
+        public const string LinearUnits = "Linear Units";
+
+        /// <summary>
+        /// Property name for angular units
+        /// </summary>
+        public const string AngularUnits = "Angular Units";
+
+        /// <summary>
+        /// Property name for system of units
+        /// </summary>
+        public const string SystemOfUnits = "System of Units";
+
+        /// <summary>
+        /// Property name for linear decimal places
+        /// </summary>
+        public const string LinearDecimalPlaces = "Linear Decimal Places";
+
+        /// <summary>
+        /// Property name for angular decimal places
+        /// </summary>
+        public const string AngularDecimalPlaces = "Angular Decimal Places";
+
+        /// <summary>
         /// Property name for current layer ID
         /// </summary>
         public const string CurrentLayerID = "Current Layer ID";
+
+        /// <summary>
+        /// Property name for current layer
+        /// </summary>
+        public const string CurrentLayer = "Current Layer";
 
         /// <summary>
         /// Property name for current color
@@ -157,6 +227,16 @@
         /// </summary>
         public const string NewLayerPrefix = "Layer";
 
+        /// <summary>
+        /// Default name for "ByLayer" properties
+        /// </summary>
+        public const string ByLayer = "ByLayer";
+
+        /// <summary>
+        /// Default name for "Custom" properties
+        /// </summary>
+        public const string Custom = "Custom";
+
         #endregion
 
         #region File Extensions
@@ -179,6 +259,13 @@
         /// Display string for empty values
         /// </summary>
         public const string EmptyValue = "(empty)";
+
+        /// <summary>
+        /// Represents a constant string value used to indicate an undefined state.
+        /// </summary>
+        /// <remarks>This value can be used as a placeholder or default value to signify that a specific
+        /// value has not been defined.</remarks>
+        public const string UndefinedValue = "(undefined)";
 
         /// <summary>
         /// Display string for "no document" state
@@ -259,6 +346,11 @@
         public const string Layer = "Layer";
 
         /// <summary>
+        /// Property name for layer ID
+        /// </summary>
+        public const string LayerID = "Layer ID";
+
+        /// <summary>
         /// Display string for selection
         /// </summary>
         public const string Selection = "Selection";
@@ -277,6 +369,11 @@
         /// Property name for length
         /// </summary>
         public const string Length = "Length";
+
+        /// <summary>
+        /// Property name for angle
+        /// </summary>
+        public const string Angle = "Angle";
 
         #endregion
 
@@ -320,6 +417,78 @@
         /// Format string for GUID with object type
         /// </summary>
         public const string GuidWithTypeFormat = "{0} ({1:D})";
+
+        /// <summary>
+        /// Minute symbol
+        /// </summary>
+        public const string Feet = "'";
+
+        /// <summary>
+        /// Second symbol
+        /// </summary>
+        public const string Inches = "\"";
+
+        /// <summary>
+        /// Minute symbol
+        /// </summary>
+        public const string Meters = "m";
+
+        /// <summary>
+        /// Second symbol
+        /// </summary>
+        public const string Centimeters = "cm";
+
+        /// <summary>
+        /// Second symbol
+        /// </summary>
+        public const string Millimeters = "mm";
+
+        /// <summary>
+        /// Degree symbol
+        /// </summary>
+        public const string Degrees = "°";
+
+        /// <summary>
+        /// Minute symbol
+        /// </summary>
+        public const string Minutes = "'";
+
+        /// <summary>
+        /// Second symbol
+        /// </summary>
+        public const string Seconds = "\"";
+
+        /// <summary>
+        /// Radian symbol
+        /// </summary>
+        public const string Radians = "rad";
+
+        /// <summary>
+        /// Gradian symbol
+        /// </summary>
+        public const string Gradians = "gon";
+
+        public const string ScientificNotationFormat = "0.#####E+0";
+
+        /// <summary>
+        /// North-East quadrant abbreviation
+        /// </summary>
+        public const string QuadNorthEast = "NE";
+
+        /// <summary>
+        /// South-East quadrant abbreviation
+        /// </summary>
+        public const string QuadSouthEast = "SE";
+
+        /// <summary>
+        /// North-West quadrant abbreviation
+        /// </summary>
+        public const string QuadNorthWest = "NW";
+
+        /// <summary>
+        /// South-West quadrant abbreviation
+        /// </summary>
+        public const string QuadSouthWest = "SW";
 
         #endregion
 

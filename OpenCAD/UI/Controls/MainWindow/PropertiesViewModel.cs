@@ -1,6 +1,7 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Windows.Input;
 using OpenCAD;
+using OpenCAD.Interfaces;
 using UI.Controls.Viewport;
 
 namespace UI.Controls.MainWindow
@@ -8,101 +9,27 @@ namespace UI.Controls.MainWindow
 	/// <summary>
 	/// ViewModel for the PropertiesControl that manages property display and editing
 	/// </summary>
-	public class PropertiesViewModel : ObservableObject
+	public class PropertiesViewModel : PropertyGridViewModel
 	{
-		private ObservableCollection<PropertyItem> _properties;
-		private PropertyItem? _selectedProperty;
-		private bool _isEditing;
-		private ViewportControl? _activeViewport;
-		private OpenCADDocument? _currentDocument;
-
-		/// <summary>
-		/// Gets the collection of properties to display
-		/// </summary>
-		public ObservableCollection<PropertyItem> Properties
-		{
-			get => _properties;
-			set => SetField(ref _properties, value);
-		}
-
-		/// <summary>
-		/// Gets or sets the currently selected property item
-		/// </summary>
-		public PropertyItem? SelectedProperty
-		{
-			get => _selectedProperty;
-			set => SetField(ref _selectedProperty, value);
-		}
-
-		/// <summary>
-		/// Gets or sets whether editing mode is active
-		/// </summary>
-		public bool IsEditing
-		{
-			get => _isEditing;
-			set => SetField(ref _isEditing, value);
-		}
-
-		/// <summary>
-		/// Gets or sets the active viewport to display properties from
-		/// </summary>
-		public ViewportControl? ActiveViewport
-		{
-			get => _activeViewport;
-			set
-			{
-				if (SetField(ref _activeViewport, value))
-				{
-					UpdateFromViewport(value);
-				}
-			}
-		}
-
-		/// <summary>
-		/// Command to refresh properties from the active viewport
-		/// </summary>
-		public ICommand RefreshCommand { get; }
-
-		/// <summary>
-		/// Command to apply property changes to the underlying object
-		/// </summary>
-		public ICommand ApplyChangesCommand { get; }
-
-		/// <summary>
-		/// Command to cancel property editing
-		/// </summary>
-		public ICommand CancelEditCommand { get; }
-
 		public PropertiesViewModel()
 		{
-			_properties = new ObservableCollection<PropertyItem>();
+			//_properties = new ObservableCollection<PropertyItem>();
 			
-			// Initialize with empty state
-			ClearProperties();
+			//// Initialize with empty state
+			//ClearProperties();
 
-			// Initialize commands
-			RefreshCommand = new RelayCommand(OnRefresh, CanRefresh);
-			ApplyChangesCommand = new RelayCommand(OnApplyChanges, CanApplyChanges);
-			CancelEditCommand = new RelayCommand(OnCancelEdit, CanCancelEdit);
+			//// Initialize commands
+			//RefreshCommand = new RelayCommand(OnRefresh, CanRefresh);
+			//ApplyChangesCommand = new RelayCommand(OnApplyChanges, CanApplyChanges);
+			//CancelEditCommand = new RelayCommand(OnCancelEdit, CanCancelEdit);
 		}
 
-		/// <summary>
-		/// Update properties from the given viewport
-		/// </summary>
-		public void UpdateFromViewport(ViewportControl? viewport)
-		{
-			if (viewport == null)
-			{
-				_currentDocument = null;
-				ClearProperties();
-				return;
-			}
-
-			var document = viewport.ObjectToDisplay as OpenCADDocument;
-			_currentDocument = document;
+        protected override void UpdateFromViewport()
+        {
+			base.UpdateFromViewport();
 			
 			// Check if there are selected objects in the viewport
-			var viewModel = viewport.DataContext as ViewportViewModel;
+			var viewModel = _activeViewport.DataContext as ViewportViewModel;
 			if (viewModel != null && viewModel.SelectedObjects != null && viewModel.SelectedObjects.Count > 0)
 			{
 				// Show properties of selected objects
@@ -117,16 +44,21 @@ namespace UI.Controls.MainWindow
 					DisplayMultipleObjectsProperties(viewModel.SelectedObjects);
 				}
 			}
-			else if (document != null)
+			else if (_currentDocument != null)
 			{
 				// No selection - show document properties
-				DisplayDocumentProperties(document);
+				DisplayDocumentProperties(_currentDocument);
 			}
 			else
 			{
 				ClearProperties();
 			}
 		}
+
+        public override void Refresh()
+        {
+			UpdateFromViewport(_activeViewport);
+        }
 
 		/// <summary>
 		/// Display properties for a single OpenCAD object
@@ -140,159 +72,75 @@ namespace UI.Controls.MainWindow
 			// Add object type and ID (read-only)
 			properties.Add(new PropertyItem 
 			{ 
-				Property = OpenCADStrings.ObjectType, 
+				PropertyName = OpenCADStrings.ObjectType, 
 				Value = obj.GetType().Name,
 				IsReadOnly = true 
 			});
-			properties.Add(new PropertyItem 
-			{ 
-				Property = OpenCADStrings.ObjectID, 
-				Value = obj.ID.ToString(),
-				IsReadOnly = true 
-			});
 
-			// Add layer information from properties collection
-			var layerProp = obj.GetProperty(PropertyType.Layer);
-			if (layerProp != null)
+			var objectProperties = ((OpenCADObject)obj).GetAllProperties();
+			foreach (var prop in objectProperties)
 			{
-				var layerId = (Guid)layerProp.GetValue(0);
-				// Resolve layer name through document
-				var layerName = GetNameFromID(layerId);
-				properties.Add(new PropertyItem 
-				{ 
-					Property = OpenCADStrings.Layer, 
-					Value = layerName,
-					IsReadOnly = true 
-				});
-			}
-			else
-			{
-				properties.Add(new PropertyItem 
-				{ 
-					Property = OpenCADStrings.Layer, 
-					Value = OpenCADStrings.NullValue,
-					IsReadOnly = true 
-				});
-			}
-
-			// Add color property
-			var color = obj.GetEffectiveColor();
-			properties.Add(new PropertyItem 
-			{ 
-				Property = OpenCADStrings.Color, 
-				Value = FormatPropertyValue(color),
-				IsReadOnly = false 
-			});
-
-			// Add line type property
-			var lineType = obj.GetEffectiveLineType();
-			properties.Add(new PropertyItem 
-			{ 
-				Property = OpenCADStrings.LineType, 
-				Value = lineType.ToString(),
-				IsReadOnly = false 
-			});
-
-			// Add line weight property
-			var lineWeight = obj.GetEffectiveLineWeight();
-			properties.Add(new PropertyItem 
-			{ 
-				Property = OpenCADStrings.LineWeight, 
-				Value = lineWeight.ToDisplayString(),
-				IsReadOnly = false 
-			});
-
-			// Add geometry-specific properties
-			if (obj is OpenCAD.Geometry.Line line)
-			{
-				properties.Add(new PropertyItem 
-				{ 
-					Property = OpenCADStrings.GeometrySection, 
-					Value = string.Empty,
-					IsReadOnly = true 
-				});
-				properties.Add(new PropertyItem 
-				{ 
-					Property = OpenCADStrings.StartPoint, 
-					Value = FormatPropertyValue(line.Start),
-					IsReadOnly = false 
-				});
-				properties.Add(new PropertyItem 
-				{ 
-					Property = OpenCADStrings.EndPoint, 
-					Value = FormatPropertyValue(line.End),
-					IsReadOnly = false 
-				});
-				
-				// Calculate and display length
-				var dx = line.End.X - line.Start.X;
-				var dy = line.End.Y - line.Start.Y;
-				var dz = line.End.Z - line.Start.Z;
-				var length = Math.Sqrt(dx * dx + dy * dy + dz * dz);
-				properties.Add(new PropertyItem 
-				{ 
-					Property = OpenCADStrings.Length, 
-					Value = length.ToString(OpenCADStrings.DoubleFormat),
-					IsReadOnly = true 
-				});
-			}
-
-			// Add custom properties from the object
-			var objectProperties = obj.GetProperties();
-			if (objectProperties != null && objectProperties.Any())
-			{
-				properties.Add(new PropertyItem 
-				{ 
-					Property = OpenCADStrings.CustomPropertiesSection, 
-					Value = string.Empty,
-					IsReadOnly = true 
-				});
-				
-				foreach (var prop in objectProperties)
+				var propertyItem = new PropertyItem
 				{
-					if (prop != null && prop.Type != PropertyType.Layer) // Skip layer as we already showed it
-					{
-						// Handle properties with multiple values
-						if (prop.Count > 1)
-						{
-							for (int i = 0; i < prop.Count; i++)
-							{
-								var propValue = prop.GetPropertyValue(i);
-								var propertyItem = new PropertyItem 
-								{ 
-									Property = propValue.Name, 
-									Value = FormatPropertyValue(propValue.Value),
-									IsReadOnly = false
-								};
-								
-								// Subscribe to value changes for this property
-								propertyItem.ValueChanged += (s, e) => OnPropertyValueChanged(propertyItem, prop, i);
-								
-								properties.Add(propertyItem);
-							}
-						}
-						else if (prop.Count == 1)
-						{
-							var propValue = prop.GetPropertyValue(0);
-							var propertyItem = new PropertyItem 
-							{ 
-								Property = propValue.Name, 
-								Value = FormatPropertyValue(propValue.Value),
-								IsReadOnly = false
-							};
-							
-							// Subscribe to value changes
-							propertyItem.ValueChanged += (s, e) => OnPropertyValueChanged(propertyItem, prop, 0);
-							
-							properties.Add(propertyItem);
-						}
-					}
-				}
+					PropertyName = prop.Name,
+					Value = prop.ToStringRepresentation(_currentDocument) ?? OpenCADStrings.NullValue,
+					RawValue = prop.Value, // ⭐ ADD THIS - Store the actual value object
+					ValueType = prop.Value?.GetType(), // ⭐ ADD THIS - Store the type
+					IsReadOnly = false
+				};
+				
+				// Subscribe to value changes for editing
+				propertyItem.ValueChanged += (s, e) => OnPropertyValueChanged(propertyItem, prop, 0);
+				
+				properties.Add(propertyItem);
+			}
+
+			// Add geometric properties if applicable
+			var geometricProperties = GetGeometricProperties(obj);
+			foreach (var geoProp in geometricProperties)
+			{
+				properties.Add(geoProp);
 			}
 
 			Properties = properties;
 			System.Diagnostics.Debug.WriteLine($"Properties updated for object: {obj.GetType().Name} ({properties.Count} properties)");
 		}
+
+        private ObservableCollection<PropertyItem> GetGeometricProperties(OpenCADObject obj)
+        {
+			var properties = new ObservableCollection<PropertyItem>();
+			// Add geometry-specific properties
+			if (obj is OpenCAD.Geometry.GeometryBase geometry)
+			{
+				properties.Add(new PropertyItem
+				{
+					PropertyName = OpenCADStrings.GeometrySection,
+					Value = string.Empty,
+					IsReadOnly = true
+				});
+
+				if (geometry.ToStringLength(out string length))
+				{
+					properties.Add(new PropertyItem
+					{
+						PropertyName = OpenCADStrings.Length,
+						Value = length,
+						IsReadOnly = true
+					});
+				}
+
+                if (geometry.ToStringAngle(out string angle))
+                {
+                    properties.Add(new PropertyItem
+                    {
+                        PropertyName = OpenCADStrings.Angle,
+                        Value = angle,
+                        IsReadOnly = true
+                    });
+                }
+            }
+            return properties;
+        }
 
 		/// <summary>
 		/// Display properties for multiple selected objects
@@ -306,7 +154,7 @@ namespace UI.Controls.MainWindow
 			// Show selection count
 			properties.Add(new PropertyItem 
 			{ 
-				Property = OpenCADStrings.Selection, 
+				PropertyName = OpenCADStrings.Selection, 
 				Value = $"{objects.Count} {OpenCADStrings.ObjectsSelected}",
 				IsReadOnly = true 
 			});
@@ -315,18 +163,18 @@ namespace UI.Controls.MainWindow
 			var types = objects.Select(o => o.GetType().Name).Distinct().ToList();
 			properties.Add(new PropertyItem 
 			{ 
-				Property = OpenCADStrings.ObjectTypes, 
+				PropertyName = OpenCADStrings.ObjectTypes, 
 				Value = string.Join(", ", types),
 				IsReadOnly = true 
 			});
 
 			// Check if all objects are on the same layer
-			var layers = objects.Select(o => o.GetProperty(PropertyType.Layer)?.GetValue(0)).Distinct().ToList();
+			var layers = objects.Select(o => o.Layer?.Name).Distinct().ToList();
 			if (layers.Count == 1 && layers[0] != null)
 			{
 				properties.Add(new PropertyItem 
 				{ 
-					Property = OpenCADStrings.Layer, 
+					PropertyName = OpenCADStrings.Layer, 
 					Value = FormatPropertyValue(layers[0]),
 					IsReadOnly = true 
 				});
@@ -335,19 +183,19 @@ namespace UI.Controls.MainWindow
 			{
 				properties.Add(new PropertyItem 
 				{ 
-					Property = OpenCADStrings.Layer, 
+					PropertyName = OpenCADStrings.Layer, 
 					Value = OpenCADStrings.MultipleValues,
 					IsReadOnly = true 
 				});
 			}
 
 			// Show common color (if all the same)
-			var colors = objects.Select(o => o.GetEffectiveColor()).Distinct().ToList();
+			var colors = objects.Select(o => ((IDrawable)o).Color).Distinct().ToList();
 			if (colors.Count == 1)
 			{
 				properties.Add(new PropertyItem 
 				{ 
-					Property = OpenCADStrings.Color, 
+					PropertyName = OpenCADStrings.Color, 
 					Value = FormatPropertyValue(colors[0]),
 					IsReadOnly = false 
 				});
@@ -356,7 +204,7 @@ namespace UI.Controls.MainWindow
 			{
 				properties.Add(new PropertyItem 
 				{ 
-					Property = OpenCADStrings.Color, 
+					PropertyName = OpenCADStrings.Color, 
 				 Value = OpenCADStrings.MultipleValues,
 					IsReadOnly = false 
 				});
@@ -378,13 +226,13 @@ namespace UI.Controls.MainWindow
 			// Add object metadata (read-only)
 			properties.Add(new PropertyItem 
 			{ 
-				Property = OpenCADStrings.DocumentType, 
+				PropertyName = OpenCADStrings.DocumentType, 
 				Value = OpenCADStrings.OpenCADDocumentType,
 				IsReadOnly = true 
 			});
 			properties.Add(new PropertyItem 
 			{ 
-				Property = OpenCADStrings.DocumentID, 
+				PropertyName = OpenCADStrings.DocumentID, 
 				Value = document.ID.ToString(),
 				IsReadOnly = true 
 			});
@@ -395,37 +243,16 @@ namespace UI.Controls.MainWindow
 			{
 				foreach (var prop in objectProperties)
 				{
-					if (prop != null)
+					if (prop != null && prop.Type != PropertyType.ID)
 					{
-						// Handle properties with multiple values
-						if (prop.Count > 1)
 						{
-							// Show each named value separately
-							for (int i = 0; i < prop.Count; i++)
-							{
-								var propValue = prop.GetPropertyValue(i);
-								var propertyItem = new PropertyItem 
-								{ 
-									Property = propValue.Name, 
-									Value = FormatPropertyValue(propValue.Value),
-									IsReadOnly = false // Allow editing for document properties
-								};
-								
-								// Subscribe to value changes for this property
-								propertyItem.ValueChanged += (s, e) => OnPropertyValueChanged(propertyItem, prop, i);
-								
-								properties.Add(propertyItem);
-							}
-						}
-						else if (prop.Count == 1)
-						{
-							// Single value property
-							var propValue = prop.GetPropertyValue(0);
 							var propertyItem = new PropertyItem 
 							{ 
-								Property = propValue.Name, 
-							 Value = FormatPropertyValue(propValue.Value),
-								IsReadOnly = false
+								PropertyName = prop.Name, 
+								Value = prop.ToStringRepresentation(_currentDocument),
+								RawValue = prop.Value,
+								ValueType = prop.Value?.GetType(),
+                                IsReadOnly = false
 							};
 							
 							// Subscribe to value changes
@@ -443,13 +270,13 @@ namespace UI.Controls.MainWindow
 			
 			properties.Add(new PropertyItem 
 			{ 
-				Property = OpenCADStrings.LayersSection, 
+				PropertyName = OpenCADStrings.LayersSection, 
 				Value = string.Empty,
 				IsReadOnly = true 
 			});
 			properties.Add(new PropertyItem 
 			{ 
-				Property = OpenCADStrings.LayerCount, 
+				PropertyName = OpenCADStrings.LayerCount, 
 				Value = layerCount.ToString(),
 				IsReadOnly = true 
 			});
@@ -458,19 +285,19 @@ namespace UI.Controls.MainWindow
 			var childCount = document.GetChildren().Count();
 			properties.Add(new PropertyItem 
 			{ 
-				Property = OpenCADStrings.ChildrenSection, 
+				PropertyName = OpenCADStrings.ChildrenSection, 
 				Value = string.Empty,
 				IsReadOnly = true 
 			});
 			properties.Add(new PropertyItem 
 			{ 
-				Property = OpenCADStrings.TotalChildren, 
+				PropertyName = OpenCADStrings.TotalChildren, 
 				Value = childCount.ToString(),
 				IsReadOnly = true 
 			});
 			properties.Add(new PropertyItem 
 			{ 
-				Property = OpenCADStrings.DrawableObjects, 
+				PropertyName = OpenCADStrings.DrawableObjects, 
 				Value = (childCount - 1).ToString(),
 				IsReadOnly = true 
 			});
@@ -478,22 +305,6 @@ namespace UI.Controls.MainWindow
 			Properties = properties;
 			System.Diagnostics.Debug.WriteLine(
 				string.Format(OpenCADStrings.PropertiesUpdatedFormat, document.Filename, properties.Count));
-		}
-
-		/// <summary>
-		/// Clear the properties display
-		/// </summary>
-		public void ClearProperties()
-		{
-			Properties = new ObservableCollection<PropertyItem>
-			{
-				new PropertyItem 
-				{ 
-					Property = OpenCADStrings.NoDocument, 
-					Value = OpenCADStrings.PlaceholderValue,
-					IsReadOnly = true 
-				}
-			};
 		}
 
 		/// <summary>
@@ -510,10 +321,10 @@ namespace UI.Controls.MainWindow
 				var newValue = ParsePropertyValue(propertyItem.Value, property.Type);
 				
 				// Update the underlying property
-				property.SetValue(index, newValue);
+				property.Value = newValue;
 				
 				System.Diagnostics.Debug.WriteLine(
-					string.Format(OpenCADStrings.PropertyValueUpdatedFormat, propertyItem.Property, propertyItem.Value));
+					string.Format(OpenCADStrings.PropertyValueUpdatedFormat, propertyItem.PropertyName, propertyItem.Value));
 				
 				// Optionally refresh the viewport if needed
 				ActiveViewport?.Refresh();
@@ -521,9 +332,9 @@ namespace UI.Controls.MainWindow
 			catch (Exception ex)
 			{
 				System.Diagnostics.Debug.WriteLine(
-					string.Format(OpenCADStrings.PropertyUpdateErrorFormat, propertyItem.Property, ex.Message));
+					string.Format(OpenCADStrings.PropertyUpdateErrorFormat, propertyItem.PropertyName, ex.Message));
 				// Revert to original value on error
-				propertyItem.Value = FormatPropertyValue(property.GetValue(index));
+				propertyItem.Value = FormatPropertyValue(property.Value);
 			}
 		}
 
@@ -603,7 +414,13 @@ namespace UI.Controls.MainWindow
 				return string.Format(OpenCADStrings.Point3DFormat, point.X, point.Y, point.Z);
 			
 			if (value is System.Drawing.Color color)
+			{
+				// Special case: transparent black (#00000000) means "ByLayer"
+				if (color.A == 0 && color.R == 0 && color.G == 0 && color.B == 0)
+					return OpenCADStrings.ByLayer;
+				
 				return string.Format(OpenCADStrings.ColorARGBFormat, color.A, color.R, color.G, color.B);
+			}
 			
 			if (value is OpenCADLayer layer)
 				return layer.Name;
@@ -650,34 +467,5 @@ namespace UI.Controls.MainWindow
 				_ => stringValue // Default to string for complex types
 			};
 		}
-
-		#region Command Handlers
-
-		private bool CanRefresh() => ActiveViewport != null;
-
-		private void OnRefresh()
-		{
-			UpdateFromViewport(ActiveViewport);
-		}
-
-		private bool CanApplyChanges() => IsEditing && SelectedProperty != null;
-
-		private void OnApplyChanges()
-		{
-			// Property changes are applied immediately via ValueChanged event
-			// This command can be used to commit all changes at once if needed
-			IsEditing = false;
-		}
-
-		private bool CanCancelEdit() => IsEditing;
-
-		private void OnCancelEdit()
-		{
-			// Refresh to revert any unsaved changes
-			UpdateFromViewport(ActiveViewport);
-			IsEditing = false;
-		}
-
-		#endregion
 	}
 }

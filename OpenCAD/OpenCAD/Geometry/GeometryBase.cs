@@ -5,7 +5,7 @@ using System.Xml.Serialization;
 
 namespace OpenCAD.Geometry
 {
-    public class GeometryBase : OpenCADObject, IDrawable
+    public abstract class GeometryBase : OpenCADObject, IDrawable
     {
         /// <summary>
         /// Parameterless constructor required for deserialization.
@@ -18,48 +18,16 @@ namespace OpenCAD.Geometry
         public GeometryBase(OpenCADDocument? doc) : base(doc)
         {
             _isDrawable = true;
+            _document = doc;
+            _parent = doc;
 
             // Assign to the document's current layer if document exists
             if (_document != null)
             {
-                var currentLayer = _document.CurrentLayer;
-                if (currentLayer != null)
-                {
-                    properties.TryAdd((int)PropertyType.Layer, new Property(PropertyType.Layer, OpenCADStrings.Layer, currentLayer.ID));
-                }
-            }
-        }
-
-        [JsonIgnore, XmlIgnore]
-        public OpenCADLayer? Layer
-        {
-            get
-            {
-                // Return null if no layer is assigned (for temporary objects like crosshairs)
-                if (!properties.TryGetValue((int)PropertyType.Layer, out var prop))
-                    return null;
-
-                // Return null if no document context
-                if (_document == null)
-                    return null;
-
-                return _document.GetLayer((Guid)prop.GetValue(0));
-            }
-            set
-            {
-                if (value == null)
-                {
-                    // Remove layer assignment
-                    properties.TryRemove((int)PropertyType.Layer, out _);
-                }
-                else
-                {
-                    properties.AddOrUpdate(
-                        (int)PropertyType.Layer,
-                        new Property(PropertyType.Layer, OpenCADStrings.Layer, value.ID),
-                        (key, oldValue) => new Property(PropertyType.Layer, OpenCADStrings.Layer, value.ID)
-                    );
-                }
+                Layer = _document.CurrentLayer;
+                Color = _document.CurrentColor;
+                LineType = _document.CurrentLineType ?? LineType.Continuous;
+                LineWeight = _document.CurrentLineWeight ?? LineWeight.Default;
             }
         }
 
@@ -68,28 +36,19 @@ namespace OpenCAD.Geometry
         {
             get
             {
-                // First check if object has a color override
-                if (properties.TryGetValue((int)PropertyType.Color, out var colorProp))
-                {
-                    return (Color)colorProp.GetValue(0);
-                }
+                // Try to get the object's own color property
+                var color = GetPropertyValue<Color?>(PropertyType.Color, nameof(Color));
+                if (color.HasValue && color.Value.A > 0)
+                    return color.Value;
 
-                // If not, get the color from the layer (if available)
-                var layer = Layer;
-                if (layer != null)
-                    return layer.Color;
+                // If not set, try to get the layer's color
+                if (Layer != null)
+                    return Layer.Color;
 
-                // Default fallback for objects without layer context (like crosshair)
-                return Color.White;
+                // Fallback to white
+                return Color.FromArgb(255, 255, 255, 255);
             }
-            set
-            {
-                properties.AddOrUpdate(
-                    (int)PropertyType.Color,
-                    new Property(PropertyType.Color, OpenCADStrings.Color, value),
-                    (key, oldValue) => new Property(PropertyType.Color, OpenCADStrings.Color, value)
-                );
-            }
+            set => SetPropertyValue<Color?>(PropertyType.Color, nameof(Color), OpenCADStrings.Color, value);
         }
 
         [JsonIgnore]
@@ -97,31 +56,27 @@ namespace OpenCAD.Geometry
         {
             get
             {
-                // First check if object has a line type override
-                if (properties.TryGetValue((int)PropertyType.LineType, out var lineTypeProp))
-                {
-                    var lineType = (LineType)lineTypeProp.GetValue(0);
+                // Try to get the object's own line type property
+                var lineType = GetPropertyValue<LineType?>(PropertyType.LineType, nameof(LineType));
+                if (lineType.HasValue && lineType.Value != LineType.ByLayer)
+                    return lineType.Value;
 
-                    // If explicitly set to ByLayer, use layer's line type
-                    if (lineType != LineType.ByLayer)
-                        return lineType;
+                // If not set or ByLayer, try to get the layer's line type
+                if (Layer != null)
+                    return Layer.LineType;
+
+                if (Document != null)
+                {
+                    // If the document has a default line type, use it
+                    var docDefaultLineType = Document.CurrentLineType;
+                    if (docDefaultLineType != null && docDefaultLineType != LineType.ByLayer)
+                        return (LineType)docDefaultLineType;
                 }
 
-                // If not, get the line type from the layer (if available)
-                var layer = Layer;
-                if (layer != null)
-                    return layer.LineType;
-
-                return LineType.Continuous; // Default for objects without layer
+                // Fallback to Continuous
+                return LineType.Continuous;
             }
-            set
-            {
-                properties.AddOrUpdate(
-                    (int)PropertyType.LineType,
-                    new Property(PropertyType.LineType, OpenCADStrings.LineType, value),
-                    (key, oldValue) => new Property(PropertyType.LineType, OpenCADStrings.LineType, value)
-                );
-            }
+            set => SetPropertyValue<LineType?>(PropertyType.LineType, nameof(LineType), OpenCADStrings.LineType, value);
         }
 
         [JsonIgnore]
@@ -129,31 +84,53 @@ namespace OpenCAD.Geometry
         {
             get
             {
-                // First check if object has a line weight override
-                if (properties.TryGetValue((int)PropertyType.LineWeight, out var lineWeightProp))
-                {
-                    var lineWeight = (LineWeight)lineWeightProp.GetValue(0);
+                // Try to get the object's own line weight property
+                var lineWeight = GetPropertyValue<LineWeight?>(PropertyType.LineWeight, nameof(LineWeight));
+                if (lineWeight.HasValue && lineWeight.Value != LineWeight.ByLayer)
+                    return lineWeight.Value;
 
-                    // If explicitly set to ByLayer, use layer's line weight
-                    if (lineWeight != LineWeight.ByLayer)
-                        return lineWeight;
+                // If not set or ByLayer, try to get the layer's line weight
+                if (Layer != null)
+                    return Layer.LineWeight;
+
+                if (Document != null)
+                {
+                    // If the document has a default line weight, use it
+                    var docDefaultLineWeight = Document.CurrentLineWeight;
+                    if (docDefaultLineWeight != null && docDefaultLineWeight != LineWeight.ByLayer)
+                        return (LineWeight)docDefaultLineWeight;
                 }
 
-                // If not, get the line weight from the layer (if available)
-                var layer = Layer;
-                if (layer != null)
-                    return layer.LineWeight;
+                // Fallback to Default
+                return LineWeight.Default;
+            }
+            set => SetPropertyValue<LineWeight?>(PropertyType.LineWeight, nameof(LineWeight), OpenCADStrings.LineWeight, value);
+        }
 
-                return LineWeight.Default; // Default for objects without layer
-            }
-            set
+        public abstract double Length { get; }
+
+        public abstract double Angle { get; }
+
+        public bool ToStringLength(out string length)
+        {
+            if (Document is null || double.IsNaN(Length) || double.IsInfinity(Length))
             {
-                properties.AddOrUpdate(
-                    (int)PropertyType.LineWeight,
-                    new Property(PropertyType.LineWeight, OpenCADStrings.LineWeight, value),
-                    (key, oldValue) => new Property(PropertyType.LineWeight, OpenCADStrings.LineWeight, value)
-                );
+                length = OpenCADStrings.UndefinedValue;
+                return false;
             }
+            length = Document.ValueToString(Length, OpenCADDocument.UnitFormatType.Linear);
+            return true;
+        }
+
+        public bool ToStringAngle(out string length)
+        {
+            if (Document is null || double.IsNaN(Angle) || double.IsInfinity(Angle))
+            {
+                length = OpenCADStrings.UndefinedValue;
+                return false;
+            }
+            length = Document.ValueToString(Angle, OpenCADDocument.UnitFormatType.Angular);
+            return true;
         }
     }
 }

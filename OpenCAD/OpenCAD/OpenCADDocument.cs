@@ -1,9 +1,13 @@
-﻿using OpenCAD.Settings;
+﻿using OpenCAD.Geometry;
+using OpenCAD.Interfaces;
+using OpenCAD.Settings;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Drawing;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Runtime.Serialization;
 using System.Text.Json.Serialization;
 using System.Xml.Serialization;
@@ -16,21 +20,12 @@ namespace OpenCAD
     /// </summary>
     public class OpenCADDocument : OpenCADObject
     {
-        // Property indices for multiple String properties
-        private const int FILENAME_INDEX = 0;
-        private const int DESCRIPTION_INDEX = 1;
-        
-        // Property indices for current drawing properties
-        private const int CURRENT_LAYER_ID_INDEX = 0;
-        private const int CURRENT_COLOR_INDEX = 0;
-        private const int CURRENT_LINETYPE_INDEX = 0;
-        private const int CURRENT_LINEWEIGHT_INDEX = 0;
-        
-        // Property index for layers container ID
-        private const int LAYERS_CONTAINER_ID_INDEX = 0;
-
-        // Property index for viewport settings container ID
-        private const int VIEWPORT_SETTINGS_CONTAINER_ID_INDEX = 1;
+        public enum UnitFormatType
+        {
+            Linear,
+            Angular,
+            Vector3D,
+        }
 
         // Cache for quick layer lookup by name
         [JsonIgnore, XmlIgnore]
@@ -39,35 +34,29 @@ namespace OpenCAD
         public OpenCADDocument()
         {
             // Initialize string properties with names (filename and description)
-            properties.TryAdd((int)PropertyType.String, new Property(PropertyType.String, 
-                (OpenCADStrings.Filename, string.Empty),
-                (OpenCADStrings.Description, string.Empty)
-            ));
-            
+            Filename = string.Empty;
+            Description = string.Empty;
+
             // Create a container object to hold all layers
             var layersContainer = new OpenCADObject(this) { Name = OpenCADStrings.LayersContainer };
             Add(layersContainer);
-            
+
+            LayersContainerID = layersContainer.ID;
+
             // Create default "0" layer (standard in CAD systems)
             var defaultLayer = new OpenCADLayer(OpenCADStrings.DefaultLayerName, Color.White, LineType.Continuous, LineWeight.Default, this);
             layersContainer.Add(defaultLayer);
-            _layerNameToId.TryAdd(defaultLayer.Name, defaultLayer.ID);
-            
-            // Store current layer ID in properties with name
-            properties.TryAdd((int)PropertyType.Layer, new Property(PropertyType.Layer, OpenCADStrings.CurrentLayerID, defaultLayer.ID));
-
-            // Current drawing properties start as null (ByLayer) - don't add to properties until set
+            _layerNameToId.TryAdd(OpenCADStrings.DefaultLayerName, defaultLayer.ID);
+            CurrentLayer = defaultLayer;
+            CurrentLineType = LineType.ByLayer;
+            CurrentLineWeight = LineWeight.ByLayer;
+            CurrentColor = Color.FromArgb(0,0,0,0); // ByLayer
 
             // Add other default settings objects as children if needed
             var viewportSettings = new ViewportSettings(this);
             Add(viewportSettings);
 
-            // Store the layers container ID in properties for quick lookup
-            // Store the viewport settings container ID in properties for quick lookup
-            properties.TryAdd((int)PropertyType.Integer, new Property(PropertyType.Integer,
-                (OpenCADStrings.LayersContainerID, layersContainer.ID),
-                (OpenCADStrings.ViewportSettingsContainerID, viewportSettings.ID)
-            ));
+            CurrentViewportSettingsID = viewportSettings.ID;
         }
 
         public OpenCADDocument(string filename, string description = "") : this()
@@ -158,120 +147,13 @@ namespace OpenCAD
         }
 
         /// <summary>
-        /// Gets the layers container object.
-        /// </summary>
-        private OpenCADObject? GetLayersContainer()
-        {
-            // First try to get from properties (fast path for normal operation)
-            if (properties.TryGetValue((int)PropertyType.Integer, out var prop))
-            {
-                try
-                {
-                    var containerId = (Guid)prop.GetValue(LAYERS_CONTAINER_ID_INDEX);
-                    var container = GetChild(containerId);
-                    if (container != null)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"GetLayersContainer: Found by ID: {containerId}");
-                        return container;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"GetLayersContainer: Failed to get by ID: {ex.Message}");
-                }
-            }
-            
-            // Fallback: Search children by name (important for deserialization!)
-            System.Diagnostics.Debug.WriteLine("GetLayersContainer: Searching children by name...");
-            var containerByName = GetChildren()
-                .FirstOrDefault(c => c.Name == OpenCADStrings.LayersContainer);
-            
-            if (containerByName != null)
-            {
-                System.Diagnostics.Debug.WriteLine($"GetLayersContainer: Found by name: {containerByName.Name} (ID: {containerByName.ID})");
-                
-                // Update the properties cache with the found ID for future lookups
-                try
-                {
-                    properties.AddOrUpdate(
-                        (int)PropertyType.Integer,
-                        new Property(PropertyType.Integer, OpenCADStrings.LayersContainerID, containerByName.ID),
-                        (key, oldValue) => new Property(PropertyType.Integer, OpenCADStrings.LayersContainerID, containerByName.ID)
-                    );
-                    System.Diagnostics.Debug.WriteLine("GetLayersContainer: Updated properties cache with container ID");
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"GetLayersContainer: Failed to update cache: {ex.Message}");
-                }
-            }
-            else
-            {
-                System.Diagnostics.Debug.WriteLine("GetLayersContainer: NOT FOUND!");
-                System.Diagnostics.Debug.WriteLine($"  Total children: {GetChildren().Count()}");
-                foreach (var child in GetChildren())
-                {
-                    System.Diagnostics.Debug.WriteLine($"    Child: Name='{child.Name ?? "null"}', Type={child.GetType().Name}, ID={child.ID}");
-                }
-            }
-            
-            return containerByName;
-        }
-
-        /// <summary>
-        /// Gets the viewport settings container object.
-        /// </summary>
-        private ViewportSettings? GetViewportSettingsContainer()
-        {
-            // First try to get from properties (fast path for normal operation)
-            if (properties.TryGetValue((int)PropertyType.Integer, out var prop))
-            {
-                try
-                {
-                    var containerId = (Guid)prop.GetValue(VIEWPORT_SETTINGS_CONTAINER_ID_INDEX);
-                    var container = GetChild(containerId) as ViewportSettings;
-                    if (container != null)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"GetViewportSettingsContainer: Found by ID: {containerId}");
-                        return container;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"GetViewportSettingsContainer: Failed to get by ID: {ex.Message}");
-                }
-            }
-
-            return null;
-        }
-
-
-        /// <summary>
         /// Gets or sets the filename of the CAD document.
         /// </summary>
         [JsonIgnore] // or [XmlIgnore]
         public string Filename
         {
-            get
-            {
-                if (properties.TryGetValue((int)PropertyType.String, out var prop))
-                    return (string)prop.GetValue(FILENAME_INDEX);
-                return string.Empty;
-            }
-            set
-            {
-                if (properties.TryGetValue((int)PropertyType.String, out var prop))
-                {
-                    prop.SetValue(FILENAME_INDEX, value ?? string.Empty);
-                }
-                else
-                {
-                    properties.TryAdd((int)PropertyType.String, new Property(PropertyType.String,
-                        (OpenCADStrings.Filename, value ?? string.Empty),
-                        (OpenCADStrings.Description, string.Empty)
-                    ));
-                }
-            }
+            get => GetPropertyValue<string>(PropertyType.String, nameof(Filename));
+            set => SetPropertyValue(PropertyType.String, nameof(Filename), OpenCADStrings.Filename, value);
         }
 
         /// <summary>
@@ -280,92 +162,46 @@ namespace OpenCAD
         [JsonIgnore]
         public string Description
         {
-            get
-            {
-                if (properties.TryGetValue((int)PropertyType.String, out var prop))
-                    return (string)prop.GetValue(DESCRIPTION_INDEX);
-                return string.Empty;
-            }
-            set
-            {
-                if (properties.TryGetValue((int)PropertyType.String, out var prop))
-                {
-                    prop.SetValue(DESCRIPTION_INDEX, value ?? string.Empty);
-                }
-                else
-                {
-                    properties.TryAdd((int)PropertyType.String, new Property(PropertyType.String,
-                        (OpenCADStrings.Filename, string.Empty),
-                        (OpenCADStrings.Description, value ?? string.Empty)
-                    ));
-                }
-            }
+            get => GetPropertyValue<string>(PropertyType.String, nameof(Description)) ?? string.Empty;
+            set => SetPropertyValue(PropertyType.String, nameof(Description), OpenCADStrings.Description, value);
         }
 
         /// <summary>
         /// Gets or sets the current active layer for new objects.
         /// </summary>
         [JsonIgnore]
-        public OpenCADLayer? CurrentLayer
+        public OpenCADLayer CurrentLayer
         {
-            get
-            {
-                if (properties.TryGetValue((int)PropertyType.Layer, out var prop))
-                {
-                    var layerId = (Guid)prop.GetValue(CURRENT_LAYER_ID_INDEX);
-                    var layersContainer = GetLayersContainer();
-                    if (layersContainer != null)
-                    {
-                        var layer = layersContainer.GetChild(layerId);
-                        return layer as OpenCADLayer;
-                    }
-                }
-                return null;
-            }
-            set
-            {
-                if (value != null)
-                {
-                    properties.AddOrUpdate(
-                        (int)PropertyType.Layer,
-                        new Property(PropertyType.Layer, OpenCADStrings.CurrentLayerID, value.ID),
-                        (key, oldValue) => new Property(PropertyType.Layer, OpenCADStrings.CurrentLayerID, value.ID)
-                    );
-                }
-            }
+            get => GetChild(LayersContainerID)?.GetChild(CurrentLayerID) as OpenCADLayer ?? new OpenCADLayer();
+            set => SetPropertyValue(PropertyType.ID, nameof(CurrentLayerID), OpenCADStrings.CurrentLayerID, value.ID);
+        }
+
+        /// <summary>
+        /// Gets or sets the current active layer's Id for new objects.
+        /// </summary>
+        [JsonIgnore]
+        public Guid CurrentLayerID
+        {
+            get => GetPropertyValue<Guid>(PropertyType.ID, nameof(CurrentLayerID));
+            set => SetPropertyValue(PropertyType.ID, nameof(CurrentLayerID), OpenCADStrings.CurrentLayerID, value);
         }
 
         [JsonIgnore]
-        public ViewportSettings? CurrentViewportSettings => GetViewportSettingsContainer();
+        public Guid? CurrentViewportSettingsID
+        {
+            get => GetPropertyValue<Guid?>(PropertyType.ID, nameof(CurrentViewportSettingsID));
+            private set => SetPropertyValue(PropertyType.ID, nameof(CurrentViewportSettingsID), OpenCADStrings.CurrentViewportSettingsID, value);
+        }
 
         /// <summary>
         /// Gets or sets the current color for new objects.
         /// If null, new objects will use ByLayer color.
         /// </summary>
         [JsonIgnore]
-        public Color? CurrentColor
+        public Color CurrentColor
         {
-            get
-            {
-                if (properties.TryGetValue((int)PropertyType.Color, out var prop))
-                    return (Color)prop.GetValue(CURRENT_COLOR_INDEX);
-                return null;
-            }
-            set
-            {
-                if (value.HasValue)
-                {
-                    properties.AddOrUpdate(
-                        (int)PropertyType.Color,
-                        new Property(PropertyType.Color, OpenCADStrings.CurrentColor, value.Value),
-                        (key, oldValue) => new Property(PropertyType.Color, OpenCADStrings.CurrentColor, value.Value)
-                    );
-                }
-                else
-                {
-                    properties.TryRemove((int)PropertyType.Color, out _);
-                }
-            }
+            get => GetPropertyValue<Color>(PropertyType.Color, nameof(CurrentColor));
+            set => SetPropertyValue(PropertyType.Color, nameof(CurrentColor), OpenCADStrings.CurrentColor, value);
         }
 
         /// <summary>
@@ -375,27 +211,8 @@ namespace OpenCAD
         [JsonIgnore]
         public LineType? CurrentLineType
         {
-            get
-            {
-                if (properties.TryGetValue((int)PropertyType.LineType, out var prop))
-                    return (LineType)prop.GetValue(CURRENT_LINETYPE_INDEX);
-                return null;
-            }
-            set
-            {
-                if (value.HasValue)
-                {
-                    properties.AddOrUpdate(
-                        (int)PropertyType.LineType,
-                        new Property(PropertyType.LineType, OpenCADStrings.CurrentLineType, value.Value),
-                        (key, oldValue) => new Property(PropertyType.LineType, OpenCADStrings.CurrentLineType, value.Value)
-                    );
-                }
-                else
-                {
-                    properties.TryRemove((int)PropertyType.LineType, out _);
-                }
-            }
+            get => GetPropertyValue<LineType>(PropertyType.LineType, nameof(CurrentLineType));
+            set => SetPropertyValue(PropertyType.LineType, nameof(CurrentLineType), OpenCADStrings.CurrentLineType, value);
         }
 
         /// <summary>
@@ -405,27 +222,8 @@ namespace OpenCAD
         [JsonIgnore]
         public LineWeight? CurrentLineWeight
         {
-            get
-            {
-                if (properties.TryGetValue((int)PropertyType.LineWeight, out var prop))
-                    return (LineWeight)prop.GetValue(CURRENT_LINEWEIGHT_INDEX);
-                return null;
-            }
-            set
-            {
-                if (value.HasValue)
-                {
-                    properties.AddOrUpdate(
-                        (int)PropertyType.LineWeight,
-                        new Property(PropertyType.LineWeight, OpenCADStrings.CurrentLineWeight, value.Value),
-                        (key, oldValue) => new Property(PropertyType.LineWeight, OpenCADStrings.CurrentLineWeight, value.Value)
-                    );
-                }
-                else
-                {
-                    properties.TryRemove((int)PropertyType.LineWeight, out _);
-                }
-            }
+            get => GetPropertyValue<LineWeight>(PropertyType.LineWeight, nameof(CurrentLineWeight));
+            set => SetPropertyValue(PropertyType.LineWeight, nameof(CurrentLineWeight), OpenCADStrings.CurrentLineWeight, value);
         }
 
         /// <summary>
@@ -499,8 +297,8 @@ namespace OpenCAD
         /// <summary>
         /// Gets a layer by name.
         /// </summary>
-        /// <param name="name">The name of the layer to retrieve.</param>
-        /// <returns>The layer with the specified name, or null if not found.</returns>
+        /// <param name="layerId">The ID of the layer to retrieve.</param>
+        /// <returns>The layer with the specified ID, or null if not found.</returns>
         public OpenCADLayer? GetLayer(Guid layerId)
         {
             var layersContainer = GetLayersContainer();
@@ -572,20 +370,27 @@ namespace OpenCAD
         /// Applies the document's current properties to a new object.
         /// </summary>
         /// <param name="obj">The object to apply properties to.</param>
-        public void ApplyCurrentProperties(OpenCADObject obj)
+        public void ApplyCurrentProperties(IDrawable obj)
         {
             if (obj == null)
                 return;
 
             obj.Layer = CurrentLayer;
-            obj.SetColor(CurrentColor);
-            obj.SetLineType(CurrentLineType);
-            obj.SetLineWeight(CurrentLineWeight);
+            obj.Color = CurrentColor;
+            obj.LineType = CurrentLineType ?? LineType.ByLayer;
+            obj.LineWeight = CurrentLineWeight ?? LineWeight.ByLayer;
         }
 
         [JsonIgnore, XmlIgnore]
         public bool HasUnsavedChanges { get; set; }
-        
+
+        [JsonIgnore, XmlIgnore]
+        public Guid LayersContainerID 
+        { 
+            get => GetPropertyValue<Guid>(PropertyType.ID, nameof(LayersContainerID));
+            private set => SetPropertyValue(PropertyType.ID, nameof(LayersContainerID), OpenCADStrings.LayersContainerID, value);
+        }
+
         // Call this whenever the document is modified
         public void MarkAsModified()
         {
@@ -623,18 +428,138 @@ namespace OpenCAD
         /// Recursively ensures all children have been deserialized properly.
         /// This manually triggers the conversion of SerializedProperties to properties.
         /// </summary>
-        private void EnsureChildrenDeserialized(OpenCADObject parent)
+        //private void EnsureChildrenDeserialized(OpenCADObject parent)
+        //{
+        //    foreach (var child in parent.GetChildren())
+        //    {
+        //        System.Diagnostics.Debug.WriteLine($"  Deserializing child: Type={child.GetType().Name}, ID={child.ID}");
+        
+        //        // Force the child to complete its deserialization
+        //        // by manually calling the conversion that OnDeserialized should do
+        //        child.CompleteDeserialization();
+        
+        //        // Recursively process grandchildren
+        //        EnsureChildrenDeserialized(child);
+        //    }
+        //}
+
+        private OpenCADObject? GetLayersContainer()
         {
-            foreach (var child in parent.GetChildren())
+            return GetChild(LayersContainerID);
+        }
+
+        public ViewportSettings? GetViewportSettings()
+        {
+            if (CurrentViewportSettingsID.HasValue)
             {
-                System.Diagnostics.Debug.WriteLine($"  Deserializing child: Type={child.GetType().Name}, ID={child.ID}");
-        
-                // Force the child to complete its deserialization
-                // by manually calling the conversion that OnDeserialized should do
-                child.CompleteDeserialization();
-        
-                // Recursively process grandchildren
-                EnsureChildrenDeserialized(child);
+                return GetChild(CurrentViewportSettingsID.Value) as ViewportSettings;
+            }
+            return null;
+        }
+
+        public string ValueToString(double value, UnitFormatType type)
+        {
+            var unitSettings = GetViewportSettings()?.Unit;
+            if (unitSettings != null)
+            {
+                return type switch
+                {
+                    UnitFormatType.Linear => unitSettings.LengthToString(value),
+                    UnitFormatType.Angular => unitSettings.AngleToString(value),
+                    _ => value.ToString()
+                };
+            }
+            return value.ToString();
+        }
+
+        public double StringToValue(string str, UnitFormatType type)
+        {
+            var unitSettings = GetViewportSettings()?.Unit;
+            if (unitSettings != null)
+            {
+                return type switch
+                {
+                    UnitFormatType.Linear => unitSettings.StringToLength(str),
+                    UnitFormatType.Angular => unitSettings.StringToAngle(str),
+                    _ => double.Parse(str)
+                };
+            }
+            return double.Parse(str);
+        }
+
+        public string VectorToString(Vector3D vector)
+        {
+            if (vector is null)
+            {
+                return OpenCADStrings.NullValue;
+            }
+
+            var unitSettings = GetViewportSettings()?.Unit;
+            if (unitSettings != null)
+            {
+                var xStr = unitSettings.LengthToString(vector.X);
+                var yStr = unitSettings.LengthToString(vector.Y);
+                var zStr = unitSettings.LengthToString(vector.Z);
+                return $"X:{xStr}, Y:{yStr}, Z:{zStr}";
+            }
+
+            return vector.ToString();
+        }
+
+        public Vector3D StringToVector(string str)
+        {
+            return Vector3D.ParseFromPropertyString(str);
+        }
+
+        public string PointToString(Point3D point)
+        {
+            if (point is null)
+            {
+                return OpenCADStrings.NullValue;
+            }
+
+            var unitSettings = GetViewportSettings()?.Unit;
+            if (unitSettings != null)
+            {
+                return VectorToString(point.AsVector3D());
+            }
+
+            return point.ToString();
+        }
+
+        public Point3D StringToPoint(string str)
+        {
+            return Point3D.ParseFromPropertyString(str);
+        }
+
+        public string ColorToString(Color value)
+        {
+            return $"A{value.A} R{value.R} G{value.G} B{value.B}";
+        }
+
+        public Color StringToColor(string strValue)
+        {
+            if (string.IsNullOrWhiteSpace(strValue))
+                throw new ArgumentNullException(nameof(strValue));
+
+            if (strValue.Equals(OpenCADStrings.ByLayer, StringComparison.OrdinalIgnoreCase))
+                return Color.FromArgb(0, 0, 0, 0); // ByLayer
+
+            var components = strValue.Split(' ');
+            if (components.Length != 4)
+                throw new FormatException("Invalid color format. Expected format: \"A{alpha} R{red} G{green} B{blue}\"");
+
+            try
+            {
+                byte a = byte.Parse(components[0].Substring(1));
+                byte r = byte.Parse(components[1].Substring(1));
+                byte g = byte.Parse(components[2].Substring(1));
+                byte b = byte.Parse(components[3].Substring(1));
+                return Color.FromArgb(a, r, g, b);
+            }
+            catch (Exception ex)
+            {
+                throw new FormatException("Invalid color format.", ex);
             }
         }
     }

@@ -3,17 +3,110 @@
 			 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 			 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
 			 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+			 xmlns:local="clr-namespace:UI.Controls.MainWindow"
+			 xmlns:converters="clr-namespace:UI.Converters"
+			 xmlns:xctk="http://schemas.xceed.com/wpf/xaml/toolkit"
+             xmlns:ocad="clr-namespace:OpenCAD;assembly=OpenCAD"
 			 mc:Ignorable="d" 
 			 d:DesignHeight="450" d:DesignWidth="250"
 			 Background="{DynamicResource SecondaryBackgroundBrush}">
-    <ListView Background="{DynamicResource SecondaryBackgroundBrush}"
+	<UserControl.Resources>
+		<!-- Converters -->
+		<converters:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
+		<converters:BoolToIndexConverter x:Key="BoolToIndexConverter"/>
+		<converters:InverseBooleanToVisibilityConverter x:Key="InverseBooleanToVisibilityConverter"/>
+		<converters:DrawingColorToMediaColorConverter x:Key="DrawingColorToMediaColorConverter"/>
+		<converters:ColorToByLayerVisibilityConverter x:Key="ColorToByLayerVisibilityConverter"/>
+		<converters:ColorToPickerVisibilityConverter x:Key="ColorToPickerVisibilityConverter"/>
+	
+		<!-- Read-only template (TextBlock) -->
+		<DataTemplate x:Key="ReadOnlyTemplate">
+			<TextBlock Text="{Binding Value}" 
+					   Padding="4"
+					   VerticalAlignment="Center"/>
+		</DataTemplate>
+
+		<!-- Color editor template with ByLayer dropdown -->
+		<DataTemplate x:Key="ColorEditorTemplate">
+			<Grid>
+				<Grid.ColumnDefinitions>
+					<ColumnDefinition Width="Auto"/>
+					<ColumnDefinition Width="*"/>
+				</Grid.ColumnDefinitions>
+				
+				<!-- Dropdown to select ByLayer or Custom (no binding, just event) -->
+				<ComboBox Grid.Column="0" 
+						  Width="80"
+						  SelectionChanged="ColorMode_SelectionChanged"
+						  Loaded="ColorMode_Loaded"
+						  Tag="{Binding}"
+						  IsEnabled="{Binding IsReadOnly, Converter={StaticResource InverseBooleanConverter}}">
+					<ComboBoxItem Content="{x:Static ocad:OpenCADStrings.ByLayer}"/>
+					<ComboBoxItem Content="{x:Static ocad:OpenCADStrings.Custom}"/>
+				</ComboBox>
+				
+				<!-- Color picker (only visible when not ByLayer) -->
+				<xctk:ColorPicker Grid.Column="1"
+								  Margin="4,0,0,0"
+								  SelectedColor="{Binding RawValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource DrawingColorToMediaColorConverter}}"
+								  IsEnabled="{Binding IsReadOnly, Converter={StaticResource InverseBooleanConverter}}"
+								  ShowStandardColors="True"
+								  ShowRecentColors="True"
+								  DisplayColorAndName="True"
+								  Visibility="{Binding IsColorByLayer, Converter={StaticResource InverseBooleanToVisibilityConverter}}"/>
+			</Grid>
+		</DataTemplate>
+
+		<!-- Enum editor template (ComboBox) -->
+		<DataTemplate x:Key="EnumEditorTemplate">
+			<ComboBox ItemsSource="{Binding EnumValues}"
+					  SelectedItem="{Binding RawValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+					  IsEnabled="{Binding IsReadOnly, Converter={StaticResource InverseBooleanConverter}}"/>
+		</DataTemplate>
+
+		<!-- Boolean editor template (CheckBox) -->
+		<DataTemplate x:Key="BooleanEditorTemplate">
+			<CheckBox IsChecked="{Binding RawValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+					  IsEnabled="{Binding IsReadOnly, Converter={StaticResource InverseBooleanConverter}}"
+					  HorizontalAlignment="Left"
+					  VerticalAlignment="Center"
+					  Margin="4"/>
+		</DataTemplate>
+
+		<!-- Default editor template (TextBox) -->
+		<DataTemplate x:Key="DefaultEditorTemplate">
+			<TextBox Text="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+					 IsReadOnly="{Binding IsReadOnly}"
+					 BorderThickness="0"
+					 Background="Transparent"/>
+		</DataTemplate>
+
+		<!-- Template Selector -->
+		<local:PropertyEditorTemplateSelector x:Key="PropertyEditorTemplateSelector"
+			EnumEditorTemplate="{StaticResource EnumEditorTemplate}"
+			BooleanEditorTemplate="{StaticResource BooleanEditorTemplate}"
+			ColorEditorTemplate="{StaticResource ColorEditorTemplate}"
+			DefaultEditorTemplate="{StaticResource DefaultEditorTemplate}"
+			ReadOnlyTemplate="{StaticResource ReadOnlyTemplate}"/>
+	</UserControl.Resources>
+
+	<DataGrid Background="{DynamicResource SecondaryBackgroundBrush}"
 			  Foreground="{DynamicResource PrimaryTextBrush}"
-			  ItemsSource="{Binding Properties}">
-        <ListView.View>
-            <GridView>
-                <GridViewColumn Header="Property" Width="100" DisplayMemberBinding="{Binding Property}" />
-                <GridViewColumn Header="Value" Width="145" DisplayMemberBinding="{Binding Value}" />
-            </GridView>
-        </ListView.View>
-    </ListView>
+			  ItemsSource="{Binding Properties}"
+			  AutoGenerateColumns="False"
+			  CanUserAddRows="False"
+			  CanUserDeleteRows="False"
+			  HeadersVisibility="Column"
+			  GridLinesVisibility="Horizontal"
+			  SelectionMode="Single">
+		<DataGrid.Columns>
+			<DataGridTextColumn Header="Property" 
+								Binding="{Binding PropertyName}" 
+								IsReadOnly="True"
+								Width="*"/>
+			<DataGridTemplateColumn Header="Value" 
+									Width="2*"
+									CellTemplateSelector="{StaticResource PropertyEditorTemplateSelector}"/>
+		</DataGrid.Columns>
+	</DataGrid>
 </UserControl>

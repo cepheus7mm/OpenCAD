@@ -44,6 +44,7 @@ namespace UI
             menuBar.LightThemeRequested += (s, e) => LightTheme_Click(s!, new RoutedEventArgs());
             menuBar.DarkThemeRequested += (s, e) => DarkTheme_Click(s!, new RoutedEventArgs());
             menuBar.LayersVisibilityChanged += MenuBar_LayersVisibilityChanged;
+            menuBar.SettingsVisibilityChanged += MenuBar_SettingsVisibilityChanged;
             menuBar.SaveAsRequested += (s, e) => SaveAs_Click(s!, new RoutedEventArgs());
             
             // Hook up toolbar events
@@ -70,6 +71,12 @@ namespace UI
             };
             _autoSaveTimer.Tick += AutoSave_Tick;
             _autoSaveTimer.Start();
+        }
+
+        private void MenuBar_SettingsVisibilityChanged(object? sender, bool isVisible)
+        {
+            dockingArea.ShowSettingsPanel(isVisible);
+            statusBar.UpdateStatus(isVisible ? "Settings panel shown" : "Settings panel hidden");
         }
 
         private void AutoSave_Tick(object? sender, EventArgs e)
@@ -332,7 +339,7 @@ namespace UI
             statusBar.ViewportSettingsChanged += (s, e) => 
             {
                 // Update snapping state from settings
-                viewport.UpdateSnappingFromSettings();
+                //viewport.UpdateSnappingFromSettings();
                 
                 // Force viewport to refresh when settings change
                 viewport.Refresh();
@@ -412,7 +419,7 @@ namespace UI
                         statusBar.SetViewportSettings(viewportSettings);
                         statusBar.ViewportSettingsChanged += (s, args) => 
                         {
-                            viewport.UpdateSnappingFromSettings();
+                            //viewport.UpdateSnappingFromSettings();
                             viewport.Refresh();
                         };
 

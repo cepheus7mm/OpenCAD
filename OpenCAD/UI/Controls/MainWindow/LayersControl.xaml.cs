@@ -1,6 +1,8 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Media;
 using UI.Controls.Viewport;
 using Xceed.Wpf.Toolkit;
 
@@ -172,14 +174,14 @@ namespace UI.Controls.MainWindow
 				if (colorPickerWindow.ShowDialog() == true && colorPicker.SelectedColor.HasValue)
 				{
 					var selectedColor = colorPicker.SelectedColor.Value;
-					
+
 					// Convert back to System.Drawing.Color
 					layerItem.Color = System.Drawing.Color.FromArgb(
 						selectedColor.A,
 						selectedColor.R,
 						selectedColor.G,
 						selectedColor.B);
-					
+
 					System.Diagnostics.Debug.WriteLine($"Layer '{layerItem.Name}' color changed to {layerItem.Color}");
 				}
 			}

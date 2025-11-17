@@ -23,8 +23,9 @@ namespace OpenCAD.Serialization
             Converters =
             {
                 new ColorJsonConverter(),
-                new ConcurrentDictionaryConverter<int, Property>(),
-                new ConcurrentDictionaryConverter<Guid, OpenCADObject>()
+                new ConcurrentDictionaryListPropertyConverter(),
+                new ConcurrentDictionaryConverter<Guid, OpenCADObject>(),
+                new PropertyJsonConverter()
             },
             TypeInfoResolver = new DefaultJsonTypeInfoResolver
             {
@@ -69,6 +70,7 @@ namespace OpenCAD.Serialization
                 typeInfo.PolymorphismOptions.DerivedTypes.Add(new JsonDerivedType(typeof(GridSettings), "gridSettings"));
                 typeInfo.PolymorphismOptions.DerivedTypes.Add(new JsonDerivedType(typeof(CrosshairSettings), "crosshairSettings"));
                 typeInfo.PolymorphismOptions.DerivedTypes.Add(new JsonDerivedType(typeof(SnapSettings), "snapSettings"));
+                typeInfo.PolymorphismOptions.DerivedTypes.Add(new JsonDerivedType(typeof(UnitSettings), "unitSettings"));
 
                 lock (_polyLock)
                 {
@@ -165,6 +167,30 @@ namespace OpenCAD.Serialization
             System.Collections.Concurrent.ConcurrentDictionary<TKey, TValue> value,
             JsonSerializerOptions options)
         {
+            JsonSerializer.Serialize(writer, value.ToDictionary(kvp => kvp.Key, kvp => kvp.Value), options);
+        }
+    }
+
+    public class ConcurrentDictionaryListPropertyConverter : JsonConverter<System.Collections.Concurrent.ConcurrentDictionary<int, List<Property>>>
+    {
+        public override System.Collections.Concurrent.ConcurrentDictionary<int, List<Property>> Read(
+            ref Utf8JsonReader reader,
+            Type typeToConvert,
+            JsonSerializerOptions options)
+        {
+            // Deserialize as Dictionary<int, List<Property>> first
+            var dictionary = JsonSerializer.Deserialize<Dictionary<int, List<Property>>>(ref reader, options);
+            return dictionary != null
+                ? new System.Collections.Concurrent.ConcurrentDictionary<int, List<Property>>(dictionary)
+                : new System.Collections.Concurrent.ConcurrentDictionary<int, List<Property>>();
+        }
+
+        public override void Write(
+            Utf8JsonWriter writer,
+            System.Collections.Concurrent.ConcurrentDictionary<int, List<Property>> value,
+            JsonSerializerOptions options)
+        {
+            // Convert to Dictionary<int, List<Property>> for serialization
             JsonSerializer.Serialize(writer, value.ToDictionary(kvp => kvp.Key, kvp => kvp.Value), options);
         }
     }

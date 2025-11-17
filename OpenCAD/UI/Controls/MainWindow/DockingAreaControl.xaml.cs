@@ -34,12 +34,16 @@ namespace UI.Controls.MainWindow
 
 			Loaded += OnLoaded;
 			Unloaded += OnUnloaded;
-		}
+        
+			PropertiesViewModelInstance = new PropertiesViewModel();
+            SettingsViewModelInstance = new SettingsViewModel();
+			DataContext = this;
+        }
 
-		/// <summary>
-		/// Gets the DockingManager instance for programmatic access
-		/// </summary>
-		public DockingManager DockingManager => dockingManager;
+        /// <summary>
+        /// Gets the DockingManager instance for programmatic access
+        /// </summary>
+        public DockingManager DockingManager => dockingManager;
 
 		/// <summary>
 		/// Gets the CommandInputControl for wiring up events
@@ -51,15 +55,24 @@ namespace UI.Controls.MainWindow
 		/// </summary>
 		public PropertiesControl PropertiesPanel => propertiesControl;
 
-		/// <summary>
-		/// Gets the LayersControl for programmatic access
-		/// </summary>
-		public LayersControl LayersPanel => layersControl;
+        /// <summary>
+        /// Gets the SettingsControl for programmatic access
+        /// </summary>
+        public PropertiesControl SettingsPanel => settingsControl;
 
-		/// <summary>
-		/// Shows or hides the layers panel
-		/// </summary>
-		public void ShowLayersPanel(bool show)
+        /// <summary>
+        /// Gets the LayersControl for programmatic access
+        /// </summary>
+        public LayersControl LayersPanel => layersControl;
+
+        public PropertiesViewModel PropertiesViewModelInstance { get; }
+        public SettingsViewModel SettingsViewModelInstance { get; }
+
+
+        /// <summary>
+        /// Shows or hides the layers panel
+        /// </summary>
+        public void ShowLayersPanel(bool show)
 		{
 			// First try to get cached reference
 			if (_layersAnchorable == null)
@@ -486,9 +499,10 @@ namespace UI.Controls.MainWindow
 		private void UpdatePropertiesPanel()
 		{
 			var viewport = GetActiveViewport();
-			propertiesControl.UpdateFromViewport(viewport);
+			PropertiesViewModelInstance.UpdateFromViewport(viewport);
 			layersControl.UpdateFromViewport(viewport);
-		}
+			SettingsViewModelInstance.UpdateFromViewport(viewport);
+        }
 
 		private void OnLoaded(object sender, RoutedEventArgs e)
 		{
@@ -567,7 +581,11 @@ namespace UI.Controls.MainWindow
 							args.Content = propertiesControl;
 							System.Diagnostics.Debug.WriteLine("Restored properties");
 							break;
-						case "layers":
+                        case "settings":
+                            args.Content = settingsControl;
+                            System.Diagnostics.Debug.WriteLine("Restored settings");
+                            break;
+                        case "layers":
 							args.Content = layersControl;
 							System.Diagnostics.Debug.WriteLine("Restored layers");
 							break;
@@ -640,5 +658,103 @@ namespace UI.Controls.MainWindow
                 System.Diagnostics.Debug.WriteLine("WARNING: ViewportViewModel not found when trying to wire selection events");
             }
         }
-	}
+
+		/// <summary>
+        /// Shows or hides the settings panel
+        /// </summary>
+        public void ShowSettingsPanel(bool show)
+        {
+            // Try to get the anchorable by ContentId
+            var settingsAnchorable = FindLayoutAnchorable("settings");
+
+            if (settingsAnchorable != null)
+            {
+                if (show)
+                {
+                    settingsAnchorable.Show();
+                    System.Diagnostics.Debug.WriteLine("Settings panel shown");
+                }
+                else
+                {
+                    settingsAnchorable.Hide();
+                    System.Diagnostics.Debug.WriteLine("Settings panel hidden");
+                }
+            }
+            else
+            {
+				EnsureSettingsPanelVisible();
+                //System.Diagnostics.Debug.WriteLine("Settings panel LayoutAnchorable not found - searching entire layout tree");
+
+                //// Debug: Print entire layout structure
+                //PrintLayoutStructure(dockingManager.Layout?.RootPanel, 0);
+
+                //// Try to find it by control reference instead
+                //var parent = settingsControl.Parent;
+                //System.Diagnostics.Debug.WriteLine($"SettingsControl parent type: {parent?.GetType().Name ?? "null"}");
+
+                //if (parent is LayoutAnchorableControl anchorableControl)
+                //{
+                //    System.Diagnostics.Debug.WriteLine("Found settings through control parent");
+                //    settingsAnchorable = anchorableControl.Model as LayoutAnchorable;
+                //    if (settingsAnchorable != null)
+                //    {
+                //        if (show)
+                //            settingsAnchorable.Show();
+                //        else
+                //            settingsAnchorable.Hide();
+                //    }
+                //}
+            }
+        }
+
+        private void EnsureSettingsPanelVisible()
+        {
+            var settingsAnchorable = FindLayoutAnchorable("settings");
+            if (settingsAnchorable == null)
+            {
+                // Find the right-side anchorable pane (where properties/layers are)
+                var rootPanel = dockingManager.Layout?.RootPanel;
+                var rightPane = FindRightAnchorablePane(rootPanel);
+
+                if (rightPane != null)
+                {
+                    settingsAnchorable = new LayoutAnchorable
+                    {
+                        ContentId = "settings",
+                        Title = "Settings",
+                        CanClose = true,
+                        CanHide = true,
+                        Content = settingsControl
+                    };
+                    rightPane.Children.Add(settingsAnchorable);
+                }
+            }
+
+            settingsAnchorable?.Show();
+        }
+
+        // Helper to find the right anchorable pane (where properties/layers are)
+        private LayoutAnchorablePane? FindRightAnchorablePane(ILayoutContainer? container)
+        {
+            if (container == null) return null;
+            foreach (var child in container.Children)
+            {
+                if (child is LayoutAnchorablePane pane)
+                {
+                    // Heuristic: look for a pane that already contains properties/layers
+                    if (pane.Children.OfType<LayoutAnchorable>().Any(a =>
+                        a.ContentId == "properties" || a.ContentId == "layers"))
+                    {
+                        return pane;
+                    }
+                }
+                if (child is ILayoutContainer childContainer)
+                {
+                    var found = FindRightAnchorablePane(childContainer);
+                    if (found != null) return found;
+                }
+            }
+            return null;
+        }
+    }
 }

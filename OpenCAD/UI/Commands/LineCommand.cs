@@ -21,7 +21,23 @@ namespace UI.Commands
         public override void Initialize(ICommandContext context)
         {
             base.Initialize(context);
-            _pointInputHelper = new PointInputHelper(context, context.GetActiveViewport());
+            var viewport = context.GetActiveViewport();
+            if (viewport == null)
+            {
+                context.OutputMessage("No active viewport.");
+                return;
+            }
+
+            // Get the ViewModel from the viewport
+            var viewModel = viewport.DataContext as ViewportViewModel;
+            if (viewModel == null)
+            {
+                context.OutputMessage("Viewport view model not available.");
+                return;
+            }
+
+            // Create helper with ViewModel instead of ViewportControl
+            _pointInputHelper = new PointInputHelper(context, viewModel);
             System.Diagnostics.Debug.WriteLine(OpenCADStrings.LineCommandInitialized);
         }
 
@@ -147,7 +163,7 @@ namespace UI.Commands
             {
                 line = new Line(document, start, end);
                 // Apply current layer and drawing properties to the new line
-                document.ApplyCurrentProperties(line);
+                //document.ApplyCurrentProperties(line);
                 System.Diagnostics.Debug.WriteLine($"Line created on layer: {document.CurrentLayer?.Name ?? "none"}");
             }
             else

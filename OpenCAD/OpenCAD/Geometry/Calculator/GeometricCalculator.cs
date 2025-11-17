@@ -45,21 +45,21 @@ namespace OpenCAD.Geometry.Calculator
         static Point3D Perpendicular (Point3D point, Line line)
         {
             Point3D lineDir = new Point3D(
-                line.End.X - line.Start.X,
-                line.End.Y - line.Start.Y,
-                line.End.Z - line.Start.Z
+                line.EndPoint.X - line.StartPoint.X,
+                line.EndPoint.Y - line.StartPoint.Y,
+                line.EndPoint.Z - line.StartPoint.Z
             );
             Point3D pToStart = new Point3D(
-                point.X - line.Start.X,
-                point.Y - line.Start.Y,
-                point.Z - line.Start.Z
+                point.X - line.StartPoint.X,
+                point.Y - line.StartPoint.Y,
+                point.Z - line.StartPoint.Z
             );
             double t = (pToStart.X * lineDir.X + pToStart.Y * lineDir.Y + pToStart.Z * lineDir.Z) /
                        (lineDir.X * lineDir.X + lineDir.Y * lineDir.Y + lineDir.Z * lineDir.Z);
             Point3D projection = new Point3D(
-                line.Start.X + t * lineDir.X,
-                line.Start.Y + t * lineDir.Y,
-                line.Start.Z + t * lineDir.Z
+                line.StartPoint.X + t * lineDir.X,
+                line.StartPoint.Y + t * lineDir.Y,
+                line.StartPoint.Z + t * lineDir.Z
             );
             return projection;
         }
