@@ -1,5 +1,6 @@
 ﻿using OpenCAD.Interfaces;
 using System.Drawing;
+using System.Numerics;
 using System.Text.Json.Serialization;
 using System.Xml.Serialization;
 
@@ -132,5 +133,19 @@ namespace OpenCAD.Geometry
             length = Document.ValueToString(Angle, OpenCADDocument.UnitFormatType.Angular);
             return true;
         }
+
+        #region Editing 
+
+        public abstract bool Move(Vector3D translation);
+
+
+        /// <summary>
+        /// Apply a 4x4 homogeneous transform to this geometry.
+        /// Default throws — override in derived geometry classes.
+        /// Return true if transform applied successfully.
+        /// </summary>
+        public abstract bool Transform(Matrix4x4 transformation);
+
+        #endregion
     }
 }

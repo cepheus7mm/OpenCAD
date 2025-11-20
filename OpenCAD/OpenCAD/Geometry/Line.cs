@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Text.Json.Serialization;
 using System.Xml.Serialization;
+using System.Numerics;
 
 namespace OpenCAD.Geometry
 {
@@ -45,5 +46,27 @@ namespace OpenCAD.Geometry
 
         [JsonIgnore, XmlIgnore]
         public override double Angle => StartPoint.AngleTo(EndPoint);
+
+        #region Editing
+
+        public override bool Move(Vector3D translation)
+        {
+            StartPoint += translation;
+            EndPoint += translation;
+            return true;
+        }
+
+        public override bool Transform(Matrix4x4 transformation)
+        {
+            // Convert to System.Numerics.Vector3 (float precision is OK for rendering/transforms)
+            var s = Vector3.Transform(new Vector3((float)StartPoint.X, (float)StartPoint.Y, (float)StartPoint.Z), transformation);
+            var e = Vector3.Transform(new Vector3((float)EndPoint.X, (float)EndPoint.Y, (float)EndPoint.Z), transformation);
+
+            StartPoint = new Point3D(s.X, s.Y, s.Z);
+            EndPoint = new Point3D(e.X, e.Y, e.Z);
+            return true;
+        }
+
+        #endregion  
     }
 }

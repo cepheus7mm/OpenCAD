@@ -1,4 +1,5 @@
 using System;
+using System.Numerics;
 using System.Text.Json.Serialization;
 
 namespace OpenCAD.Geometry
@@ -49,6 +50,9 @@ namespace OpenCAD.Geometry
 
         public static Point3D operator +(Point3D a, Vector3D b) =>
             new Point3D(a.X + b.X, a.Y + b.Y, a.Z + b.Z);
+
+        public static Point3D operator +(Point3D a, Matrix4x4 b) =>
+            new Point3D(a.X + b.M41, a.Y + b.M42, a.Z + b.M43);
 
         public static Point3D operator -(Point3D a, Vector3D b) =>
             new Point3D(a.X - b.X, a.Y - b.Y, a.Z - b.Z);

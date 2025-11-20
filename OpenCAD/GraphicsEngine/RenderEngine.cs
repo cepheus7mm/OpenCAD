@@ -143,7 +143,7 @@ namespace GraphicsEngine
         /// <summary>
         /// Render a collection of OpenCADObjects with optional highlighting
         /// </summary>
-        public void Render(IEnumerable<OpenCADObject> objects, OpenCADObject? highlightedObject = null, IEnumerable<OpenCADObject>? selectedObjects = null)
+        public void Render(IEnumerable<OpenCADObject> objects, IEnumerable<OpenCADObject>? highlightedObjects = null, IEnumerable<OpenCADObject>? selectedObjects = null)
         {
             // Clearing is now handled by the caller to allow layered rendering
             // GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
@@ -173,7 +173,7 @@ namespace GraphicsEngine
                 {
                     ViewMatrix = _viewMatrix,
                     ProjectionMatrix = _projectionMatrix,
-                    IsHighlighted = obj == highlightedObject,
+                    IsHighlighted = highlightedObjects?.Contains(obj) ?? false,
                     IsSelected = selectedSet.Contains(obj)
                 };
                 

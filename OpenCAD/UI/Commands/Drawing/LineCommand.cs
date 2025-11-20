@@ -4,7 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using UI.Controls.Viewport;
 
-namespace UI.Commands
+namespace UI.Commands.Drawing
 {
     /// <summary>
     /// Command to create a line

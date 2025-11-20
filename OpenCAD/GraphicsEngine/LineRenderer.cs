@@ -121,12 +121,6 @@ namespace GraphicsEngine
                     lineTypePattern = 8;
                     lineWidth = Math.Max(lineWidth, 2.0f); // Make selected lines at least 2px thick
                 }
-                else if (context.IsHighlighted)
-                {
-                    // Use the object's color but with halved alpha for semi-transparent highlight
-                    color = new Vector4(color.X, color.Y, color.Z, color.W * 0.5f);
-                    lineWidth = Math.Max(lineWidth, 2.0f); // Make highlighted lines at least 2px thick
-                }
 
                 // Determine rendering method based on line width
                 bool useThinLineRendering = lineWidth <= THIN_LINE_THRESHOLD;
@@ -135,13 +129,20 @@ namespace GraphicsEngine
                 bool isOrtho = MathF.Abs(context.ProjectionMatrix.M34) < 1e-6f &&
                               MathF.Abs(context.ProjectionMatrix.M44 - 1f) < 1e-6f;
 
+                float glowRadius = 0.0f; // Default: no glow
+                
+                if (context.IsHighlighted)
+                {
+                    glowRadius = 5.0f; // Glow halo size in pixels
+                }
+
                 if (isOrtho)
                 {
-                    RenderOrthographic(start, end, context.ProjectionMatrix, color, lineWidth, lineTypePattern, useThinLineRendering);
+                    RenderOrthographic(start, end, context.ProjectionMatrix, color, lineWidth, lineTypePattern, useThinLineRendering, glowRadius);
                 }
                 else
                 {
-                    RenderPerspective(start, end, context.ViewMatrix, context.ProjectionMatrix, color, lineWidth, lineTypePattern, useThinLineRendering);
+                    RenderPerspective(start, end, context.ViewMatrix, context.ProjectionMatrix, color, lineWidth, lineTypePattern, useThinLineRendering, glowRadius);
                 }
             }
             catch (Exception ex)
@@ -224,7 +225,8 @@ namespace GraphicsEngine
             };
         }
 
-        private void RenderOrthographic(Point3D start, Point3D end, Matrix4x4 projectionMatrix, Vector4 color, float lineWidth, int lineTypePattern, bool useThinLineRendering)
+        private void RenderOrthographic(Point3D start, Point3D end, Matrix4x4 projectionMatrix, 
+            Vector4 color, float lineWidth, int lineTypePattern, bool useThinLineRendering, float glowRadius = 0.0f)
         {
             // CPU path: derive ortho window from projection (row-major)
             float sx = projectionMatrix.M11;
@@ -288,41 +290,22 @@ namespace GraphicsEngine
                 _shaderProgram.SetVector2("lineStart", screenStart);
                 _shaderProgram.SetVector2("lineEnd", screenEnd);
                 _shaderProgram.SetVector2("viewport", _viewport);
+                _shaderProgram.SetFloat("lineWidth", lineWidth);
+                _shaderProgram.SetFloat("glowRadius", glowRadius);
 
                 // Bind VAO (vertex attributes already configured in constructor)
                 GL.BindVertexArray(_vao);
 
-                if (useThinLineRendering)
+                // For glow, always render as quad to cover the glow area
+                if (glowRadius > 0.0f)
                 {
-                    // Simple line rendering for thin lines
-                    float[] ndcVerts =
-                    {
-                        ndcAx, ndcAy, 0f,
-                        ndcBx, ndcBy, 0f
-                    };
-
-                    GL.BindBuffer(BufferTarget.ArrayBuffer, _vbo);
-                    GL.BufferData(BufferTarget.ArrayBuffer, ndcVerts.Length * sizeof(float), ndcVerts, BufferUsageHint.DynamicDraw);
-
-                    GL.LineWidth(lineWidth);
-                    GL.DrawArrays(PrimitiveType.Lines, 0, 2);
-
-                    if (_debugTilt)
-                    {
-                        float lineLen = Vector2.Distance(screenStart, screenEnd);
-                        Debug.WriteLine($"[LR][CPU-ORTHO-THIN] screenLen={lineLen:F1}px color=({color.X:F2},{color.Y:F2},{color.Z:F2},{color.W:F2}) lineWidth={lineWidth:F2} pattern={lineTypePattern}");
-                    }
-                }
-                else
-                {
-                    // Quad rendering for thick lines
-                    Vector2 ndcStart = new Vector2(ndcAx, ndcAy);
-                    Vector2 ndcEnd = new Vector2(ndcBx, ndcBy);
-
-                    // Calculate half-width in NDC space
-                    float halfWidthNDC = (lineWidth * 0.5f) / (_viewport.X * 0.5f);
-
-                    float[]? ndcVerts = CreateLineQuad(ndcStart, ndcEnd, halfWidthNDC, out _);
+                    useThinLineRendering = false;
+                    
+                    // Expand the quad to cover the glow radius
+                    float totalWidth = lineWidth + glowRadius * 2.0f;
+                    float halfWidthNDC = (totalWidth * 0.5f) / (_viewport.X * 0.5f);
+                    
+                    float[]? ndcVerts = CreateLineQuad(new Vector2(ndcAx, ndcAy), new Vector2(ndcBx, ndcBy), halfWidthNDC, out _);
 
                     if (ndcVerts != null)
                     {
@@ -330,28 +313,77 @@ namespace GraphicsEngine
                         GL.BufferData(BufferTarget.ArrayBuffer, ndcVerts.Length * sizeof(float), ndcVerts, BufferUsageHint.DynamicDraw);
 
                         GL.DrawArrays(PrimitiveType.Triangles, 0, 6);
-
+                        
                         if (_debugTilt)
                         {
                             float lineLen = Vector2.Distance(screenStart, screenEnd);
-                            Debug.WriteLine($"[LR][CPU-ORTHO-QUAD] screenLen={lineLen:F1}px color=({color.X:F2},{color.Y:F2},{color.Z:F2},{color.W:F2}) lineWidth={lineWidth:F2} pattern={lineTypePattern}");
+                            Debug.WriteLine($"[LR][CPU-ORTHO-GLOW] screenLen={lineLen:F1}px color=({color.X:F2},{color.Y:F2},{color.Z:F2},{color.W:F2}) lineWidth={lineWidth:F2} glowRadius={glowRadius:F2}");
                         }
                     }
-                    else
+                }
+                else
+                {
+                    if (useThinLineRendering)
                     {
-                        // Fallback to simple line rendering if quad creation failed
-                        Debug.WriteLine("[LR] Falling back to simple line rendering for degenerate thick line");
-                        float[] ndcVertsFallback =
+                        // Simple line rendering for thin lines
+                        float[] ndcVerts =
                         {
                             ndcAx, ndcAy, 0f,
                             ndcBx, ndcBy, 0f
                         };
 
                         GL.BindBuffer(BufferTarget.ArrayBuffer, _vbo);
-                        GL.BufferData(BufferTarget.ArrayBuffer, ndcVertsFallback.Length * sizeof(float), ndcVertsFallback, BufferUsageHint.DynamicDraw);
+                        GL.BufferData(BufferTarget.ArrayBuffer, ndcVerts.Length * sizeof(float), ndcVerts, BufferUsageHint.DynamicDraw);
 
                         GL.LineWidth(lineWidth);
                         GL.DrawArrays(PrimitiveType.Lines, 0, 2);
+
+                        if (_debugTilt)
+                        {
+                            float lineLen = Vector2.Distance(screenStart, screenEnd);
+                            Debug.WriteLine($"[LR][CPU-ORTHO-THIN] screenLen={lineLen:F1}px color=({color.X:F2},{color.Y:F2},{color.Z:F2},{color.W:F2}) lineWidth={lineWidth:F2} pattern={lineTypePattern}");
+                        }
+                    }
+                    else
+                    {
+                        // Quad rendering for thick lines
+                        Vector2 ndcStart = new Vector2(ndcAx, ndcAy);
+                        Vector2 ndcEnd = new Vector2(ndcBx, ndcBy);
+
+                        // Calculate half-width in NDC space
+                        float halfWidthNDC = (lineWidth * 0.5f) / (_viewport.X * 0.5f);
+
+                        float[]? ndcVerts = CreateLineQuad(ndcStart, ndcEnd, halfWidthNDC, out _);
+
+                        if (ndcVerts != null)
+                        {
+                            GL.BindBuffer(BufferTarget.ArrayBuffer, _vbo);
+                            GL.BufferData(BufferTarget.ArrayBuffer, ndcVerts.Length * sizeof(float), ndcVerts, BufferUsageHint.DynamicDraw);
+
+                            GL.DrawArrays(PrimitiveType.Triangles, 0, 6);
+
+                            if (_debugTilt)
+                            {
+                                float lineLen = Vector2.Distance(screenStart, screenEnd);
+                                Debug.WriteLine($"[LR][CPU-ORTHO-QUAD] screenLen={lineLen:F1}px color=({color.X:F2},{color.Y:F2},{color.Z:F2},{color.W:F2}) lineWidth={lineWidth:F2} pattern={lineTypePattern}");
+                            }
+                        }
+                        else
+                        {
+                            // Fallback to simple line rendering if quad creation failed
+                            Debug.WriteLine("[LR] Falling back to simple line rendering for degenerate thick line");
+                            float[] ndcVertsFallback =
+                            {
+                                ndcAx, ndcAy, 0f,
+                                ndcBx, ndcBy, 0f
+                            };
+
+                            GL.BindBuffer(BufferTarget.ArrayBuffer, _vbo);
+                            GL.BufferData(BufferTarget.ArrayBuffer, ndcVertsFallback.Length * sizeof(float), ndcVertsFallback, BufferUsageHint.DynamicDraw);
+
+                            GL.LineWidth(lineWidth);
+                            GL.DrawArrays(PrimitiveType.Lines, 0, 2);
+                        }
                     }
                 }
 
@@ -361,7 +393,7 @@ namespace GraphicsEngine
             }
         }
 
-        private void RenderPerspective(Point3D start, Point3D end, Matrix4x4 viewMatrix, Matrix4x4 projectionMatrix, Vector4 color, float lineWidth, int lineTypePattern, bool useThinLineRendering)
+        private void RenderPerspective(Point3D start, Point3D end, Matrix4x4 viewMatrix, Matrix4x4 projectionMatrix, Vector4 color, float lineWidth, int lineTypePattern, bool useThinLineRendering, float glowRadius)
         {
             // Get viewport dimensions
             int[] viewport = new int[4];
@@ -421,6 +453,8 @@ namespace GraphicsEngine
             _shaderProgram.SetVector2("lineStart", screenStart);
             _shaderProgram.SetVector2("lineEnd", screenEnd);
             _shaderProgram.SetVector2("viewport", _viewport);
+            _shaderProgram.SetFloat("lineWidth", lineWidth);
+            _shaderProgram.SetFloat("glowRadius", glowRadius);
 
             // Bind VAO (vertex attributes already configured in constructor)
             GL.BindVertexArray(_vao);

@@ -1,7 +1,7 @@
-using OpenTK.Graphics.OpenGL;
 using System.Collections.Generic;
 using System.Numerics;
 using System;
+using OpenTK.Graphics.OpenGL;
 
 namespace GraphicsEngine
 {
@@ -15,121 +15,151 @@ namespace GraphicsEngine
 
         public ShaderProgram()
         {
-            // Updated shaders to support quad-based line rendering with perpendicular end caps
+            // Updated shaders to support quad-based line rendering with glow effect
             string vertexShaderSource = @"
                 #version 330 core
                 layout (location = 0) in vec3 aPosition;
 
                 uniform mat4 mvp;
-                uniform vec4 color;
+                uniform vec2 viewport;
 
-                out vec4 fragColor;
-                out vec4 screenPos;
+                out vec2 fragScreenPos; // Screen-space position of fragment
 
                 void main()
                 {
-                    gl_Position = mvp * vec4(aPosition, 1.0);
-                    fragColor = color;
-                    screenPos = gl_Position;
+                    vec4 clipPos = mvp * vec4(aPosition, 1.0);
+                    gl_Position = clipPos;
+                    
+                    // Convert to screen space for distance calculations
+                    vec3 ndc = clipPos.xyz / clipPos.w;
+                    fragScreenPos = (ndc.xy * 0.5 + 0.5) * viewport;
                 }";
 
             string fragmentShaderSource = @"
                 #version 330 core
-                in vec4 fragColor;
-                in vec4 screenPos;
+
+                uniform vec4 color;
+                uniform vec2 lineStart;      // Screen space
+                uniform vec2 lineEnd;        // Screen space
+                uniform vec2 viewport;
+                uniform int lineTypePattern;
+                uniform float lineWidth;     // Actual line width in pixels
+                uniform float glowRadius;    // Glow halo size in pixels (0 = no glow)
+
+                in vec2 fragScreenPos;
                 out vec4 FragColor;
 
-                uniform int lineTypePattern;  // 0=Continuous, 1=Dashed, 2=Dotted, etc.
-                uniform vec2 lineStart;
-                uniform vec2 lineEnd;
-                uniform vec2 viewport;
+                // Distance from point to line segment
+                float distanceToSegment(vec2 p, vec2 a, vec2 b) {
+                    vec2 pa = p - a;
+                    vec2 ba = b - a;
+                    float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+                    return length(pa - ba * h);
+                }
 
-                void main()
-                {
-                    // lineTypePattern values:
-                    // 0 = Continuous (no stipple)
-                    // 1 = Dashed
-                    // 2 = Dotted
-                    // 3 = DashDot
-                    // 4 = DashDotDot
-                    // 5 = Center (long-short)
-                    // 6 = Hidden (short dashes)
-                    // 7 = Phantom (long-short-short)
-                    // 8 = Selected (fine dash for selection)
+                void main() {
+                    // Calculate distance from fragment to line
+                    float dist = distanceToSegment(fragScreenPos, lineStart, lineEnd);
                     
-                    if (lineTypePattern > 0)
-                    {
-                        // Convert from clip space to screen space
-                        vec2 screenCoord = (screenPos.xy / screenPos.w) * 0.5 + 0.5;
-                        screenCoord *= viewport;
+                    // Line stippling logic
+                    vec2 lineVec = lineEnd - lineStart;
+                    float lineLength = length(lineVec);
+                    
+                    if (lineLength > 0.1) {
+                        vec2 lineDir = lineVec / lineLength;
+                        vec2 fragVec = fragScreenPos - lineStart;
+                        float alongLine = dot(fragVec, lineDir);
                         
-                        // Calculate the line vector in screen space
-                        vec2 lineVec = lineEnd - lineStart;
-                        float lineLength = length(lineVec);
-                        
-                        if (lineLength > 0.0)
-                        {
-                            vec2 lineDir = lineVec / lineLength;
-                            
-                            // Project current fragment onto the line
-                            vec2 toFrag = screenCoord - lineStart;
-                            float distAlongLine = dot(toFrag, lineDir);
-                            
-                            // Apply pattern based on lineTypePattern
-                            bool visible = true;
-                            
-                            if (lineTypePattern == 1) {
-                                // Dashed: 12 on, 6 off
-                                float pattern = mod(distAlongLine, 18.0);
-                                visible = pattern <= 12.0;
-                            }
-                            else if (lineTypePattern == 2) {
-                                // Dotted: 2 on, 6 off
-                                float pattern = mod(distAlongLine, 8.0);
-                                visible = pattern <= 2.0;
-                            }
-                            else if (lineTypePattern == 3) {
-                                // DashDot: 12 on, 4 off, 2 on, 4 off
-                                float pattern = mod(distAlongLine, 22.0);
-                                visible = (pattern <= 12.0) || (pattern >= 16.0 && pattern <= 18.0);
-                            }
-                            else if (lineTypePattern == 4) {
-                                // DashDotDot: 12 on, 4 off, 2 on, 4 off, 2 on, 4 off
-                                float pattern = mod(distAlongLine, 30.0);
-                                visible = (pattern <= 12.0) || 
-                                         (pattern >= 16.0 && pattern <= 18.0) || 
-                                         (pattern >= 22.0 && pattern <= 24.0);
-                            }
-                            else if (lineTypePattern == 5) {
-                                // Center: 24 on, 6 off, 6 on, 6 off
-                                float pattern = mod(distAlongLine, 42.0);
-                                visible = (pattern <= 24.0) || (pattern >= 30.0 && pattern <= 36.0);
-                            }
-                            else if (lineTypePattern == 6) {
-                                // Hidden: 6 on, 6 off (short dashes)
-                                float pattern = mod(distAlongLine, 12.0);
-                                visible = pattern <= 6.0;
-                            }
-                            else if (lineTypePattern == 7) {
-                                // Phantom: 24 on, 6 off, 6 on, 6 off, 6 on, 6 off
-                                float pattern = mod(distAlongLine, 54.0);
-                                visible = (pattern <= 24.0) || 
-                                         (pattern >= 30.0 && pattern <= 36.0) || 
-                                         (pattern >= 42.0 && pattern <= 48.0);
-                            }
-                            else if (lineTypePattern == 8) {
-                                // Selected: 4 on, 2 off (fine dash for selection)
-                                float pattern = mod(distAlongLine, 6.0);
-                                visible = pattern <= 4.0;
-                            }
-                            
-                            if (!visible) {
-                                discard;
-                            }
+                        // Apply line type patterns
+                        if (lineTypePattern == 1) { // Dashed
+                            float dashLength = 10.0;
+                            float gapLength = 5.0;
+                            float cycle = dashLength + gapLength;
+                            float pos = mod(alongLine, cycle);
+                            if (pos > dashLength) discard;
+                        }
+                        else if (lineTypePattern == 2) { // Dotted
+                            float dotLength = 2.0;
+                            float gapLength = 4.0;
+                            float cycle = dotLength + gapLength;
+                            float pos = mod(alongLine, cycle);
+                            if (pos > dotLength) discard;
+                        }
+                        else if (lineTypePattern == 3) { // DashDot
+                            float dashLength = 10.0;
+                            float dotLength = 2.0;
+                            float gapLength = 4.0;
+                            float cycle = dashLength + gapLength + dotLength + gapLength;
+                            float pos = mod(alongLine, cycle);
+                            if ((pos > dashLength && pos < dashLength + gapLength) || 
+                                (pos > dashLength + gapLength + dotLength)) discard;
+                        }
+                        else if (lineTypePattern == 4) { // DashDotDot
+                            float dashLength = 10.0;
+                            float dotLength = 2.0;
+                            float gapLength = 4.0;
+                            float cycle = dashLength + gapLength + dotLength + gapLength + dotLength + gapLength;
+                            float pos = mod(alongLine, cycle);
+                            if ((pos > dashLength && pos < dashLength + gapLength) || 
+                                (pos > dashLength + gapLength + dotLength && pos < dashLength + 2.0 * gapLength + dotLength) ||
+                                (pos > dashLength + 2.0 * gapLength + 2.0 * dotLength)) discard;
+                        }
+                        else if (lineTypePattern == 5) { // Center
+                            float longDash = 20.0;
+                            float shortDash = 5.0;
+                            float gapLength = 4.0;
+                            float cycle = longDash + gapLength + shortDash + gapLength;
+                            float pos = mod(alongLine, cycle);
+                            if ((pos > longDash && pos < longDash + gapLength) ||
+                                (pos > longDash + gapLength + shortDash)) discard;
+                        }
+                        else if (lineTypePattern == 6) { // Hidden
+                            float dashLength = 5.0;
+                            float gapLength = 3.0;
+                            float cycle = dashLength + gapLength;
+                            float pos = mod(alongLine, cycle);
+                            if (pos > dashLength) discard;
+                        }
+                        else if (lineTypePattern == 7) { // Phantom
+                            float longDash = 20.0;
+                            float shortDash = 5.0;
+                            float gapLength = 4.0;
+                            float cycle = longDash + gapLength + shortDash + gapLength + shortDash + gapLength;
+                            float pos = mod(alongLine, cycle);
+                            if ((pos > longDash && pos < longDash + gapLength) ||
+                                (pos > longDash + gapLength + shortDash && pos < longDash + 2.0 * gapLength + shortDash) ||
+                                (pos > longDash + 2.0 * gapLength + 2.0 * shortDash)) discard;
+                        }
+                        else if (lineTypePattern == 8) { // Fine dashed (for selection)
+                            float dashLength = 6.0;
+                            float gapLength = 3.0;
+                            float cycle = dashLength + gapLength;
+                            float pos = mod(alongLine, cycle);
+                            if (pos > dashLength) discard;
                         }
                     }
                     
-                    FragColor = fragColor;
+                    // Distance-based rendering with optional glow
+                    if (glowRadius > 0.0) {
+                        float halfWidth = lineWidth * 0.5;
+                        
+                        if (dist <= halfWidth) {
+                            // Inside core line: full opacity
+                            FragColor = vec4(color.rgb, color.a);
+                        } else if (dist <= halfWidth + glowRadius) {
+                            // Inside glow halo: smooth falloff
+                            float glowFactor = 1.0 - smoothstep(halfWidth, halfWidth + glowRadius, dist);
+                            float glowAlpha = glowFactor * 0.45; // 0.45 = glow intensity
+                            FragColor = vec4(color.rgb, color.a * glowAlpha);
+                        } else {
+                            // Outside glow: discard
+                            discard;
+                        }
+                    } else {
+                        // Standard rendering: discard fragments outside line width
+                        if (dist > lineWidth * 0.5) discard;
+                        FragColor = color;
+                    }
                 }";
 
             int vertexShader = CompileShader(ShaderType.VertexShader, vertexShaderSource);

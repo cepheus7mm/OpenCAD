@@ -265,11 +265,11 @@ namespace UI.Controls.MainWindow
 				if (content is ViewportControl viewport)
 				{
 					var viewModel = CommandInput.DataContext as CommandInputViewModel;
-					if (viewModel != null && !viewModel.HasActiveCommand)
-					{
-						viewport.EnableSelectionMode();
-						System.Diagnostics.Debug.WriteLine($"Selection mode ENABLED for new viewport {title}");
-					}
+					//if (viewModel != null && !viewModel.HasActiveCommand)
+					//{
+					//	viewport.EnableSelectionMode();
+					//	System.Diagnostics.Debug.WriteLine($"Selection mode ENABLED for new viewport {title}");
+					//}
 					
 					// Wire up viewport selection events to restore focus to command input
 					CommandInput.WireUpViewportEvents(viewport);
@@ -366,35 +366,69 @@ namespace UI.Controls.MainWindow
 		}
 
 		/// <summary>
-		/// Wire up command state changes to control viewport selection mode
-		/// </summary>
-		private void SetupCommandStateTracking()
-		{
-			// Get the ViewModel from the CommandInputControl
-			var viewModel = CommandInput.DataContext as CommandInputViewModel;
-			if (viewModel == null)
-			{
-				System.Diagnostics.Debug.WriteLine("SetupCommandStateTracking: ViewModel not found");
-				return;
-			}
-
-			// Subscribe to the ActiveCommandChanged event
-			viewModel.ActiveCommandChanged += (s, e) =>
-			{
-				UpdateViewportSelectionMode();
-			};
-
-			// Subscribe to PropertyChanged for HasActiveCommand
-			viewModel.PropertyChanged += (s, e) =>
-			{
-				if (e.PropertyName == nameof(CommandInputViewModel.HasActiveCommand))
-				{
-					UpdateViewportSelectionMode();
-				}
-			};
-
-			System.Diagnostics.Debug.WriteLine("SetupCommandStateTracking: Command state tracking initialized");
-		}
+/// Wire up command state changes to control viewport selection mode
+/// </summary>
+private void SetupCommandStateTracking()
+{
+    var commandInputViewModel = CommandInput.DataContext as CommandInputViewModel;
+    if (commandInputViewModel != null)
+    {
+        System.Diagnostics.Debug.WriteLine("=== SetupCommandStateTracking: Handler attached ===");
+        
+        commandInputViewModel.ActiveCommandChanged += (s, e) =>
+        {
+            System.Diagnostics.Debug.WriteLine("=== ActiveCommandChanged event fired ===");
+            
+            var viewport = GetActiveViewport();
+            if (viewport == null)
+            {
+                System.Diagnostics.Debug.WriteLine("  ERROR: No active viewport");
+                return;
+            }
+            
+            var viewModel = viewport.DataContext as ViewportViewModel;
+            if (viewModel == null)
+            {
+                System.Diagnostics.Debug.WriteLine("  ERROR: No viewport view model");
+                return;
+            }
+            
+            var activeCommand = commandInputViewModel.ActiveCommand;
+            System.Diagnostics.Debug.WriteLine($"  ActiveCommand: {activeCommand?.GetType().Name ?? "null"}");
+            System.Diagnostics.Debug.WriteLine($"  Current IsSelectionMode: {viewModel.IsSelectionMode}");
+            System.Diagnostics.Debug.WriteLine($"  Current IsPointPickingMode: {viewModel.IsPointPickingMode}");
+            
+            //if (activeCommand == null)
+            //{
+            //    // Command just completed or was cancelled
+            //    // Re-enable selection mode for editing workflows
+            //    System.Diagnostics.Debug.WriteLine("  Command completed - ENABLING selection mode");
+            //    viewModel.EnableSelectionMode();
+            //    System.Diagnostics.Debug.WriteLine($"  After EnableSelectionMode: IsSelectionMode={viewModel.IsSelectionMode}");
+            //}
+            //else if (activeCommand.RequiresSelection)
+            //{
+            //    // Editing command starting - enable selection mode
+            //    System.Diagnostics.Debug.WriteLine($"  Editing command '{activeCommand.GetType().Name}' started - ENABLING selection mode");
+            //    viewModel.EnableSelectionMode();
+            //    System.Diagnostics.Debug.WriteLine($"  After EnableSelectionMode: IsSelectionMode={viewModel.IsSelectionMode}");
+            //}
+            //else
+            //{
+            //    // Drawing command starting - disable selection mode
+            //    System.Diagnostics.Debug.WriteLine($"  Drawing command '{activeCommand.GetType().Name}' started - DISABLING selection mode");
+            //    viewModel.DisableSelectionMode();
+            //    System.Diagnostics.Debug.WriteLine($"  After DisableSelectionMode: IsSelectionMode={viewModel.IsSelectionMode}");
+            //}
+        };
+        
+        System.Diagnostics.Debug.WriteLine("=== SetupCommandStateTracking: Complete ===");
+    }
+    else
+    {
+        System.Diagnostics.Debug.WriteLine("=== SetupCommandStateTracking: ERROR - CommandInputViewModel is null ===");
+    }
+}
 
 		/// <summary>
 		/// Wire up layer change notifications to update properties panel
@@ -444,13 +478,13 @@ namespace UI.Controls.MainWindow
 						if (hasActiveCommand && !commandRequiresSelection)
 						{
 							// Disable selection mode when a command is active (unless it requires selection)
-							viewport.DisableSelectionMode();
+							//viewport.DisableSelectionMode();
 						 System.Diagnostics.Debug.WriteLine($"Selection mode DISABLED for {doc.Title} (command active)");
 						}
 						else
 						{
 							// Enable selection mode when no command is active OR when command requires selection
-							viewport.EnableSelectionMode();
+							//viewport.EnableSelectionMode();
 							System.Diagnostics.Debug.WriteLine($"Selection mode ENABLED for {doc.Title} (no command or command requires selection)");
 						}
 					}

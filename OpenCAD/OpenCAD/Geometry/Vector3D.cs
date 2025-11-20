@@ -64,5 +64,9 @@ namespace OpenCAD.Geometry
 
             return new Vector3D(x, y, z);
         }
+
+            public static Vector3D operator +(Vector3D a, Vector3D b) => new Vector3D(a.X + b.X, a.Y + b.Y, a.Z + b.Z);
+            public static Vector3D operator -(Vector3D a, Vector3D b) => new Vector3D(a.X - b.X, a.Y - b.Y, a.Z - b.Z);
+            public static Vector3D operator -(Vector3D a) => new Vector3D(-a.X, -a.Y, -a.Z);
     }
 }

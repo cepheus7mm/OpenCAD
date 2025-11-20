@@ -802,5 +802,99 @@
         public const string LayerHiddenIndicator = "◯";
 
         #endregion
+
+        #region Move Command Messages
+
+        /// <summary>
+        /// Debug message for MoveCommand initialization
+        /// </summary>
+        public const string MoveCommandInitialized = "MoveCommand initialized";
+
+        /// <summary>
+        /// Prompt to select objects to move
+        /// </summary>
+        public const string SelectObjectsToMovePrompt = "Select objects to move (or press ESC to cancel):";
+
+        /// <summary>
+        /// Message when prompting user to select objects to move
+        /// </summary>
+        public const string SelectObjectsToMoveMessage = "Select objects to move...";
+
+        /// <summary>
+        /// Message when no objects are selected and command is cancelled
+        /// </summary>
+        public const string NoObjectsSelectedToMoveCancelled = "No objects selected. Command cancelled.";
+
+        /// <summary>
+        /// Message when there are no objects to move
+        /// </summary>
+        public const string NoObjectsToMove = "No objects to move.";
+
+        /// <summary>
+        /// Error message when unable to move objects due to missing document or viewport
+        /// </summary>
+        public const string UnableToMoveObjectsMissingContext = "Unable to move objects: document or viewport not available.";
+
+        /// <summary>
+        /// Prompt for specifying base point for move
+        /// </summary>
+        public const string MoveBasePointPrompt = "Specify base point (enter coordinates or click in viewport):";
+
+        /// <summary>
+        /// Prompt for specifying target point for move
+        /// </summary>
+        public const string MoveTargetPointPrompt = "Specify target point (enter coordinates or click in viewport):";
+
+        /// <summary>
+        /// Error message for invalid point input
+        /// </summary>
+        public const string InvalidPointInput = "Invalid point. Please enter coordinates or click in the viewport.";
+
+        /// <summary>
+        /// Format string for undo action description when moving objects
+        /// </summary>
+        public const string UndoMoveObjectsFormat = "Move {0} object(s)";
+
+        /// <summary>
+        /// Format string for message displayed when objects are moved
+        /// </summary>
+        public const string ObjectsMovedFormat = "Moved {0} object(s).";
+
+        /// <summary>
+        /// Format string for message displayed when objects are moved without undo support
+        /// </summary>
+        public const string ObjectsMovedNoUndoFormat = "Moved {0} object(s) (no undo available).";
+
+        #endregion
+
+        // Prompts & messages for the Copy command
+        public const string SelectObjectsToCopyPrompt = "Select objects to copy:";
+        public const string SelectObjectsToCopyMessage = "Select objects to copy.\nClick objects to select them, then press ENTER to copy (or ESC to cancel).";
+        public const string NoObjectsToCopy = "No objects to copy.";
+
+        // Point prompts (optional — Move prompts are already available; these provide copy-specific wording)
+        public const string CopyBasePointPrompt = "Specify base point for copy";
+        public const string CopyTargetPointPrompt = "Specify target point for copy";
+
+        // Error / status messages
+        public const string UnableToCopyObjectsMissingContext = "Unable to copy objects - missing document or viewport.";
+
+        // Undo / success format strings
+        public const string UndoCopyObjectsFormat = "Copy {0} object(s)";
+        public const string ObjectsCopiedFormat = "{0} object(s) copied.";
+        public const string ObjectsCopiedNoUndoFormat = "{0} object(s) copied (no undo available).";
+
+        public const string SelectObjectsToRotatePrompt = "Select objects to rotate:";
+        public const string SelectObjectsToRotateMessage = "Select objects to rotate.\nClick objects to select them, then press ENTER to rotate (or ESC to cancel).";
+        public const string NoObjectsToRotate = "No objects to rotate.";
+
+        public const string RotateBasePointPrompt = "Specify base point (rotation center)";
+        public const string RotateTargetPointPrompt = "Specify rotation angle by picking a point";
+
+        public const string UnableToRotateObjectsMissingContext = "Unable to rotate objects - missing document or viewport.";
+
+        public const string UndoRotateObjectsFormat = "Rotate {0} object(s)";
+        public const string ObjectsRotatedFormat = "{0} object(s) rotated.";
+        public const string ObjectsRotatedNoUndoFormat = "{0} object(s) rotated (no undo available).";
     }
 }

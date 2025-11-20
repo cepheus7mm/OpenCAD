@@ -134,9 +134,9 @@ namespace UI.Controls.Viewport
         public void AddObject(OpenCADObject obj) => _viewModel.AddObject(obj);
         public void RemoveObject(OpenCADObject obj) => _viewModel.RemoveObject(obj);
         public void ClearObjects() => _viewModel.ClearObjects();
-        public void EnableSnapping(bool enabled, double gridSize = 1.0) => _viewModel.EnableSnapping(enabled, gridSize);
-        public void EnableSelectionMode() => _viewModel.EnableSelectionMode();
-        public void DisableSelectionMode() => _viewModel.DisableSelectionMode();
+        //public void EnableSnapping(bool enabled, double gridSize = 1.0) => _viewModel.EnableSnapping(enabled, gridSize);
+        //public void EnableSelectionMode() => _viewModel.EnableSelectionMode();
+        //public void DisableSelectionMode() => _viewModel.DisableSelectionMode();
         public void ClearSelection() => _viewModel.ClearSelection();
         
         /// <summary>
@@ -314,7 +314,7 @@ namespace UI.Controls.Viewport
                 RenderSceneFlat(_document);
 
                 // Finally render overlay (crosshair, preview lines, etc.)
-                RenderPreviewGeometry();
+                RenderPostGeometry();
             }
             catch (Exception ex)
             {
@@ -329,9 +329,14 @@ namespace UI.Controls.Viewport
 
             var list = new List<OpenCADObject>();
             CollectDrawable(document, list);
-            
+
+            var highlightedObjects = new List<OpenCADObject>();
+            if (_viewModel.HighlightedObject != null)
+            {
+                highlightedObjects.Add(_viewModel.HighlightedObject);
+            }
             // Pass highlighting and selection information to the render engine
-            _renderEngine.Render(list, _viewModel.HighlightedObject, _viewModel.SelectedObjects);
+            _renderEngine.Render(list, highlightedObjects, _viewModel.SelectedObjects);
         }
 
         private void CollectDrawable(OpenCADObject parent, List<OpenCADObject> list)
@@ -367,7 +372,7 @@ namespace UI.Controls.Viewport
             }
         }
 
-        private void RenderPreviewGeometry()
+        private void RenderPostGeometry()
         {
             if (_renderEngine == null) return;
 
@@ -686,24 +691,32 @@ namespace UI.Controls.Viewport
 
             bool isShiftPressed = Keyboard.IsKeyDown(Key.LeftShift) || Keyboard.IsKeyDown(Key.RightShift);
 
-            // Keep existing panScale for VM consumers
             float panScale = (_renderEngine.ProjectionMode == GraphicsEngine.ProjectionMode.Orthographic)
                 ? _renderEngine.OrthographicScale * 0.02f
                 : (_renderEngine.Camera.Position - _renderEngine.Camera.Target).Length() * 0.002f;
 
-            // Only perform hit testing if in selection mode, NOT in point picking mode, and not dragging
-            if (_viewModel.IsSelectionMode && !_viewModel.IsPointPickingMode && 
+            // DEBUG: Log selection mode state
+            bool shouldHitTest = !_viewModel.IsPointPickingMode && 
                 e.LeftButton != MouseButtonState.Pressed && 
                 e.MiddleButton != MouseButtonState.Pressed && 
-                e.RightButton != MouseButtonState.Pressed)
-            {
-                var hitObject = _viewModel.HitTest(currentPosDip, ScreenToWorld);
-                if (_viewModel.HighlightedObject != hitObject)
-                {
-                    // Update highlighted object directly (now that it has internal setter)
-                    _viewModel.HighlightedObject = hitObject;
-                }
-            }
+                e.RightButton != MouseButtonState.Pressed;
+    
+            //System.Diagnostics.Debug.WriteLine($"MouseMove: SelectMode={_viewModel.IsSelectionMode}, PickMode={_viewModel.IsPointPickingMode}, ShouldHitTest={shouldHitTest}");
+
+    // Only perform hit testing if in selection mode, NOT in point picking mode, and not dragging
+    if (shouldHitTest)
+    {
+        var hitObject = _viewModel.HitTest(currentPosDip, ScreenToWorld);
+        System.Diagnostics.Debug.WriteLine($"  HitTest result: {hitObject?.GetType().Name ?? "null"}");
+        
+        if (_viewModel.HighlightedObject != hitObject)
+        {
+            _viewModel.HighlightedObject = hitObject;
+            System.Diagnostics.Debug.WriteLine($"  HighlightedObject updated to: {hitObject?.GetType().Name ?? "null"}");
+            Refresh(); // Force a refresh when highlighting changes
+        }
+    }
+    
             var vector3D = new Vector3D();
             if (worldPos.HasValue)
             {

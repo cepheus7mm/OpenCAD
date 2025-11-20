@@ -128,6 +128,7 @@ namespace UI.Controls.MainWindow
                 {
                     item.Property.Value = item.RawValue;
                 }
+                item.Value = item.Property.ToStringRepresentation(_currentDocument);
             }
             _activeViewport?.InvalidateVisual();
         }

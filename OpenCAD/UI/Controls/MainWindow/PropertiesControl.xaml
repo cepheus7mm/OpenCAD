@@ -18,7 +18,19 @@
 		<converters:DrawingColorToMediaColorConverter x:Key="DrawingColorToMediaColorConverter"/>
 		<converters:ColorToByLayerVisibilityConverter x:Key="ColorToByLayerVisibilityConverter"/>
 		<converters:ColorToPickerVisibilityConverter x:Key="ColorToPickerVisibilityConverter"/>
-	
+
+		<!-- Style for Value column cells - No selection highlight -->
+		<Style x:Key="ValueCellStyle" TargetType="DataGridCell">
+			<Setter Property="BorderThickness" Value="0"/>
+			<Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+			<Style.Triggers>
+				<Trigger Property="IsSelected" Value="True">
+					<Setter Property="Background" Value="{DynamicResource SecondaryBackgroundBrush}"/>
+					<Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}"/>
+				</Trigger>
+			</Style.Triggers>
+		</Style>
+
 		<!-- Read-only template (TextBlock) -->
 		<DataTemplate x:Key="ReadOnlyTemplate">
 			<TextBlock Text="{Binding Value}" 
@@ -106,6 +118,7 @@
 								Width="*"/>
 			<DataGridTemplateColumn Header="Value" 
 									Width="2*"
+									CellStyle="{StaticResource ValueCellStyle}"
 									CellTemplateSelector="{StaticResource PropertyEditorTemplateSelector}"/>
 		</DataGrid.Columns>
 	</DataGrid>
