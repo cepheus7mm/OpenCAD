@@ -249,21 +249,21 @@ namespace UI.Controls.MainWindow
 						if (!isDuplicate)
 						{
 							layerItem.Layer.Name = layerItem.Name;
-							System.Diagnostics.Debug.WriteLine($"Layer name changed to: {layerItem.Name}");
+							//System.Diagnostics.Debug.WriteLine($"Layer name changed to: {layerItem.Name}");
 							RaiseLayersModified();
 						}
 						else
 						{
 							// Revert to original name if duplicate
 							layerItem.Name = layerItem.Layer.Name;
-							System.Diagnostics.Debug.WriteLine($"Layer name '{layerItem.Name}' already exists - reverting");
+							//System.Diagnostics.Debug.WriteLine($"Layer name '{layerItem.Name}' already exists - reverting");
 						}
 					}
 					else
 					{
 						// Revert to original if empty
 						layerItem.Name = layerItem.Layer.Name;
-						System.Diagnostics.Debug.WriteLine("Layer name cannot be empty - reverting");
+						//System.Diagnostics.Debug.WriteLine("Layer name cannot be empty - reverting");
 					}
 					break;
 				case nameof(LayerItem.IsVisible):
@@ -319,7 +319,7 @@ namespace UI.Controls.MainWindow
 				return;
 
 			layerItem.IsVisible = !layerItem.IsVisible;
-			System.Diagnostics.Debug.WriteLine($"Layer '{layerItem.Name}' visibility toggled to {layerItem.IsVisible}");
+			//System.Diagnostics.Debug.WriteLine($"Layer '{layerItem.Name}' visibility toggled to {layerItem.IsVisible}");
 		}
 
 		#region Command Handlers

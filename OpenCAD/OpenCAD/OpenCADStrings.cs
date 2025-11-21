@@ -867,22 +867,66 @@
 
         #endregion
 
-        // Prompts & messages for the Copy command
-        public const string SelectObjectsToCopyPrompt = "Select objects to copy:";
-        public const string SelectObjectsToCopyMessage = "Select objects to copy.\nClick objects to select them, then press ENTER to copy (or ESC to cancel).";
-        public const string NoObjectsToCopy = "No objects to copy.";
+        #region Scale Command Messages
 
-        // Point prompts (optional — Move prompts are already available; these provide copy-specific wording)
-        public const string CopyBasePointPrompt = "Specify base point for copy";
-        public const string CopyTargetPointPrompt = "Specify target point for copy";
+        /// <summary>
+        /// Debug message for ScaleCommand initialization
+        /// </summary>
+        public const string ScaleCommandInitialized = "ScaleCommand initialized";
 
-        // Error / status messages
-        public const string UnableToCopyObjectsMissingContext = "Unable to copy objects - missing document or viewport.";
+        /// <summary>
+        /// Prompt to select objects to scale
+        /// </summary>
+        public const string SelectObjectsToScalePrompt = "Select objects to scale (or press ESC to cancel):";
 
-        // Undo / success format strings
-        public const string UndoCopyObjectsFormat = "Copy {0} object(s)";
-        public const string ObjectsCopiedFormat = "{0} object(s) copied.";
-        public const string ObjectsCopiedNoUndoFormat = "{0} object(s) copied (no undo available).";
+        /// <summary>
+        /// Message when prompting user to select objects to scale
+        /// </summary>
+        public const string SelectObjectsToScaleMessage = "Select objects to scale...";
+
+        /// <summary>
+        /// Message when no objects are selected and command is cancelled
+        /// </summary>
+        public const string NoObjectsSelectedToScaleCancelled = "No objects selected. Command cancelled.";
+
+        /// <summary>
+        /// Message when there are no objects to scale
+        /// </summary>
+        public const string NoObjectsToScale = "No objects to scale.";
+
+        /// <summary>
+        /// Error message when unable to scale objects due to missing document or viewport
+        /// </summary>
+        public const string UnableToScaleObjectsMissingContext = "Unable to scale objects: document or viewport not available.";
+
+        /// <summary>
+        /// Prompt for specifying base point (scale center)
+        /// </summary>
+        public const string ScaleBasePointPrompt = "Specify base point (enter coordinates or click in viewport):";
+
+        /// <summary>
+        /// Prompt for specifying target point (defines scale factor)
+        /// </summary>
+        public const string ScaleTargetPointPrompt = "Specify target point (enter coordinates or click in viewport):";
+
+        /// <summary>
+        /// Format string for undo action description when scaling objects
+        /// </summary>
+        public const string UndoScaleObjectsFormat = "Scale {0} object(s)";
+
+        /// <summary>
+        /// Format string for message displayed when objects are scaled
+        /// </summary>
+        public const string ObjectsScaledFormat = "Scaled {0} object(s).";
+
+        /// <summary>
+        /// Format string for message displayed when objects are scaled without undo support
+        /// </summary>
+        public const string ObjectsScaledNoUndoFormat = "Scaled {0} object(s) (no undo available).";
+
+        #endregion
+
+        #region Rotate Command Messages
 
         public const string SelectObjectsToRotatePrompt = "Select objects to rotate:";
         public const string SelectObjectsToRotateMessage = "Select objects to rotate.\nClick objects to select them, then press ENTER to rotate (or ESC to cancel).";
@@ -896,5 +940,7 @@
         public const string UndoRotateObjectsFormat = "Rotate {0} object(s)";
         public const string ObjectsRotatedFormat = "{0} object(s) rotated.";
         public const string ObjectsRotatedNoUndoFormat = "{0} object(s) rotated (no undo available).";
+
+        #endregion
     }
 }

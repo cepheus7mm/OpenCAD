@@ -155,7 +155,7 @@ namespace UI.Controls.MainWindow
         public void SetActiveViewportProvider(Func<ViewportControl?> getActiveViewport)
         {
             _getActiveViewport = getActiveViewport;
-            System.Diagnostics.Debug.WriteLine("CommandInputViewModel: Viewport provider set");
+            //System.Diagnostics.Debug.WriteLine("CommandInputViewModel: Viewport provider set");
         }
 
         /// <summary>
@@ -229,10 +229,10 @@ namespace UI.Controls.MainWindow
         /// </summary>
         public void ExecuteCommandProgrammatically(string commandName)
         {
-            System.Diagnostics.Debug.WriteLine($"=== ExecuteCommandProgrammatically: '{commandName}' ===");
+            //System.Diagnostics.Debug.WriteLine($"=== ExecuteCommandProgrammatically: '{commandName}' ===");
             
             string resolvedCommand = ResolveCommandAlias(commandName);
-            System.Diagnostics.Debug.WriteLine($"  Resolved to: '{resolvedCommand}'");
+            //System.Diagnostics.Debug.WriteLine($"  Resolved to: '{resolvedCommand}'");
             
             // Output to history to show the command was executed
             AppendToHistory($"> {resolvedCommand}");
@@ -244,7 +244,7 @@ namespace UI.Controls.MainWindow
             catch (Exception ex)
             {
                 AppendToHistory($"Error: {ex.Message}");
-                System.Diagnostics.Debug.WriteLine($"  ERROR executing command: {ex.Message}");
+                //System.Diagnostics.Debug.WriteLine($"  ERROR executing command: {ex.Message}");
             }
         }
 
@@ -498,7 +498,7 @@ namespace UI.Controls.MainWindow
 
         private void OnCommandCompleted(object? sender, EventArgs e)
         {
-            System.Diagnostics.Debug.WriteLine("CommandInputViewModel: Command completed via event");
+            //System.Diagnostics.Debug.WriteLine("CommandInputViewModel: Command completed via event");
             CompleteActiveCommand();
         }
 

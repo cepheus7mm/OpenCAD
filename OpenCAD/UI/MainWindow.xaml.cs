@@ -98,7 +98,7 @@ namespace UI
                             }
                             catch (Exception ex)
                             {
-                                System.Diagnostics.Debug.WriteLine($"Auto-save failed: {ex.Message}");
+                                //System.Diagnostics.Debug.WriteLine($"Auto-save failed: {ex.Message}");
                             }
                         }
                     }
@@ -111,14 +111,14 @@ namespace UI
         /// </summary>
         private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
         {
-            System.Diagnostics.Debug.WriteLine($"MainWindow.PreviewKeyDown: Key={e.Key}, Modifiers={Keyboard.Modifiers}");
+            //System.Diagnostics.Debug.WriteLine($"MainWindow.PreviewKeyDown: Key={e.Key}, Modifiers={Keyboard.Modifiers}");
             
             // Handle Ctrl+S for Save
             if (e.Key == Key.S && Keyboard.Modifiers == ModifierKeys.Control)
             {
                 Save_Click(this, new RoutedEventArgs());
                 e.Handled = true;
-                System.Diagnostics.Debug.WriteLine("Ctrl+S - Save executed");
+                //System.Diagnostics.Debug.WriteLine("Ctrl+S - Save executed");
                 return;
             }
             
@@ -127,7 +127,7 @@ namespace UI
             {
                 SaveAs_Click(this, new RoutedEventArgs());
                 e.Handled = true;
-                System.Diagnostics.Debug.WriteLine("Ctrl+Shift+S - Save As executed");
+                //System.Diagnostics.Debug.WriteLine("Ctrl+Shift+S - Save As executed");
                 return;
             }
             
@@ -136,7 +136,7 @@ namespace UI
             {
                 Open_Click(this, new RoutedEventArgs());
                 e.Handled = true;
-                System.Diagnostics.Debug.WriteLine("Ctrl+O - Open executed");
+                //System.Diagnostics.Debug.WriteLine("Ctrl+O - Open executed");
                 return;
             }
             
@@ -150,12 +150,12 @@ namespace UI
                     if (viewport.HandleEscapeKey())
                     {
                         e.Handled = true;
-                        System.Diagnostics.Debug.WriteLine("ESC handled by viewport");
+                        //System.Diagnostics.Debug.WriteLine("ESC handled by viewport");
                         return;
                     }
                 }
                 
-                System.Diagnostics.Debug.WriteLine("ESC not handled by viewport - allowing default behavior");
+                //System.Diagnostics.Debug.WriteLine("ESC not handled by viewport - allowing default behavior");
             }
             
             // Handle Delete key - execute the Erase command
@@ -169,18 +169,18 @@ namespace UI
                     // Only execute erase if there are selected objects
                     if (viewModel != null && viewModel.SelectedObjects.Count > 0)
                     {
-                        System.Diagnostics.Debug.WriteLine($"Delete key pressed - executing Erase command for {viewModel.SelectedObjects.Count} selected object(s)");
+                        //System.Diagnostics.Debug.WriteLine($"Delete key pressed - executing Erase command for {viewModel.SelectedObjects.Count} selected object(s)");
                         
                         // Execute the erase command programmatically
                         dockingArea.CommandInput.ExecuteCommandProgrammatically("erase");
                         
                         e.Handled = true;
-                        System.Diagnostics.Debug.WriteLine("Delete handled - Erase command executed");
+                        //System.Diagnostics.Debug.WriteLine("Delete handled - Erase command executed");
                         return;
                     }
                 }
                 
-                System.Diagnostics.Debug.WriteLine("Delete not handled - no selection");
+                //System.Diagnostics.Debug.WriteLine("Delete not handled - no selection");
             }
             
             // Handle Ctrl+Z for Undo
@@ -192,7 +192,7 @@ namespace UI
                     undoManager.Undo();
                     statusBar.UpdateStatus($"Undo: {undoManager.UndoDescription ?? "action"}");
                     e.Handled = true;
-                    System.Diagnostics.Debug.WriteLine("Ctrl+Z - Undo executed");
+                    //System.Diagnostics.Debug.WriteLine("Ctrl+Z - Undo executed");
                 }
                 return;
             }
@@ -206,7 +206,7 @@ namespace UI
                     undoManager.Redo();
                     statusBar.UpdateStatus($"Redo: {undoManager.RedoDescription ?? "action"}");
                     e.Handled = true;
-                    System.Diagnostics.Debug.WriteLine("Ctrl+Y - Redo executed");
+                    //System.Diagnostics.Debug.WriteLine("Ctrl+Y - Redo executed");
                 }
                 return;
             }
@@ -257,7 +257,7 @@ namespace UI
             catch (Exception ex)
             {
                 // If titlebar button hookup fails, continue without custom buttons
-                System.Diagnostics.Debug.WriteLine($"Failed to hook up titlebar buttons: {ex.Message}");
+                //System.Diagnostics.Debug.WriteLine($"Failed to hook up titlebar buttons: {ex.Message}");
             }
         }
 
@@ -439,7 +439,7 @@ namespace UI
                             if (newDoc != null)
                             {
                                 statusBar.UpdateStatus($"Opened: {openFileDialog.FileName}");
-                                System.Diagnostics.Debug.WriteLine($"Document opened: {openFileDialog.FileName}");
+                                //System.Diagnostics.Debug.WriteLine($"Document opened: {openFileDialog.FileName}");
                                 
                                 // Focus command input
                                 Dispatcher.BeginInvoke(new Action(() =>
@@ -467,7 +467,7 @@ namespace UI
                         MessageBoxButton.OK, 
                         MessageBoxImage.Error);
                     statusBar.UpdateStatus("Open failed");
-                    System.Diagnostics.Debug.WriteLine($"Open error: {ex}");
+                    //System.Diagnostics.Debug.WriteLine($"Open error: {ex}");
                 }
             }
             else
@@ -506,7 +506,7 @@ namespace UI
                             // Save to existing filename
                             DocumentSerializer.SaveToJson(openCADDoc, openCADDoc.Filename);
                             statusBar.UpdateStatus($"Saved: {openCADDoc.Filename}");
-                            System.Diagnostics.Debug.WriteLine($"Document saved to: {openCADDoc.Filename}");
+                            //System.Diagnostics.Debug.WriteLine($"Document saved to: {openCADDoc.Filename}");
                         }
                         catch (Exception ex)
                         {
@@ -516,7 +516,7 @@ namespace UI
                                 MessageBoxButton.OK, 
                                 MessageBoxImage.Error);
                             statusBar.UpdateStatus("Save failed");
-                            System.Diagnostics.Debug.WriteLine($"Save error: {ex}");
+                            //System.Diagnostics.Debug.WriteLine($"Save error: {ex}");
                         }
                     }
                     else
@@ -572,7 +572,7 @@ namespace UI
                                 selectedDoc.Title = System.IO.Path.GetFileName(saveFileDialog.FileName);
                                 
                                 statusBar.UpdateStatus($"Saved: {saveFileDialog.FileName}");
-                                System.Diagnostics.Debug.WriteLine($"Document saved to: {saveFileDialog.FileName}");
+                                //System.Diagnostics.Debug.WriteLine($"Document saved to: {saveFileDialog.FileName}");
                             }
                             catch (Exception ex)
                             {
@@ -582,7 +582,7 @@ namespace UI
                                     MessageBoxButton.OK, 
                                     MessageBoxImage.Error);
                                 statusBar.UpdateStatus("Save failed");
-                                System.Diagnostics.Debug.WriteLine($"Save error: {ex}");
+                                //System.Diagnostics.Debug.WriteLine($"Save error: {ex}");
                             }
                         }
                         else
@@ -752,7 +752,7 @@ namespace UI
                                 }
                                 catch (Exception ex)
                                 {
-                                    System.Diagnostics.Debug.WriteLine($"Save failed: {ex.Message}");
+                                    //System.Diagnostics.Debug.WriteLine($"Save failed: {ex.Message}");
                                 }
                             }
                         }

@@ -95,11 +95,11 @@ namespace UI.Commands.Editing
                     var viewModel = viewport?.DataContext as ViewportViewModel;
                     if (viewModel != null && viewModel.IsPointPickingMode)
                     {
-                        System.Diagnostics.Debug.WriteLine("CopyCommand: Manually disabling point picking mode before completion");
+                        //System.Diagnostics.Debug.WriteLine("CopyCommand: Manually disabling point picking mode before completion");
                         viewModel.DisablePointPickingMode();
                     }
 
-                    System.Diagnostics.Debug.WriteLine("CopyCommand: Raising CommandCompleted");
+                    //System.Diagnostics.Debug.WriteLine("CopyCommand: Raising CommandCompleted");
                     RaiseCommandCompleted();
                 }
                 finally
@@ -147,7 +147,7 @@ namespace UI.Commands.Editing
 
             if (document == null || viewport == null)
             {
-                System.Diagnostics.Debug.WriteLine("CopySelectedObjects: required document or viewport is null. Cancelling command.");
+                //System.Diagnostics.Debug.WriteLine("CopySelectedObjects: required document or viewport is null. Cancelling command.");
                 Context?.OutputMessage(OpenCADStrings.UnableToMoveObjectsMissingContext);
                 return;
             }

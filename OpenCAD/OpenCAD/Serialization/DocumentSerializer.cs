@@ -86,12 +86,12 @@ namespace OpenCAD.Serialization
             {
                 string json = JsonSerializer.Serialize(document, JsonOptions);
                 File.WriteAllText(filePath, json);
-                System.Diagnostics.Debug.WriteLine($"Document saved successfully to: {filePath}");
+                //System.Diagnostics.Debug.WriteLine($"Document saved successfully to: {filePath}");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Save failed: {ex.Message}");
-                System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
+                //System.Diagnostics.Debug.WriteLine($"Save failed: {ex.Message}");
+                //System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
                 throw;
             }
         }
@@ -100,33 +100,33 @@ namespace OpenCAD.Serialization
         {
             try
             {
-                System.Diagnostics.Debug.WriteLine($"Loading document from: {filePath}");
+                //System.Diagnostics.Debug.WriteLine($"Loading document from: {filePath}");
 
                 string json = File.ReadAllText(filePath);
-                System.Diagnostics.Debug.WriteLine($"JSON file read, length: {json.Length} characters");
+                //System.Diagnostics.Debug.WriteLine($"JSON file read, length: {json.Length} characters");
 
                 var document = JsonSerializer.Deserialize<OpenCADDocument>(json, JsonOptions);
-                System.Diagnostics.Debug.WriteLine($"Deserialization complete, document: {(document != null ? "valid" : "NULL")}");
+                //System.Diagnostics.Debug.WriteLine($"Deserialization complete, document: {(document != null ? "valid" : "NULL")}");
 
                 if (document != null)
                 {
-                    System.Diagnostics.Debug.WriteLine("Calling InitializeAfterDeserialization...");
+                    //System.Diagnostics.Debug.WriteLine("Calling InitializeAfterDeserialization...");
                     document.InitializeAfterDeserialization();
 
-                    System.Diagnostics.Debug.WriteLine("Verifying initialization...");
+                    //System.Diagnostics.Debug.WriteLine("Verifying initialization...");
                     if (!document.EnsureInitialized())
                         throw new InvalidOperationException("Document failed to initialize after deserialization");
 
-                    System.Diagnostics.Debug.WriteLine($"Document fully initialized and verified!");
+                    //System.Diagnostics.Debug.WriteLine($"Document fully initialized and verified!");
                 }
 
-                System.Diagnostics.Debug.WriteLine($"Document loaded successfully from: {filePath}");
+                //System.Diagnostics.Debug.WriteLine($"Document loaded successfully from: {filePath}");
                 return document;
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Load failed: {ex.Message}");
-                System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
+                //System.Diagnostics.Debug.WriteLine($"Load failed: {ex.Message}");
+                //System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
                 throw;
             }
         }

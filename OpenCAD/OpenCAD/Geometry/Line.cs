@@ -56,11 +56,11 @@ namespace OpenCAD.Geometry
             return true;
         }
 
-        public override bool Transform(Matrix4x4 transformation)
+        public override bool Transform(Matrix4D transformation)
         {
             // Convert to System.Numerics.Vector3 (float precision is OK for rendering/transforms)
-            var s = Vector3.Transform(new Vector3((float)StartPoint.X, (float)StartPoint.Y, (float)StartPoint.Z), transformation);
-            var e = Vector3.Transform(new Vector3((float)EndPoint.X, (float)EndPoint.Y, (float)EndPoint.Z), transformation);
+            var s = Vector3D.Transform(new Vector3D(StartPoint.X, StartPoint.Y, StartPoint.Z), transformation);
+            var e = Vector3D.Transform(new Vector3D(EndPoint.X, EndPoint.Y, EndPoint.Z), transformation);
 
             StartPoint = new Point3D(s.X, s.Y, s.Z);
             EndPoint = new Point3D(e.X, e.Y, e.Z);

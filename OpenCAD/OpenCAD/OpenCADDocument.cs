@@ -81,12 +81,12 @@ namespace OpenCAD
                 var test4 = GetLayers().ToList();
                 
                 // If we got here without exception, document is initialized
-                System.Diagnostics.Debug.WriteLine($"Document initialized: {test4.Count} layers, current: {test3?.Name ?? "null"}");
+                //System.Diagnostics.Debug.WriteLine($"Document initialized: {test4.Count} layers, current: {test3?.Name ?? "null"}");
                 return true;
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Document NOT initialized: {ex.Message}");
+                //System.Diagnostics.Debug.WriteLine($"Document NOT initialized: {ex.Message}");
                 return false;
             }
         }
@@ -97,21 +97,21 @@ namespace OpenCAD
         [OnDeserialized]
         private void OnDeserialized(StreamingContext context)
         {
-            System.Diagnostics.Debug.WriteLine("=== OpenCADDocument.OnDeserialized START ===");
+            //System.Diagnostics.Debug.WriteLine("=== OpenCADDocument.OnDeserialized START ===");
             
             try
             {
                 // Rebuild the layer name-to-ID cache
                 _layerNameToId = new ConcurrentDictionary<string, Guid>();
                 
-                System.Diagnostics.Debug.WriteLine($"Rebuilding layer cache...");
+                //System.Diagnostics.Debug.WriteLine($"Rebuilding layer cache...");
                 
                 var layers = GetLayers().ToList();
-                System.Diagnostics.Debug.WriteLine($"Found {layers.Count} layers");
+                //System.Diagnostics.Debug.WriteLine($"Found {layers.Count} layers");
                 
                 foreach (var layer in layers)
                 {
-                    System.Diagnostics.Debug.WriteLine($"  Layer: {layer.Name} (ID: {layer.ID})");
+                    //System.Diagnostics.Debug.WriteLine($"  Layer: {layer.Name} (ID: {layer.ID})");
                     _layerNameToId.TryAdd(layer.Name, layer.ID);
                     
                     // Restore document reference
@@ -119,15 +119,15 @@ namespace OpenCAD
                 }
                 
                 // Recursively restore document and parent references for all children
-                System.Diagnostics.Debug.WriteLine("Restoring references...");
+                //System.Diagnostics.Debug.WriteLine("Restoring references...");
                 RestoreReferences(this, this);
                 
-                System.Diagnostics.Debug.WriteLine("=== OpenCADDocument.OnDeserialized COMPLETE ===");
+                //System.Diagnostics.Debug.WriteLine("=== OpenCADDocument.OnDeserialized COMPLETE ===");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"=== OpenCADDocument.OnDeserialized FAILED: {ex.Message} ===");
-                System.Diagnostics.Debug.WriteLine($"Stack: {ex.StackTrace}");
+                //System.Diagnostics.Debug.WriteLine($"=== OpenCADDocument.OnDeserialized FAILED: {ex.Message} ===");
+                //System.Diagnostics.Debug.WriteLine($"Stack: {ex.StackTrace}");
             }
         }
 
@@ -432,7 +432,7 @@ namespace OpenCAD
         //{
         //    foreach (var child in parent.GetChildren())
         //    {
-        //        System.Diagnostics.Debug.WriteLine($"  Deserializing child: Type={child.GetType().Name}, ID={child.ID}");
+        //        //System.Diagnostics.Debug.WriteLine($"  Deserializing child: Type={child.GetType().Name}, ID={child.ID}");
         
         //        // Force the child to complete its deserialization
         //        // by manually calling the conversion that OnDeserialized should do

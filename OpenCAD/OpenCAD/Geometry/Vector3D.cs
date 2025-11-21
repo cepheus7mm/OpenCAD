@@ -65,8 +65,29 @@ namespace OpenCAD.Geometry
             return new Vector3D(x, y, z);
         }
 
-            public static Vector3D operator +(Vector3D a, Vector3D b) => new Vector3D(a.X + b.X, a.Y + b.Y, a.Z + b.Z);
-            public static Vector3D operator -(Vector3D a, Vector3D b) => new Vector3D(a.X - b.X, a.Y - b.Y, a.Z - b.Z);
-            public static Vector3D operator -(Vector3D a) => new Vector3D(-a.X, -a.Y, -a.Z);
+        public static Vector3D operator +(Vector3D a, Vector3D b) => new Vector3D(a.X + b.X, a.Y + b.Y, a.Z + b.Z);
+        public static Vector3D operator -(Vector3D a, Vector3D b) => new Vector3D(a.X - b.X, a.Y - b.Y, a.Z - b.Z);
+        public static Vector3D operator -(Vector3D a) => new Vector3D(-a.X, -a.Y, -a.Z);
+
+        /// <summary>
+        /// Transform this vector/point by a double-precision 4x4 matrix.
+        /// Treats the vector as a point (homogeneous w = 1) so translation is applied.
+        /// Returns a new transformed Vector3D. If homogeneous w != 1, result is divided by w.
+        /// </summary>
+        public static Vector3D Transform(in Vector3D v, in Matrix4D m)
+        {
+            // Multiply as homogeneous coordinate (x,y,z,1)
+            double x = v.X * m.M11 + v.Y * m.M21 + v.Z * m.M31 + m.M41;
+            double y = v.X * m.M12 + v.Y * m.M22 + v.Z * m.M32 + m.M42;
+            double z = v.X * m.M13 + v.Y * m.M23 + v.Z * m.M33 + m.M43;
+            double w = v.X * m.M14 + v.Y * m.M24 + v.Z * m.M34 + m.M44;
+
+            if (Math.Abs(w - 1.0) > double.Epsilon && Math.Abs(w) > double.Epsilon)
+            {
+                return new Vector3D(x / w, y / w, z / w);
+            }
+
+            return new Vector3D(x, y, z);
+        }
     }
 }

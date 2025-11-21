@@ -1,6 +1,5 @@
 ﻿using OpenCAD.Interfaces;
 using System.Drawing;
-using System.Numerics;
 using System.Text.Json.Serialization;
 using System.Xml.Serialization;
 
@@ -144,7 +143,7 @@ namespace OpenCAD.Geometry
         /// Default throws — override in derived geometry classes.
         /// Return true if transform applied successfully.
         /// </summary>
-        public abstract bool Transform(Matrix4x4 transformation);
+        public abstract bool Transform(Matrix4D transformation);
 
         #endregion
     }

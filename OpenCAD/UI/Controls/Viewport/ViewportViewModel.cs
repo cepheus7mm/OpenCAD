@@ -269,18 +269,18 @@ namespace UI.Controls.Viewport
         /// </summary>
         //public void EnableSelectionMode()
         //{
-        //    System.Diagnostics.Debug.WriteLine($"=== EnableSelectionMode called ===");
-        //    System.Diagnostics.Debug.WriteLine($"  Current state: PickMode={IsPointPickingMode}, SelectMode={IsSelectionMode}");
+        //    //System.Diagnostics.Debug.WriteLine($"=== EnableSelectionMode called ===");
+        //    //System.Diagnostics.Debug.WriteLine($"  Current state: PickMode={IsPointPickingMode}, SelectMode={IsSelectionMode}");
 
         //    // Don't enable selection mode if point picking is active
         //    if (_isPointPickingMode)
         //    {
-        //        System.Diagnostics.Debug.WriteLine("  Selection mode NOT enabled - point picking mode is active");
+        //        //System.Diagnostics.Debug.WriteLine("  Selection mode NOT enabled - point picking mode is active");
         //        return;
         //    }
 
         //    IsSelectionMode = true;
-        //    System.Diagnostics.Debug.WriteLine($"  Selection mode ENABLED - new state: SelectMode={IsSelectionMode}");
+        //    //System.Diagnostics.Debug.WriteLine($"  Selection mode ENABLED - new state: SelectMode={IsSelectionMode}");
         //}
 
         /// <summary>
@@ -288,10 +288,10 @@ namespace UI.Controls.Viewport
         /// </summary>
         //public void DisableSelectionMode()
         //{
-        //    System.Diagnostics.Debug.WriteLine($"=== DisableSelectionMode called ===");
+        //    //System.Diagnostics.Debug.WriteLine($"=== DisableSelectionMode called ===");
         //    IsSelectionMode = false;
         //    HighlightedObject = null;
-        //    System.Diagnostics.Debug.WriteLine("  Selection mode DISABLED");
+        //    //System.Diagnostics.Debug.WriteLine("  Selection mode DISABLED");
         //}
 
         /// <summary>
@@ -320,7 +320,7 @@ namespace UI.Controls.Viewport
                 ObjectSelected?.Invoke(this, new ObjectSelectedEventArgs(obj));
                 RefreshRequested?.Invoke(this, EventArgs.Empty);
                 SelectionChanged?.Invoke(this, EventArgs.Empty);  // ADD THIS LINE
-                System.Diagnostics.Debug.WriteLine($"Object selected: {obj.GetType().Name}");
+                //System.Diagnostics.Debug.WriteLine($"Object selected: {obj.GetType().Name}");
             }
         }
 
@@ -334,7 +334,7 @@ namespace UI.Controls.Viewport
                 OnPropertyChanged(nameof(SelectedObjects));
                 RefreshRequested?.Invoke(this, EventArgs.Empty);
                 SelectionChanged?.Invoke(this, EventArgs.Empty);  // ADD THIS LINE
-                System.Diagnostics.Debug.WriteLine($"Object deselected: {obj.GetType().Name}");
+                //System.Diagnostics.Debug.WriteLine($"Object deselected: {obj.GetType().Name}");
             }
         }
 
@@ -347,19 +347,19 @@ namespace UI.Controls.Viewport
         /// </summary>
         public void EnablePointPickingMode()
         {
-            System.Diagnostics.Debug.WriteLine($"=== EnablePointPickingMode called, current state: InputMode={CurrentInputMode} ===");
+            //System.Diagnostics.Debug.WriteLine($"=== EnablePointPickingMode called, current state: InputMode={CurrentInputMode} ===");
             
             //// Disable selection mode when entering point picking mode
             //if (_isSelectionMode)
             //{
-            //    System.Diagnostics.Debug.WriteLine("  Disabling selection mode");
+            //    //System.Diagnostics.Debug.WriteLine("  Disabling selection mode");
             //    IsSelectionMode = false;
             //    HighlightedObject = null;
             //}
             //_previousSelectionMode = IsSelectionMode;
             //IsPointPickingMode = true;
             CurrentInputMode = InputMode.PointPicking;
-            System.Diagnostics.Debug.WriteLine($"  Point picking mode ENABLED, _tempPoints.Count={_tempPoints.Count}");
+            //System.Diagnostics.Debug.WriteLine($"  Point picking mode ENABLED, _tempPoints.Count={_tempPoints.Count}");
         }
 
         /// <summary>
@@ -367,14 +367,14 @@ namespace UI.Controls.Viewport
         /// </summary>
         public void DisablePointPickingMode()
         {
-            //System.Diagnostics.Debug.WriteLine($"=== DisablePointPickingMode called ===");
+            ////System.Diagnostics.Debug.WriteLine($"=== DisablePointPickingMode called ===");
             //IsPointPickingMode = false;
             //_tempPoints.Clear();
             //PreviewPoint = null;
             //_previewCallback = null;
             //IsSelectionMode = _previousSelectionMode;
             CurrentInputMode = InputMode.Selection;
-            System.Diagnostics.Debug.WriteLine("  Point picking mode DISABLED, temp points cleared");
+            //System.Diagnostics.Debug.WriteLine("  Point picking mode DISABLED, temp points cleared");
         }
 
         /// <summary>
@@ -383,7 +383,7 @@ namespace UI.Controls.Viewport
         public void AddTempPoint(Point3D point)
         {
             _tempPoints.Add(point);
-            System.Diagnostics.Debug.WriteLine($"Temp point added: ({point.X:F3}, {point.Y:F3}, {point.Z:F3}), total count: {_tempPoints.Count}");
+            //System.Diagnostics.Debug.WriteLine($"Temp point added: ({point.X:F3}, {point.Y:F3}, {point.Z:F3}), total count: {_tempPoints.Count}");
             OnPropertyChanged(nameof(TempPoints));
         }
 
@@ -402,7 +402,7 @@ namespace UI.Controls.Viewport
         public void EnablePreviewMode(Action<Point3D> previewCallback)
         {
             _previewCallback = previewCallback;
-            System.Diagnostics.Debug.WriteLine("Preview mode ENABLED");
+            //System.Diagnostics.Debug.WriteLine("Preview mode ENABLED");
         }
 
         /// <summary>
@@ -412,7 +412,7 @@ namespace UI.Controls.Viewport
         {
             _previewCallback = null;
             PreviewPoint = null;
-            System.Diagnostics.Debug.WriteLine("Preview mode DISABLED");
+            //System.Diagnostics.Debug.WriteLine("Preview mode DISABLED");
         }
 
         /// <summary>
@@ -431,7 +431,7 @@ namespace UI.Controls.Viewport
             if (CurrentInputMode != InputMode.PointPicking)
                 return;
             
-            System.Diagnostics.Debug.WriteLine("CancelPointPicking called - raising PointPickingCancelled event");
+            //System.Diagnostics.Debug.WriteLine("CancelPointPicking called - raising PointPickingCancelled event");
             
             // Raise the cancelled event BEFORE disabling the mode
             // This allows commands to clean up properly
@@ -483,7 +483,7 @@ namespace UI.Controls.Viewport
             // Log line details if it's a line
             if (obj is Line line)
             {
-                System.Diagnostics.Debug.WriteLine($"  Line: Start({line.StartPoint.X}, {line.StartPoint.Y}, {line.StartPoint.Z}) -> End({line.EndPoint.X}, {line.EndPoint.Y}, {line.EndPoint.Z})");
+                //System.Diagnostics.Debug.WriteLine($"  Line: Start({line.StartPoint.X}, {line.StartPoint.Y}, {line.StartPoint.Z}) -> End({line.EndPoint.X}, {line.EndPoint.Y}, {line.EndPoint.Z})");
             }
 
             ObjectAdded?.Invoke(this, new ObjectEventArgs(obj));
@@ -521,7 +521,7 @@ namespace UI.Controls.Viewport
         /// </summary>
         public void ClearObjects()
         {
-            System.Diagnostics.Debug.WriteLine("Cleared all objects");
+            //System.Diagnostics.Debug.WriteLine("Cleared all objects");
             // Note: OpenCADObject doesn't have a Clear method, so we can't implement this fully
             // This would need to be added to OpenCADObject
             RefreshRequested?.Invoke(this, EventArgs.Empty);
@@ -584,12 +584,12 @@ namespace UI.Controls.Viewport
         /// </summary>
         public MouseHandlingResult HandleMouseDown(MouseButton button, Point mousePos, Vector3? worldPos)
         {
-            System.Diagnostics.Debug.WriteLine($"HandleMouseDown: Button={button}, InputMode={CurrentInputMode}, WorldPos={(worldPos.HasValue ? $"({worldPos.Value.X:F2},{worldPos.Value.Y:F2},{worldPos.Value.Z:F2})" : "null")}");
+            //System.Diagnostics.Debug.WriteLine($"HandleMouseDown: Button={button}, InputMode={CurrentInputMode}, WorldPos={(worldPos.HasValue ? $"({worldPos.Value.X:F2},{worldPos.Value.Y:F2},{worldPos.Value.Z:F2})" : "null")}");
 
             // If in point picking mode and left button clicked
             if (CurrentInputMode == InputMode.PointPicking && button == MouseButton.Left)
             {
-                System.Diagnostics.Debug.WriteLine($"Point picking: screen=({mousePos.X:F2}, {mousePos.Y:F2})");
+                //System.Diagnostics.Debug.WriteLine($"Point picking: screen=({mousePos.X:F2}, {mousePos.Y:F2})");
 
                 if (worldPos.HasValue)
                 {
@@ -599,14 +599,14 @@ namespace UI.Controls.Viewport
                     if (SnappingEnabled)
                     {
                         var snappedPoint = SnapToGrid(point);
-                        System.Diagnostics.Debug.WriteLine($"Snapping: ({point.X:F3}, {point.Y:F3}, {point.Z:F3}) -> ({snappedPoint.X:F3}, {snappedPoint.Y:F3}, {snappedPoint.Z:F3})");
+                        //System.Diagnostics.Debug.WriteLine($"Snapping: ({point.X:F3}, {point.Y:F3}, {point.Z:F3}) -> ({snappedPoint.X:F3}, {snappedPoint.Y:F3}, {snappedPoint.Z:F3})");
                         point = snappedPoint;
                     }
                     
                     _tempPoints.Add(point);
                     OnPropertyChanged(nameof(TempPoints));
 
-                    System.Diagnostics.Debug.WriteLine($"Point picked and added: ({point.X:F3}, {point.Y:F3}, {point.Z:F3}), total count: {_tempPoints.Count}");
+                    //System.Diagnostics.Debug.WriteLine($"Point picked and added: ({point.X:F3}, {point.Y:F3}, {point.Z:F3}), total count: {_tempPoints.Count}");
 
                     // Raise the event
                     PointPicked?.Invoke(this, new PointPickedEventArgs(point));
@@ -615,14 +615,14 @@ namespace UI.Controls.Viewport
                 }
                 else
                 {
-                    System.Diagnostics.Debug.WriteLine("ERROR: Failed to convert screen to world coordinates in point picking mode");
+                    //System.Diagnostics.Debug.WriteLine("ERROR: Failed to convert screen to world coordinates in point picking mode");
                 }
 
                 return new MouseHandlingResult { Handled = true, NeedsRefresh = false, CaptureMouse = false };
             }
             else if (CurrentInputMode == InputMode.PointPicking && button == MouseButton.Right)
             {
-                System.Diagnostics.Debug.WriteLine("Point picking cancelled by right-click");
+                //System.Diagnostics.Debug.WriteLine("Point picking cancelled by right-click");
                 // Raise a "cancelled" event
                 PointPickingCancelled?.Invoke(this, EventArgs.Empty);
                 return new MouseHandlingResult { Handled = true, NeedsRefresh = false, CaptureMouse = false };
@@ -631,7 +631,7 @@ namespace UI.Controls.Viewport
             // If in selection mode and left button clicked
             if (CurrentInputMode == InputMode.Selection && button == MouseButton.Left)
             {
-                System.Diagnostics.Debug.WriteLine($"Selection mode click: HighlightedObject={(HighlightedObject?.GetType().Name ?? "null")}, SelectedObjectsCount={_selectedObjects.Count}");
+                //System.Diagnostics.Debug.WriteLine($"Selection mode click: HighlightedObject={(HighlightedObject?.GetType().Name ?? "null")}, SelectedObjectsCount={_selectedObjects.Count}");
                 if (HighlightedObject != null)
                 {
                     // Toggle selection of the highlighted object
@@ -649,7 +649,7 @@ namespace UI.Controls.Viewport
 
             // Normal mouse handling for camera control
             _lastMousePos = mousePos;
-            System.Diagnostics.Debug.WriteLine("Mouse down handled as camera control");
+            //System.Diagnostics.Debug.WriteLine("Mouse down handled as camera control");
             return new MouseHandlingResult { Handled = false, NeedsRefresh = false, CaptureMouse = true };
         }
 
@@ -905,7 +905,7 @@ namespace UI.Controls.Viewport
             //{
             //    SnappingEnabled = _viewportSettings.Snap.SnapEnabled;
             //    GridSize = _viewportSettings.Snap.SnapSpacing;
-            //    System.Diagnostics.Debug.WriteLine($"Snapping updated from settings: Enabled={SnappingEnabled}, GridSize={GridSize}");
+            //    //System.Diagnostics.Debug.WriteLine($"Snapping updated from settings: Enabled={SnappingEnabled}, GridSize={GridSize}");
             //}
         }
 

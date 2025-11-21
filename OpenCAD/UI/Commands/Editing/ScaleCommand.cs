@@ -1,8 +1,8 @@
-using System.ComponentModel;
 using OpenCAD;
 using OpenCAD.Geometry;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Threading;
 using System.Threading.Tasks;
 using UI.Commands.Undo;
@@ -10,11 +10,11 @@ using UI.Controls.Viewport;
 
 namespace UI.Commands.Editing
 {
-    [InputCommand("rotate", "Rotate selected objects", "ro")]
-    public class RotateCommand : EditCommandBase
+    [InputCommand("scale", "Scale selected objects", "sc")]
+    public class ScaleCommand : EditCommandBase
     {
-        protected override string SelectObjectsPrompt => OpenCADStrings.SelectObjectsToRotatePrompt;
-        protected override string SelectObjectsMessage => OpenCADStrings.SelectObjectsToRotateMessage + "\nClick objects to select them, then press ENTER to rotate (or ESC to cancel).";
+        protected override string SelectObjectsPrompt => OpenCADStrings.SelectObjectsToScalePrompt;
+        protected override string SelectObjectsMessage => OpenCADStrings.SelectObjectsToScaleMessage + "\nClick objects to select them, then press ENTER to scale (or ESC to cancel).";
 
         private readonly List<OpenCADObject> _previewObjects = new();
 
@@ -33,7 +33,7 @@ namespace UI.Commands.Editing
         {
             if (SelectedObjects == null || SelectedObjects.Count == 0)
             {
-                Context?.OutputMessage(OpenCADStrings.NoObjectsToRotate);
+                Context?.OutputMessage(OpenCADStrings.NoObjectsToScale);
                 Cancel();
                 return;
             }
@@ -48,21 +48,19 @@ namespace UI.Commands.Editing
 
             try
             {
-                // Ensure any previous preview state is cleared so the first pick is truly the base point
+                // Clear any prior preview/temp points
                 var initialViewport = Context?.GetActiveViewport();
                 var initialViewModel = initialViewport?.DataContext as ViewportViewModel;
                 if (initialViewModel != null)
                 {
-                    // Clear any temp points / preview that may be left over from other commands
-                    //System.Diagnostics.Debug.WriteLine("RotateCommand: Clearing existing preview/temp points before base pick");
                     initialViewModel.DisablePreviewMode();
                     initialViewModel.ClearTempPoints();
                 }
 
-                // Prompt for rotation center (base point)
-                CurrentPrompt = OpenCADStrings.RotateBasePointPrompt;
+                // Prompt for scale center (base point)
+                CurrentPrompt = OpenCADStrings.ScaleBasePointPrompt;
                 var basePoint = await _pointInputHelper!.GetPointAsync(
-                    OpenCADStrings.RotateBasePointPrompt,
+                    OpenCADStrings.ScaleBasePointPrompt,
                     allowLastPoint: false,
                     basePoint: null,
                     _cancellationTokenSource.Token);
@@ -74,13 +72,13 @@ namespace UI.Commands.Editing
                 }
                 _basePoint = basePoint;
 
-                // Cache providers immediately (guard against await issues)
+                // Cache providers
                 cachedViewport = Context?.GetActiveViewport();
                 cachedDocument = Context?.GetDocument();
                 cachedUndo = Context?.GetUndoRedoManager();
                 viewModel = cachedViewport?.DataContext as ViewportViewModel;
 
-                // Now that we have the base point, add it as a temp point and subscribe for preview updates
+                // Add temp base point and subscribe for preview updates
                 if (viewModel != null && cachedViewport != null)
                 {
                     viewModel.ClearTempPoints();
@@ -92,44 +90,39 @@ namespace UI.Commands.Editing
                         {
                             var previewPoint = viewModel.PreviewPoint;
                             if (previewPoint != null)
-                            {
-                                UpdateRotationPreview(previewPoint, cachedViewport, cachedDocument);
-                            }
+                                UpdateScalePreview(previewPoint, cachedViewport, cachedDocument);
                             else
-                            {
-                                ClearRotationPreview(cachedViewport);
-                            }
+                                ClearScalePreview(cachedViewport);
                         }
                     };
                     viewModel.PropertyChanged += previewHandler;
                 }
 
-                // Ask for a target point that defines the rotation angle (relative to center)
-                CurrentPrompt = OpenCADStrings.RotateTargetPointPrompt;
+                // Ask for target point that defines scale (distance from base -> scale factor)
+                CurrentPrompt = OpenCADStrings.ScaleTargetPointPrompt;
                 var targetPoint = await _pointInputHelper.GetPointAsync(
-                    OpenCADStrings.RotateTargetPointPrompt,
+                    OpenCADStrings.ScaleTargetPointPrompt,
                     allowLastPoint: false,
                     basePoint: _basePoint,
                     _cancellationTokenSource.Token);
 
-                // If user cancelled
                 if (targetPoint == null)
                 {
-                    // Clean up preview subscription/state before exiting
+                    // cleanup
                     if (viewModel != null && previewHandler != null)
                         viewModel.PropertyChanged -= previewHandler;
                     if (cachedViewport != null)
-                        ClearRotationPreview(cachedViewport);
+                        ClearScalePreview(cachedViewport);
                     Cancel();
                     return;
                 }
                 _targetPoint = targetPoint;
 
-                // Use shared helper to build rotation matrix; treat invalid as user error
-                if (!Matrix4D.TryCreateRotationMatrix(_basePoint!, _targetPoint!, out var rotationMatrix))
+                // Build scale matrix using shared helper (returns false for invalid / zero scale)
+                if (!Matrix4D.TryCreateUniformScaleMatrix(_basePoint!, _targetPoint!, out var finalMatrix))
                 {
                     if (cachedViewport != null)
-                        ClearRotationPreview(cachedViewport);
+                        ClearScalePreview(cachedViewport);
                     if (viewModel != null && previewHandler != null)
                         viewModel.PropertyChanged -= previewHandler;
 
@@ -138,10 +131,9 @@ namespace UI.Commands.Editing
                     return;
                 }
 
-                // Apply rotation (use cached providers)
                 if (cachedDocument == null || cachedViewport == null)
                 {
-                    Context?.OutputMessage(OpenCADStrings.UnableToRotateObjectsMissingContext);
+                    Context?.OutputMessage(OpenCADStrings.UnableToScaleObjectsMissingContext);
                     Cancel();
                     return;
                 }
@@ -152,17 +144,17 @@ namespace UI.Commands.Editing
                     {
                         var action = new TransformGeometryAction(
                             SelectedObjects,
-                            rotationMatrix,
-                            string.Format(OpenCADStrings.UndoRotateObjectsFormat, SelectedObjects.Count)
+                            finalMatrix,
+                            string.Format(OpenCADStrings.UndoScaleObjectsFormat, SelectedObjects.Count)
                         );
                         cachedUndo.ExecuteAction(action);
-                        Context?.OutputMessage(string.Format(OpenCADStrings.ObjectsRotatedFormat, SelectedObjects.Count));
+                        Context?.OutputMessage(string.Format(OpenCADStrings.ObjectsScaledFormat, SelectedObjects.Count));
                     }
                     catch (InvalidOperationException)
                     {
-                        // Non-invertible matrix should be treated as invalid input
+                        // If matrix ends up non-invertible despite checks, handle gracefully
                         if (cachedViewport != null)
-                            ClearRotationPreview(cachedViewport);
+                            ClearScalePreview(cachedViewport);
                         if (viewModel != null && previewHandler != null)
                             viewModel.PropertyChanged -= previewHandler;
 
@@ -177,25 +169,28 @@ namespace UI.Commands.Editing
                     {
                         if (obj is GeometryBase geom)
                         {
-                            try { geom.Transform(rotationMatrix); }
+                            try { geom.Transform(finalMatrix); }
                             catch (NotImplementedException)
                             {
-                                // fallback to translate by translation component if Transform not implemented
-                                geom.Move(new Vector3D(rotationMatrix.M41, rotationMatrix.M42, rotationMatrix.M43));
+                                // Fallback: apply translation component if Transform not implemented
+                                var tx = finalMatrix.M41;
+                                var ty = finalMatrix.M42;
+                                var tz = finalMatrix.M43;
+                                geom.Move(new Vector3D(tx, ty, tz));
                             }
                         }
                     }
-                    Context?.OutputMessage(string.Format(OpenCADStrings.ObjectsRotatedNoUndoFormat, SelectedObjects.Count));
+                    Context?.OutputMessage(string.Format(OpenCADStrings.ObjectsScaledNoUndoFormat, SelectedObjects.Count));
                 }
 
-                // Clean up preview visuals and subscription
+                // Clean up preview and subscriptions
                 if (cachedViewport != null)
-                    ClearRotationPreview(cachedViewport);
+                    ClearScalePreview(cachedViewport);
 
                 if (viewModel != null && previewHandler != null)
                     viewModel.PropertyChanged -= previewHandler;
 
-                // Ensure point picking mode is disabled
+                // Ensure point picking mode disabled
                 var vp = Context?.GetActiveViewport();
                 var vm = vp?.DataContext as ViewportViewModel;
                 if (vm != null && vm.IsPointPickingMode)
@@ -205,9 +200,8 @@ namespace UI.Commands.Editing
             }
             catch (OperationCanceledException)
             {
-                // Cancellation -> remove preview and exit
                 if (cachedViewport != null)
-                    ClearRotationPreview(cachedViewport);
+                    ClearScalePreview(cachedViewport);
                 if (viewModel != null && previewHandler != null)
                     viewModel.PropertyChanged -= previewHandler;
                 Cancel();
@@ -225,22 +219,21 @@ namespace UI.Commands.Editing
             return false;
         }
 
-        private void UpdateRotationPreview(Point3D previewPoint, ViewportControl viewport, OpenCADDocument? document)
+        private void UpdateScalePreview(Point3D previewPoint, ViewportControl viewport, OpenCADDocument? document)
         {
             // Remove previous preview clones
-            ClearRotationPreview(viewport);
+            ClearScalePreview(viewport);
 
             if (document == null || _basePoint == null)
                 return;
 
-            // Use shared helper to construct the rotation matrix for preview; bail out if invalid
-            if (!Matrix4D.TryCreateRotationMatrix(_basePoint, previewPoint, out var matrix))
+            // Use shared helper to construct the matrix for preview; bail out if invalid
+            if (!Matrix4D.TryCreateUniformScaleMatrix(_basePoint, previewPoint, out var matrix))
                 return;
 
-            // Create transformed clones for preview
             foreach (var src in SelectedObjects)
             {
-                var clone = CreateTransformedClone(src, matrix, document);
+                var clone = CreateScaledClone(src, matrix, document);
                 if (clone != null)
                 {
                     _previewObjects.Add(clone);
@@ -251,7 +244,7 @@ namespace UI.Commands.Editing
             viewport.Refresh();
         }
 
-        private void ClearRotationPreview(ViewportControl viewport)
+        private void ClearScalePreview(ViewportControl viewport)
         {
             if (_previewObjects.Count == 0) return;
             foreach (var p in _previewObjects.ToArray())
@@ -264,9 +257,9 @@ namespace UI.Commands.Editing
         }
 
         /// <summary>
-        /// Create a transformed clone using a 4x4 double-precision matrix.  Implemented for Line; extend for other types.
+        /// Create a scaled clone using a 4x4 double-precision matrix. Implemented for Line; extend for other types.
         /// </summary>
-        private OpenCADObject? CreateTransformedClone(OpenCADObject source, Matrix4D matrix, OpenCADDocument document)
+        private OpenCADObject? CreateScaledClone(OpenCADObject source, Matrix4D matrix, OpenCADDocument document)
         {
             if (source is Line line)
             {

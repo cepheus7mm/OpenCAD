@@ -65,7 +65,7 @@ namespace UI.Controls.MainWindow
 		/// </summary>
 		private void DisplayObjectProperties(OpenCADObject obj)
 		{
-			System.Diagnostics.Debug.WriteLine($"DisplayObjectProperties called for: {obj.GetType().Name}");
+			//System.Diagnostics.Debug.WriteLine($"DisplayObjectProperties called for: {obj.GetType().Name}");
 			
 			var properties = new ObservableCollection<PropertyItem>();
 
@@ -103,7 +103,7 @@ namespace UI.Controls.MainWindow
 			}
 
 			Properties = properties;
-			System.Diagnostics.Debug.WriteLine($"Properties updated for object: {obj.GetType().Name} ({properties.Count} properties)");
+			//System.Diagnostics.Debug.WriteLine($"Properties updated for object: {obj.GetType().Name} ({properties.Count} properties)");
 		}
 
         private ObservableCollection<PropertyItem> GetGeometricProperties(OpenCADObject obj)
@@ -147,7 +147,7 @@ namespace UI.Controls.MainWindow
 		/// </summary>
 		private void DisplayMultipleObjectsProperties(IReadOnlyList<OpenCADObject> objects)
 		{
-			System.Diagnostics.Debug.WriteLine($"DisplayMultipleObjectsProperties called for {objects.Count} objects");
+			//System.Diagnostics.Debug.WriteLine($"DisplayMultipleObjectsProperties called for {objects.Count} objects");
 			
 			var properties = new ObservableCollection<PropertyItem>();
 
@@ -211,7 +211,7 @@ namespace UI.Controls.MainWindow
 			}
 
 			Properties = properties;
-			System.Diagnostics.Debug.WriteLine($"Properties updated for multiple selection ({properties.Count} properties)");
+			//System.Diagnostics.Debug.WriteLine($"Properties updated for multiple selection ({properties.Count} properties)");
 		}
 
 		/// <summary>
@@ -219,7 +219,7 @@ namespace UI.Controls.MainWindow
 		/// </summary>
 		private void DisplayDocumentProperties(OpenCADDocument document)
 		{
-			System.Diagnostics.Debug.WriteLine($"DisplayDocumentProperties called for: {document.Filename}");
+			//System.Diagnostics.Debug.WriteLine($"DisplayDocumentProperties called for: {document.Filename}");
 			
 			var properties = new ObservableCollection<PropertyItem>();
 
@@ -266,7 +266,7 @@ namespace UI.Controls.MainWindow
 
 			// Add layer count (read-only)
 			var layerCount = document.GetLayers().Count();
-			System.Diagnostics.Debug.WriteLine($"Layer count in document: {layerCount}");
+			//System.Diagnostics.Debug.WriteLine($"Layer count in document: {layerCount}");
 			
 			properties.Add(new PropertyItem 
 			{ 

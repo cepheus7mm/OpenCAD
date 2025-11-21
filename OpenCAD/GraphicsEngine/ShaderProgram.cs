@@ -182,7 +182,7 @@ namespace GraphicsEngine
             GL.DeleteShader(vertexShader);
             GL.DeleteShader(fragmentShader);
 
-            System.Diagnostics.Debug.WriteLine($"Shader program created successfully (id={_programId})");
+            //System.Diagnostics.Debug.WriteLine($"Shader program created successfully (id={_programId})");
             GLDiag.Check("ShaderProgram ctor end");
         }
 
@@ -262,7 +262,7 @@ namespace GraphicsEngine
 
                 if (location == -1)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Warning: Uniform '{name}' not found in shader (program={_programId})");
+                    //System.Diagnostics.Debug.WriteLine($"Warning: Uniform '{name}' not found in shader (program={_programId})");
                 }
             }
 

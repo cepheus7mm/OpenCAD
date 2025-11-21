@@ -64,7 +64,7 @@ namespace UI.Controls.Viewport
 
             InitializeComponent();
 
-            System.Diagnostics.Debug.WriteLine("=== ViewportControl constructor called ===");
+            //System.Diagnostics.Debug.WriteLine("=== ViewportControl constructor called ===");
 
             if (GlWPFControl == null)
                 throw new InvalidOperationException("GlControl not found. Make sure it is defined in XAML with x:Name=\"GlWPFControl\".");
@@ -77,7 +77,7 @@ namespace UI.Controls.Viewport
             };
 
             GlWPFControl.Start(settings);
-            System.Diagnostics.Debug.WriteLine("GLWpfControl.Start() called with RenderContinuously = false");
+            //System.Diagnostics.Debug.WriteLine("GLWpfControl.Start() called with RenderContinuously = false");
 
             // Subscribe to ViewModel events
             _viewModel.RefreshRequested += (s, e) => Refresh();
@@ -107,18 +107,18 @@ namespace UI.Controls.Viewport
             GlWPFControl.KeyDown += OnKeyDown;
             GlWPFControl.Focusable = true; // Make sure the control can receive keyboard focus
 
-            System.Diagnostics.Debug.WriteLine("=== ViewportControl constructor completed ===");
+            //System.Diagnostics.Debug.WriteLine("=== ViewportControl constructor completed ===");
 
             // ✅ ADD: Verify document is fully loaded
             try
             {
                 var testLayer = document.CurrentLayer;
                 _documentFullyLoaded = true;
-                System.Diagnostics.Debug.WriteLine($"ViewportControl: Document fully loaded with current layer: {testLayer?.Name ?? "null"}");
+                //System.Diagnostics.Debug.WriteLine($"ViewportControl: Document fully loaded with current layer: {testLayer?.Name ?? "null"}");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"ViewportControl: Document NOT fully loaded: {ex.Message}");
+                //System.Diagnostics.Debug.WriteLine($"ViewportControl: Document NOT fully loaded: {ex.Message}");
                 _documentFullyLoaded = false;
             }
         }
@@ -175,18 +175,18 @@ namespace UI.Controls.Viewport
 
         private void ViewportControl_Loaded(object sender, RoutedEventArgs e)
         {
-            System.Diagnostics.Debug.WriteLine("=== ViewportControl.Loaded event fired ===");
+            //System.Diagnostics.Debug.WriteLine("=== ViewportControl.Loaded event fired ===");
 
             if (!_isInitialized)
             {
-                System.Diagnostics.Debug.WriteLine("Initializing from Loaded event");
+                //System.Diagnostics.Debug.WriteLine("Initializing from Loaded event");
                 InitializeOpenGL();
             }
         }
 
         private void OnGLControlReady()
         {
-            System.Diagnostics.Debug.WriteLine("=== GLWpfControl.Ready event fired ===");
+            //System.Diagnostics.Debug.WriteLine("=== GLWpfControl.Ready event fired ===");
 
             try
             {
@@ -195,27 +195,27 @@ namespace UI.Controls.Viewport
                 string renderer = GL.GetString(StringName.Renderer);
                 string glslVersion = GL.GetString(StringName.ShadingLanguageVersion);
 
-                System.Diagnostics.Debug.WriteLine($"OpenGL Version: {version}");
-                System.Diagnostics.Debug.WriteLine($"Vendor: {vendor}");
-                System.Diagnostics.Debug.WriteLine($"Renderer: {renderer}");
-                System.Diagnostics.Debug.WriteLine($"GLSL Version: {glslVersion}");
+                //System.Diagnostics.Debug.WriteLine($"OpenGL Version: {version}");
+                //System.Diagnostics.Debug.WriteLine($"Vendor: {vendor}");
+                //System.Diagnostics.Debug.WriteLine($"Renderer: {renderer}");
+                //System.Diagnostics.Debug.WriteLine($"GLSL Version: {glslVersion}");
 
                 var versionParts = version.Split('.', ' ');
                 if (versionParts.Length >= 2)
                 {
                     int major = int.Parse(versionParts[0]);
                     int minor = int.Parse(versionParts[1]);
-                    System.Diagnostics.Debug.WriteLine($"Parsed version: {major}.{minor}");
+                    //System.Diagnostics.Debug.WriteLine($"Parsed version: {major}.{minor}");
 
                     if (major < 3 || (major == 3 && minor < 3))
                     {
-                        System.Diagnostics.Debug.WriteLine("WARNING: OpenGL 3.3 or higher is recommended");
+                        //System.Diagnostics.Debug.WriteLine("WARNING: OpenGL 3.3 or higher is recommended");
                     }
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error getting OpenGL info: {ex.Message}");
+                //System.Diagnostics.Debug.WriteLine($"Error getting OpenGL info: {ex.Message}");
             }
 
             InitializeOpenGL();
@@ -225,13 +225,13 @@ namespace UI.Controls.Viewport
         {
             if (_isInitialized)
             {
-                System.Diagnostics.Debug.WriteLine("OpenGL already initialized, skipping");
+                //System.Diagnostics.Debug.WriteLine("OpenGL already initialized, skipping");
                 return;
             }
 
             try
             {
-                System.Diagnostics.Debug.WriteLine("--- Starting OpenGL initialization ---");
+                //System.Diagnostics.Debug.WriteLine("--- Starting OpenGL initialization ---");
 
                 _renderEngine = new RenderEngine();
 
@@ -242,7 +242,7 @@ namespace UI.Controls.Viewport
                 if (pixelWidth <= 0) pixelWidth = 800;
                 if (pixelHeight <= 0) pixelHeight = 600;
 
-                System.Diagnostics.Debug.WriteLine($"Viewport framebuffer (pixels): {pixelWidth}x{pixelHeight}");
+                //System.Diagnostics.Debug.WriteLine($"Viewport framebuffer (pixels): {pixelWidth}x{pixelHeight}");
 
                 _renderEngine.Initialize(pixelWidth, pixelHeight);
 
@@ -254,21 +254,21 @@ namespace UI.Controls.Viewport
                 var error = GL.GetError();
                 if (error != ErrorCode.NoError)
                 {
-                    System.Diagnostics.Debug.WriteLine($"OpenGL Error during initialization: {error}");
+                    //System.Diagnostics.Debug.WriteLine($"OpenGL Error during initialization: {error}");
                 }
 
                 _isInitialized = true;
 
-                System.Diagnostics.Debug.WriteLine("--- Forcing initial refresh ---");
+                //System.Diagnostics.Debug.WriteLine("--- Forcing initial refresh ---");
                 Refresh();
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"EXCEPTION during OpenGL initialization: {ex.Message}");
-                System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
+                //System.Diagnostics.Debug.WriteLine($"EXCEPTION during OpenGL initialization: {ex.Message}");
+                //System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
                 if (ex.InnerException != null)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Inner exception: {ex.InnerException.Message}");
+                    //System.Diagnostics.Debug.WriteLine($"Inner exception: {ex.InnerException.Message}");
                 }
             }
         }
@@ -279,7 +279,7 @@ namespace UI.Controls.Viewport
 
         private void OnRender(TimeSpan delta)
         {
-            //System.Diagnostics.Debug.WriteLine($"*** OnRender called at {DateTime.Now:HH:mm:ss.fff} ***");
+            ////System.Diagnostics.Debug.WriteLine($"*** OnRender called at {DateTime.Now:HH:mm:ss.fff} ***");
     
             if (!_isInitialized || _renderEngine == null)
                 return;
@@ -287,14 +287,14 @@ namespace UI.Controls.Viewport
             // ✅ ADD: Don't render until document is fully loaded
             if (!_documentFullyLoaded)
             {
-                System.Diagnostics.Debug.WriteLine("OnRender: Document not fully loaded, skipping render");
+                //System.Diagnostics.Debug.WriteLine("OnRender: Document not fully loaded, skipping render");
                 
                 // Try to check again
                 try
                 {
                     var testLayer = _document.CurrentLayer;
                     _documentFullyLoaded = true;
-                    System.Diagnostics.Debug.WriteLine("OnRender: Document is now fully loaded!");
+                    //System.Diagnostics.Debug.WriteLine("OnRender: Document is now fully loaded!");
                 }
                 catch
                 {
@@ -318,8 +318,8 @@ namespace UI.Controls.Viewport
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"!!! EXCEPTION during render: {ex.Message}");
-                System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
+                //System.Diagnostics.Debug.WriteLine($"!!! EXCEPTION during render: {ex.Message}");
+                //System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
             }
         }
 
@@ -382,14 +382,14 @@ namespace UI.Controls.Viewport
             var previewPoint = _viewModel.PreviewPoint;
             var tempPoints = _viewModel.TempPoints;
 
-            //System.Diagnostics.Debug.WriteLine($"RenderPreviewGeometry: previewPoint={(previewPoint != null ? "SET" : "null")}, tempPoints.Count={tempPoints.Count}");
+            ////System.Diagnostics.Debug.WriteLine($"RenderPreviewGeometry: previewPoint={(previewPoint != null ? "SET" : "null")}, tempPoints.Count={tempPoints.Count}");
 
             if (previewPoint != null && tempPoints.Count > 0)
             {
                 var lastPoint = tempPoints[tempPoints.Count - 1];
                 var previewLine = new Line(_document, lastPoint, previewPoint);
 
-                System.Diagnostics.Debug.WriteLine($"  Rendering preview line from ({lastPoint.X:F3}, {lastPoint.Y:F3}, {lastPoint.Z:F3}) to ({previewPoint.X:F3}, {previewPoint.Y:F3}, {previewPoint.Z:F3})");
+                //System.Diagnostics.Debug.WriteLine($"  Rendering preview line from ({lastPoint.X:F3}, {lastPoint.Y:F3}, {lastPoint.Z:F3}) to ({previewPoint.X:F3}, {previewPoint.Y:F3}, {previewPoint.Z:F3})");
 
                 overlayObjects.Add(previewLine);
             }
@@ -630,13 +630,13 @@ namespace UI.Controls.Viewport
         }
         public void Refresh()
         {
-            //System.Diagnostics.Debug.WriteLine("*** Refresh() -> InvalidateVisual() called ***");
+            ////System.Diagnostics.Debug.WriteLine("*** Refresh() -> InvalidateVisual() called ***");
             GlWPFControl?.InvalidateVisual();
         }
 
         private void OnSizeChanged(object sender, SizeChangedEventArgs e)
         {
-            System.Diagnostics.Debug.WriteLine($"OnSizeChanged: {e.NewSize.Width}x{e.NewSize.Height}");
+            //System.Diagnostics.Debug.WriteLine($"OnSizeChanged: {e.NewSize.Width}x{e.NewSize.Height}");
 
             if (!_isInitialized || _renderEngine == null) return;
 
@@ -646,7 +646,7 @@ namespace UI.Controls.Viewport
             int pixelHeight = Math.Max(1, (int)Math.Round(e.NewSize.Height * dpi.DpiScaleY));
 
             _renderEngine.UpdateProjection(pixelWidth, pixelHeight);
-            System.Diagnostics.Debug.WriteLine($"Framebuffer resized to {pixelWidth}x{pixelHeight} (pixels)");
+            //System.Diagnostics.Debug.WriteLine($"Framebuffer resized to {pixelWidth}x{pixelHeight} (pixels)");
 
             Refresh();
         }
@@ -701,18 +701,18 @@ namespace UI.Controls.Viewport
                 e.MiddleButton != MouseButtonState.Pressed && 
                 e.RightButton != MouseButtonState.Pressed;
     
-            //System.Diagnostics.Debug.WriteLine($"MouseMove: SelectMode={_viewModel.IsSelectionMode}, PickMode={_viewModel.IsPointPickingMode}, ShouldHitTest={shouldHitTest}");
+            ////System.Diagnostics.Debug.WriteLine($"MouseMove: SelectMode={_viewModel.IsSelectionMode}, PickMode={_viewModel.IsPointPickingMode}, ShouldHitTest={shouldHitTest}");
 
     // Only perform hit testing if in selection mode, NOT in point picking mode, and not dragging
     if (shouldHitTest)
     {
         var hitObject = _viewModel.HitTest(currentPosDip, ScreenToWorld);
-        System.Diagnostics.Debug.WriteLine($"  HitTest result: {hitObject?.GetType().Name ?? "null"}");
+        //System.Diagnostics.Debug.WriteLine($"  HitTest result: {hitObject?.GetType().Name ?? "null"}");
         
         if (_viewModel.HighlightedObject != hitObject)
         {
             _viewModel.HighlightedObject = hitObject;
-            System.Diagnostics.Debug.WriteLine($"  HighlightedObject updated to: {hitObject?.GetType().Name ?? "null"}");
+            //System.Diagnostics.Debug.WriteLine($"  HighlightedObject updated to: {hitObject?.GetType().Name ?? "null"}");
             Refresh(); // Force a refresh when highlighting changes
         }
     }
@@ -820,7 +820,7 @@ namespace UI.Controls.Viewport
 
         private void OnKeyDown(object sender, KeyEventArgs e)
         {
-            System.Diagnostics.Debug.WriteLine($"ViewportControl.OnKeyDown: Key={e.Key}, IsSelectionMode={_viewModel.IsSelectionMode}, SelectedCount={_viewModel.SelectedObjects.Count}");
+            //System.Diagnostics.Debug.WriteLine($"ViewportControl.OnKeyDown: Key={e.Key}, IsSelectionMode={_viewModel.IsSelectionMode}, SelectedCount={_viewModel.SelectedObjects.Count}");
 
             // Handle ESC key
             if (e.Key == Key.Escape)
@@ -828,7 +828,7 @@ namespace UI.Controls.Viewport
                 // Priority 1: Cancel point picking mode if active
                 if (_viewModel.IsPointPickingMode)
                 {
-                    System.Diagnostics.Debug.WriteLine("ESC pressed - cancelling point picking mode");
+                    //System.Diagnostics.Debug.WriteLine("ESC pressed - cancelling point picking mode");
                     _viewModel.CancelPointPicking();
                     e.Handled = true;
                     return;
@@ -837,7 +837,7 @@ namespace UI.Controls.Viewport
                 // Priority 2: Clear selection if there are selected objects
                 if (_viewModel.IsSelectionMode && _viewModel.SelectedObjects.Count > 0)
                 {
-                    System.Diagnostics.Debug.WriteLine("ESC pressed - clearing selection");
+                    //System.Diagnostics.Debug.WriteLine("ESC pressed - clearing selection");
                     _viewModel.ClearSelection();
                     e.Handled = true;
                     return;
@@ -904,7 +904,7 @@ namespace UI.Controls.Viewport
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error in ScreenToWorld: {ex.Message}");
+                //System.Diagnostics.Debug.WriteLine($"Error in ScreenToWorld: {ex.Message}");
                 return null;
             }
         }
@@ -917,12 +917,12 @@ namespace UI.Controls.Viewport
         /// <returns>True if ESC was handled, false otherwise</returns>
         public bool HandleEscapeKey()
         {
-            System.Diagnostics.Debug.WriteLine($"ViewportControl.HandleEscapeKey: IsPointPickingMode={_viewModel.IsPointPickingMode}, IsSelectionMode={_viewModel.IsSelectionMode}, SelectedCount={_viewModel.SelectedObjects.Count}");
+            //System.Diagnostics.Debug.WriteLine($"ViewportControl.HandleEscapeKey: IsPointPickingMode={_viewModel.IsPointPickingMode}, IsSelectionMode={_viewModel.IsSelectionMode}, SelectedCount={_viewModel.SelectedObjects.Count}");
             
             // Priority 1: Cancel point picking mode if active
             if (_viewModel.IsPointPickingMode)
             {
-                System.Diagnostics.Debug.WriteLine("ESC handled - cancelling point picking mode");
+                //System.Diagnostics.Debug.WriteLine("ESC handled - cancelling point picking mode");
                 _viewModel.CancelPointPicking();
                 return true;
             }
@@ -930,7 +930,7 @@ namespace UI.Controls.Viewport
             // Priority 2: Clear selection if there are selected objects
             if (_viewModel.IsSelectionMode && _viewModel.SelectedObjects.Count > 0)
             {
-                System.Diagnostics.Debug.WriteLine("ESC handled - clearing selection");
+                //System.Diagnostics.Debug.WriteLine("ESC handled - clearing selection");
                 _viewModel.ClearSelection();
                 return true;
             }
@@ -946,7 +946,7 @@ namespace UI.Controls.Viewport
             // Only delete if in selection mode with selected objects
             if (_viewModel.IsSelectionMode && _viewModel.SelectedObjects.Count > 0)
             {
-                System.Diagnostics.Debug.WriteLine($"Delete key pressed - erasing {_viewModel.SelectedObjects.Count} selected object(s)");
+                //System.Diagnostics.Debug.WriteLine($"Delete key pressed - erasing {_viewModel.SelectedObjects.Count} selected object(s)");
         
                 // Create a list to hold the objects to delete (to avoid modifying collection during iteration)
                 var objectsToDelete = _viewModel.SelectedObjects.ToList();
@@ -955,7 +955,7 @@ namespace UI.Controls.Viewport
                 foreach (var obj in objectsToDelete)
                 {
                     _viewModel.RemoveObject(obj);
-                    System.Diagnostics.Debug.WriteLine($"  Deleted: {obj.GetType().Name} (ID: {obj.ID})");
+                    //System.Diagnostics.Debug.WriteLine($"  Deleted: {obj.GetType().Name} (ID: {obj.ID})");
                 }
         
                 // Clear the selection after deletion

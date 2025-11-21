@@ -44,7 +44,7 @@ namespace GraphicsEngine
                         AlignCameraForOrthographic();
 
                     UpdateProjection(_viewportWidth, _viewportHeight);
-                    System.Diagnostics.Debug.WriteLine($"Projection mode changed to: {_projectionMode}");
+                    //System.Diagnostics.Debug.WriteLine($"Projection mode changed to: {_projectionMode}");
                 }
             }
         }
@@ -92,7 +92,7 @@ namespace GraphicsEngine
             RegisterDefaultRenderers();
 
             GLDiag.Check("Initialize end");
-            System.Diagnostics.Debug.WriteLine($"RenderEngine initialized with {_projectionMode} projection");
+            //System.Diagnostics.Debug.WriteLine($"RenderEngine initialized with {_projectionMode} projection");
         }
 
         /// <summary>
@@ -104,7 +104,7 @@ namespace GraphicsEngine
                 throw new InvalidOperationException("ShaderProgram must be initialized before registering renderers");
 
             _renderers.Add(new LineRenderer(_shaderProgram));
-            System.Diagnostics.Debug.WriteLine($"Registered {_renderers.Count} renderer(s)");
+            //System.Diagnostics.Debug.WriteLine($"Registered {_renderers.Count} renderer(s)");
         }
 
         /// <summary>
@@ -122,8 +122,8 @@ namespace GraphicsEngine
 
             if (_projectionMode != ProjectionMode.Orthographic && _viewMatrix.IsIdentity)
             {
-                System.Diagnostics.Debug.WriteLine("WARNING: View matrix is IDENTITY in perspective!");
-                System.Diagnostics.Debug.WriteLine($"Camera - Position: {_camera.Position}, Target: {_camera.Target}, Up: {_camera.Up}");
+                //System.Diagnostics.Debug.WriteLine("WARNING: View matrix is IDENTITY in perspective!");
+                //System.Diagnostics.Debug.WriteLine($"Camera - Position: {_camera.Position}, Target: {_camera.Target}, Up: {_camera.Up}");
             }
 
             int count = 0;
@@ -135,7 +135,7 @@ namespace GraphicsEngine
             }
 
             if (count == 0)
-                System.Diagnostics.Debug.WriteLine("Render called with 0 objects.");
+                //System.Diagnostics.Debug.WriteLine("Render called with 0 objects.");
 
             GLDiag.Check("End of Render");
         }
@@ -155,8 +155,8 @@ namespace GraphicsEngine
 
             if (_projectionMode != ProjectionMode.Orthographic && _viewMatrix.IsIdentity)
             {
-                System.Diagnostics.Debug.WriteLine("WARNING: View matrix is IDENTITY in perspective!");
-                System.Diagnostics.Debug.WriteLine($"Camera - Position: {_camera.Position}, Target: {_camera.Target}, Up: {_camera.Up}");
+                //System.Diagnostics.Debug.WriteLine("WARNING: View matrix is IDENTITY in perspective!");
+                //System.Diagnostics.Debug.WriteLine($"Camera - Position: {_camera.Position}, Target: {_camera.Target}, Up: {_camera.Up}");
             }
 
             // Create a set for fast lookup of selected objects
@@ -181,7 +181,7 @@ namespace GraphicsEngine
             }
 
             if (count == 0)
-                System.Diagnostics.Debug.WriteLine("Render called with 0 objects.");
+                //System.Diagnostics.Debug.WriteLine("Render called with 0 objects.");
 
             GLDiag.Check("End of Render");
         }
@@ -210,7 +210,7 @@ namespace GraphicsEngine
                 RenderObject(obj);
             }
             if (count == 0)
-                System.Diagnostics.Debug.WriteLine("RenderOverlay called with 0 objects.");
+                //System.Diagnostics.Debug.WriteLine("RenderOverlay called with 0 objects.");
 
             // Restore states
             if (!blendWasEnabled) GL.Disable(EnableCap.Blend);
@@ -231,7 +231,7 @@ namespace GraphicsEngine
             }
             else
             {
-                System.Diagnostics.Debug.WriteLine($"No renderer found for type {obj.GetType().FullName}");
+                //System.Diagnostics.Debug.WriteLine($"No renderer found for type {obj.GetType().FullName}");
             }
         }
 
@@ -247,7 +247,7 @@ namespace GraphicsEngine
             }
             else
             {
-                System.Diagnostics.Debug.WriteLine($"No renderer found for type {obj.GetType().FullName}");
+                //System.Diagnostics.Debug.WriteLine($"No renderer found for type {obj.GetType().FullName}");
             }
         }
 
@@ -292,7 +292,7 @@ namespace GraphicsEngine
             // Log viewport sanity
             int[] vp = new int[4];
             GL.GetInteger(GetPName.Viewport, vp);
-            System.Diagnostics.Debug.WriteLine($"Projection updated ({_projectionMode}): {width}x{height}, GL viewport: {vp[2]}x{vp[3]} at ({vp[0]},{vp[1]})");
+            //System.Diagnostics.Debug.WriteLine($"Projection updated ({_projectionMode}): {width}x{height}, GL viewport: {vp[2]}x{vp[3]} at ({vp[0]},{vp[1]})");
 
             GLDiag.Check("UpdateProjection");
         }
@@ -306,7 +306,7 @@ namespace GraphicsEngine
             {
                 // Decrease scale to zoom in, increase to zoom out
                 OrthographicScale += delta;
-                System.Diagnostics.Debug.WriteLine($"Orthographic scale: {_orthographicScale:F2}");
+                //System.Diagnostics.Debug.WriteLine($"Orthographic scale: {_orthographicScale:F2}");
             }
         }
 

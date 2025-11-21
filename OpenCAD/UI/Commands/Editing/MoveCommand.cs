@@ -2,7 +2,6 @@ using OpenCAD;
 using OpenCAD.Geometry;
 using System;
 using System.Collections.Generic;
-using System.Numerics;
 using System.Threading;
 using System.Threading.Tasks;
 using UI.Commands.Undo;
@@ -13,8 +12,8 @@ namespace UI.Commands.Editing
     [InputCommand("move", "Move selected objects", "m")]
     public class MoveCommand : EditCommandBase
     {
-        protected override string SelectObjectsPrompt => OpenCADStrings.SelectObjectsToCopyPrompt;
-        protected override string SelectObjectsMessage => OpenCADStrings.SelectObjectsToCopyMessage + "\nClick objects to select them, then press ENTER to move (or ESC to cancel).";
+        protected override string SelectObjectsPrompt => OpenCADStrings.SelectObjectsToMovePrompt;
+        protected override string SelectObjectsMessage => OpenCADStrings.SelectObjectsToMoveMessage + "\nClick objects to select them, then press ENTER to move (or ESC to cancel).";
 
         public override void Initialize(ICommandContext context)
         {
@@ -31,7 +30,7 @@ namespace UI.Commands.Editing
         {
             if (SelectedObjects == null || SelectedObjects.Count == 0)
             {
-                Context?.OutputMessage(OpenCADStrings.NoObjectsToCopy);
+                Context?.OutputMessage(OpenCADStrings.NoObjectsToMove);
                 Cancel();
                 return;
             }
@@ -41,9 +40,9 @@ namespace UI.Commands.Editing
             try
             {
                 // Prompt for base point
-                CurrentPrompt = OpenCADStrings.CopyBasePointPrompt;
+                CurrentPrompt = OpenCADStrings.MoveBasePointPrompt;
                 var basePoint = await _pointInputHelper!.GetPointAsync(
-                    OpenCADStrings.CopyBasePointPrompt,
+                    OpenCADStrings.MoveBasePointPrompt,
                     allowLastPoint: false,
                     basePoint: null,
                     _cancellationTokenSource.Token);
@@ -61,9 +60,9 @@ namespace UI.Commands.Editing
                 try
                 {
                     // Prompt for target point (PointInputHelper will enable preview mode / rubberband)
-                    CurrentPrompt = OpenCADStrings.CopyTargetPointPrompt;
+                    CurrentPrompt = OpenCADStrings.MoveTargetPointPrompt;
                     var targetPoint = await _pointInputHelper.GetPointAsync(
-                        OpenCADStrings.CopyTargetPointPrompt,
+                        OpenCADStrings.MoveTargetPointPrompt,
                         allowLastPoint: false,
                         basePoint: _basePoint,
                         _cancellationTokenSource.Token);
@@ -86,12 +85,12 @@ namespace UI.Commands.Editing
                     var viewModel = viewport?.DataContext as ViewportViewModel;
                     if (viewModel != null && viewModel.IsPointPickingMode)
                     {
-                        System.Diagnostics.Debug.WriteLine("MoveCommand: Manually disabling point picking mode before completion");
+                        //System.Diagnostics.Debug.WriteLine("MoveCommand: Manually disabling point picking mode before completion");
                         viewModel.DisablePointPickingMode();
                     }
 
                     // NOW raise command completed (after async work is done AND point picking is disabled)
-                    System.Diagnostics.Debug.WriteLine("MoveCommand: Raising CommandCompleted");
+                    //System.Diagnostics.Debug.WriteLine("MoveCommand: Raising CommandCompleted");
                     RaiseCommandCompleted();
                 }
                 finally
@@ -129,7 +128,7 @@ namespace UI.Commands.Editing
         {
             if (SelectedObjects == null || _basePoint == null || _targetPoint == null)
             {
-                Context?.OutputMessage(OpenCADStrings.UnableToCopyObjectsMissingContext);
+                Context?.OutputMessage(OpenCADStrings.UnableToMoveObjectsMissingContext);
                 Cancel();
                 return;
             }
@@ -141,26 +140,26 @@ namespace UI.Commands.Editing
 
             if (document == null || viewport == null)
             {
-                System.Diagnostics.Debug.WriteLine("MoveSelectedObjects: required document or viewport is null. Cancelling command.");
-                Context?.OutputMessage(OpenCADStrings.UnableToCopyObjectsMissingContext);
+                //System.Diagnostics.Debug.WriteLine("MoveSelectedObjects: required document or viewport is null. Cancelling command.");
+                Context?.OutputMessage(OpenCADStrings.UnableToMoveObjectsMissingContext);
                 Cancel();
                 return;
             }
 
             Vector3D v = _targetPoint.AsVector3D() - _basePoint.AsVector3D();
 
-            // Build a translation matrix (you can replace this with any Matrix4x4 for rotate/scale)
-            var translation = Matrix4x4.CreateTranslation((float)v.X, (float)v.Y, (float)v.Z);
+            // Build a double-precision translation matrix (Matrix4D)
+            var translation = Matrix4D.CreateTranslation(v.X, v.Y, v.Z);
 
             if (undoManager != null)
             {
                 var action = new TransformGeometryAction(
                     SelectedObjects,
                     translation,
-                    string.Format(OpenCADStrings.UndoCopyObjectsFormat, SelectedObjects.Count)
+                    string.Format(OpenCADStrings.UndoMoveObjectsFormat, SelectedObjects.Count)
                 );
                 undoManager.ExecuteAction(action);
-                Context?.OutputMessage(string.Format(OpenCADStrings.ObjectsCopiedFormat, SelectedObjects.Count));
+                Context?.OutputMessage(string.Format(OpenCADStrings.ObjectsMovedFormat, SelectedObjects.Count));
             }
             else
             {
@@ -176,7 +175,7 @@ namespace UI.Commands.Editing
                         }
                     }
                 }
-                Context?.OutputMessage(string.Format(OpenCADStrings.ObjectsCopiedNoUndoFormat, SelectedObjects.Count));
+                Context?.OutputMessage(string.Format(OpenCADStrings.ObjectsMovedNoUndoFormat, SelectedObjects.Count));
             }
 
             var viewModel = viewport?.DataContext as ViewportViewModel;

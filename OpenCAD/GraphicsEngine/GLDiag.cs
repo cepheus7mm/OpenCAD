@@ -10,7 +10,7 @@ namespace GraphicsEngine
             var err = GL.GetError();
             if (err != ErrorCode.NoError)
             {
-                System.Diagnostics.Debug.WriteLine($"GL ERROR at {where}: {err}");
+                //System.Diagnostics.Debug.WriteLine($"GL ERROR at {where}: {err}");
             }
         }
 
@@ -22,11 +22,11 @@ namespace GraphicsEngine
                 string renderer = GL.GetString(StringName.Renderer);
                 string version = GL.GetString(StringName.Version);
                 string glsl = GL.GetString(StringName.ShadingLanguageVersion);
-                System.Diagnostics.Debug.WriteLine($"OpenGL Context -> Vendor: {vendor}, Renderer: {renderer}, Version: {version}, GLSL: {glsl}");
+                //System.Diagnostics.Debug.WriteLine($"OpenGL Context -> Vendor: {vendor}, Renderer: {renderer}, Version: {version}, GLSL: {glsl}");
 
                 float[] range = new float[2];
                 GL.GetFloat(GetPName.LineWidthRange, range);
-                System.Diagnostics.Debug.WriteLine($"Line width range: {range[0]} .. {range[1]}");
+                //System.Diagnostics.Debug.WriteLine($"Line width range: {range[0]} .. {range[1]}");
             }
             catch { /* ignore if context not ready */ }
         }
@@ -39,18 +39,18 @@ namespace GraphicsEngine
                 GL.Enable(EnableCap.DebugOutput);
                 GL.Enable(EnableCap.DebugOutputSynchronous);
                 GL.DebugMessageCallback(DebugCallback, IntPtr.Zero);
-                System.Diagnostics.Debug.WriteLine("KHR_debug enabled.");
+                //System.Diagnostics.Debug.WriteLine("KHR_debug enabled.");
             }
             catch
             {
-                System.Diagnostics.Debug.WriteLine("KHR_debug not available on this context.");
+                //System.Diagnostics.Debug.WriteLine("KHR_debug not available on this context.");
             }
         }
 
         private static void DebugCallback(DebugSource source, DebugType type, int id, DebugSeverity severity, int length, IntPtr message, IntPtr userParam)
         {
             var msg = System.Runtime.InteropServices.Marshal.PtrToStringAnsi(message, length);
-            //System.Diagnostics.Debug.WriteLine($"[GL DEBUG] {severity} {type} ({id}): {msg}");
+            ////System.Diagnostics.Debug.WriteLine($"[GL DEBUG] {severity} {type} ({id}): {msg}");
         }
 
         public static void DumpPipelineState(int vao, int vbo, int programId)

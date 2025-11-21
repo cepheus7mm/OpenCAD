@@ -36,7 +36,7 @@ namespace GraphicsEngine
 
             if (_vao == 0 || _vbo == 0)
             {
-                System.Diagnostics.Debug.WriteLine($"ERROR: Failed to create VAO/VBO (vao={_vao}, vbo={_vbo}). Is a GL context current?");
+                //System.Diagnostics.Debug.WriteLine($"ERROR: Failed to create VAO/VBO (vao={_vao}, vbo={_vbo}). Is a GL context current?");
             }
 
             // Set up VAO once in constructor - this state is preserved
@@ -50,7 +50,7 @@ namespace GraphicsEngine
             GL.BindVertexArray(0);
 
             GLDiag.Check("LineRenderer ctor end");
-            System.Diagnostics.Debug.WriteLine($"LineRenderer initialized with VAO={_vao} and VBO={_vbo}");
+            //System.Diagnostics.Debug.WriteLine($"LineRenderer initialized with VAO={_vao} and VBO={_vbo}");
         }
 
         public bool CanRender(OpenCADObject obj)

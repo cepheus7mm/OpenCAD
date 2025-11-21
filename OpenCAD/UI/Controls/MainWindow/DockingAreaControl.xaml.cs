@@ -85,28 +85,28 @@ namespace UI.Controls.MainWindow
 				if (show)
 				{
 					_layersAnchorable.Show();
-					System.Diagnostics.Debug.WriteLine("Layers panel shown");
+					//System.Diagnostics.Debug.WriteLine("Layers panel shown");
 				}
 				else
 				{
 					_layersAnchorable.Hide();
-					System.Diagnostics.Debug.WriteLine("Layers panel hidden");
+					//System.Diagnostics.Debug.WriteLine("Layers panel hidden");
 				}
 			}
 			else
 			{
-				System.Diagnostics.Debug.WriteLine("Layers panel LayoutAnchorable not found - searching entire layout tree");
+				//System.Diagnostics.Debug.WriteLine("Layers panel LayoutAnchorable not found - searching entire layout tree");
 				
 				// Debug: Print entire layout structure
 				PrintLayoutStructure(dockingManager.Layout?.RootPanel, 0);
 				
 				// Try to find it by control reference instead
 				var parent = layersControl.Parent;
-				System.Diagnostics.Debug.WriteLine($"LayersControl parent type: {parent?.GetType().Name ?? "null"}");
+				//System.Diagnostics.Debug.WriteLine($"LayersControl parent type: {parent?.GetType().Name ?? "null"}");
 				
 				if (parent is LayoutAnchorableControl anchorableControl)
 				{
-					System.Diagnostics.Debug.WriteLine("Found layers through control parent");
+					//System.Diagnostics.Debug.WriteLine("Found layers through control parent");
 					_layersAnchorable = anchorableControl.Model as LayoutAnchorable;
 					if (_layersAnchorable != null)
 					{
@@ -130,15 +130,15 @@ namespace UI.Controls.MainWindow
 			
 			if (element is LayoutAnchorable anchorable)
 			{
-				System.Diagnostics.Debug.WriteLine($"{indentStr}LayoutAnchorable: ContentId={anchorable.ContentId}, Title={anchorable.Title}, IsVisible={anchorable.IsVisible}");
+				//System.Diagnostics.Debug.WriteLine($"{indentStr}LayoutAnchorable: ContentId={anchorable.ContentId}, Title={anchorable.Title}, IsVisible={anchorable.IsVisible}");
 			}
 			else if (element is LayoutDocument document)
 			{
-				System.Diagnostics.Debug.WriteLine($"{indentStr}LayoutDocument: ContentId={document.ContentId}, Title={document.Title}");
+				//System.Diagnostics.Debug.WriteLine($"{indentStr}LayoutDocument: ContentId={document.ContentId}, Title={document.Title}");
 			}
 			else
 			{
-				System.Diagnostics.Debug.WriteLine($"{indentStr}{element.GetType().Name}");
+				//System.Diagnostics.Debug.WriteLine($"{indentStr}{element.GetType().Name}");
 			}
 
 			if (element is ILayoutContainer container)
@@ -268,7 +268,7 @@ namespace UI.Controls.MainWindow
 					//if (viewModel != null && !viewModel.HasActiveCommand)
 					//{
 					//	viewport.EnableSelectionMode();
-					//	System.Diagnostics.Debug.WriteLine($"Selection mode ENABLED for new viewport {title}");
+					//	//System.Diagnostics.Debug.WriteLine($"Selection mode ENABLED for new viewport {title}");
 					//}
 					
 					// Wire up viewport selection events to restore focus to command input
@@ -327,11 +327,11 @@ namespace UI.Controls.MainWindow
 			var docPane = GetDocumentPane();
 			if (docPane == null)
 			{
-				System.Diagnostics.Debug.WriteLine("GetActiveViewport: No document pane found");
+				//System.Diagnostics.Debug.WriteLine("GetActiveViewport: No document pane found");
 				return null;
 			}
 
-			System.Diagnostics.Debug.WriteLine($"GetActiveViewport: Document pane has {docPane.Children.Count} children");
+			//System.Diagnostics.Debug.WriteLine($"GetActiveViewport: Document pane has {docPane.Children.Count} children");
 
 			// Find the selected document in the document pane
 			var selectedDoc = docPane.Children.OfType<LayoutDocument>()
@@ -339,28 +339,28 @@ namespace UI.Controls.MainWindow
 
 			if (selectedDoc == null)
 			{
-				System.Diagnostics.Debug.WriteLine("GetActiveViewport: No selected document found");
+				//System.Diagnostics.Debug.WriteLine("GetActiveViewport: No selected document found");
 
 				// Log what documents exist
 				foreach (var doc in docPane.Children.OfType<LayoutDocument>())
 				{
-					System.Diagnostics.Debug.WriteLine($"  Document: '{doc.Title}', Content type: {doc.Content?.GetType().Name ?? "null"}");
+					//System.Diagnostics.Debug.WriteLine($"  Document: '{doc.Title}', Content type: {doc.Content?.GetType().Name ?? "null"}");
 				}
 
 				return null;
 			}
 
-			System.Diagnostics.Debug.WriteLine($"GetActiveViewport: Selected document is '{selectedDoc.Title}', Content type: {selectedDoc.Content?.GetType().Name ?? "null"}");
+			//System.Diagnostics.Debug.WriteLine($"GetActiveViewport: Selected document is '{selectedDoc.Title}', Content type: {selectedDoc.Content?.GetType().Name ?? "null"}");
 
 			// Check if the selected document contains a ViewportControl
 			if (selectedDoc.Content is ViewportControl viewport)
 			{
-				System.Diagnostics.Debug.WriteLine($"GetActiveViewport: Found active viewport for '{selectedDoc.Title}'");
+				//System.Diagnostics.Debug.WriteLine($"GetActiveViewport: Found active viewport for '{selectedDoc.Title}'");
 				return viewport;
 			}
 			else
 			{
-				System.Diagnostics.Debug.WriteLine($"GetActiveViewport: Selected document '{selectedDoc.Title}' does not contain a ViewportControl (contains {selectedDoc.Content?.GetType().Name ?? "null"})");
+				//System.Diagnostics.Debug.WriteLine($"GetActiveViewport: Selected document '{selectedDoc.Title}' does not contain a ViewportControl (contains {selectedDoc.Content?.GetType().Name ?? "null"})");
 				return null;
 			}
 		}
@@ -373,60 +373,60 @@ private void SetupCommandStateTracking()
     var commandInputViewModel = CommandInput.DataContext as CommandInputViewModel;
     if (commandInputViewModel != null)
     {
-        System.Diagnostics.Debug.WriteLine("=== SetupCommandStateTracking: Handler attached ===");
+        //System.Diagnostics.Debug.WriteLine("=== SetupCommandStateTracking: Handler attached ===");
         
         commandInputViewModel.ActiveCommandChanged += (s, e) =>
         {
-            System.Diagnostics.Debug.WriteLine("=== ActiveCommandChanged event fired ===");
+            //System.Diagnostics.Debug.WriteLine("=== ActiveCommandChanged event fired ===");
             
             var viewport = GetActiveViewport();
             if (viewport == null)
             {
-                System.Diagnostics.Debug.WriteLine("  ERROR: No active viewport");
+                //System.Diagnostics.Debug.WriteLine("  ERROR: No active viewport");
                 return;
             }
             
             var viewModel = viewport.DataContext as ViewportViewModel;
             if (viewModel == null)
             {
-                System.Diagnostics.Debug.WriteLine("  ERROR: No viewport view model");
+                //System.Diagnostics.Debug.WriteLine("  ERROR: No viewport view model");
                 return;
             }
             
             var activeCommand = commandInputViewModel.ActiveCommand;
-            System.Diagnostics.Debug.WriteLine($"  ActiveCommand: {activeCommand?.GetType().Name ?? "null"}");
-            System.Diagnostics.Debug.WriteLine($"  Current IsSelectionMode: {viewModel.IsSelectionMode}");
-            System.Diagnostics.Debug.WriteLine($"  Current IsPointPickingMode: {viewModel.IsPointPickingMode}");
+            //System.Diagnostics.Debug.WriteLine($"  ActiveCommand: {activeCommand?.GetType().Name ?? "null"}");
+            //System.Diagnostics.Debug.WriteLine($"  Current IsSelectionMode: {viewModel.IsSelectionMode}");
+            //System.Diagnostics.Debug.WriteLine($"  Current IsPointPickingMode: {viewModel.IsPointPickingMode}");
             
             //if (activeCommand == null)
             //{
             //    // Command just completed or was cancelled
             //    // Re-enable selection mode for editing workflows
-            //    System.Diagnostics.Debug.WriteLine("  Command completed - ENABLING selection mode");
+            //    //System.Diagnostics.Debug.WriteLine("  Command completed - ENABLING selection mode");
             //    viewModel.EnableSelectionMode();
-            //    System.Diagnostics.Debug.WriteLine($"  After EnableSelectionMode: IsSelectionMode={viewModel.IsSelectionMode}");
+            //    //System.Diagnostics.Debug.WriteLine($"  After EnableSelectionMode: IsSelectionMode={viewModel.IsSelectionMode}");
             //}
             //else if (activeCommand.RequiresSelection)
             //{
             //    // Editing command starting - enable selection mode
-            //    System.Diagnostics.Debug.WriteLine($"  Editing command '{activeCommand.GetType().Name}' started - ENABLING selection mode");
+            //    //System.Diagnostics.Debug.WriteLine($"  Editing command '{activeCommand.GetType().Name}' started - ENABLING selection mode");
             //    viewModel.EnableSelectionMode();
-            //    System.Diagnostics.Debug.WriteLine($"  After EnableSelectionMode: IsSelectionMode={viewModel.IsSelectionMode}");
+            //    //System.Diagnostics.Debug.WriteLine($"  After EnableSelectionMode: IsSelectionMode={viewModel.IsSelectionMode}");
             //}
             //else
             //{
             //    // Drawing command starting - disable selection mode
-            //    System.Diagnostics.Debug.WriteLine($"  Drawing command '{activeCommand.GetType().Name}' started - DISABLING selection mode");
+            //    //System.Diagnostics.Debug.WriteLine($"  Drawing command '{activeCommand.GetType().Name}' started - DISABLING selection mode");
             //    viewModel.DisableSelectionMode();
-            //    System.Diagnostics.Debug.WriteLine($"  After DisableSelectionMode: IsSelectionMode={viewModel.IsSelectionMode}");
+            //    //System.Diagnostics.Debug.WriteLine($"  After DisableSelectionMode: IsSelectionMode={viewModel.IsSelectionMode}");
             //}
         };
         
-        System.Diagnostics.Debug.WriteLine("=== SetupCommandStateTracking: Complete ===");
+        //System.Diagnostics.Debug.WriteLine("=== SetupCommandStateTracking: Complete ===");
     }
     else
     {
-        System.Diagnostics.Debug.WriteLine("=== SetupCommandStateTracking: ERROR - CommandInputViewModel is null ===");
+        //System.Diagnostics.Debug.WriteLine("=== SetupCommandStateTracking: ERROR - CommandInputViewModel is null ===");
     }
 }
 
@@ -439,18 +439,18 @@ private void SetupCommandStateTracking()
 			var viewModel = layersControl.DataContext as LayersViewModel;
 			if (viewModel == null)
 			{
-				System.Diagnostics.Debug.WriteLine("SetupLayerChangeTracking: LayersViewModel not found");
+				//System.Diagnostics.Debug.WriteLine("SetupLayerChangeTracking: LayersViewModel not found");
 				return;
 			}
 
 			// Subscribe to the LayersModified event
 			viewModel.LayersModified += (s, e) =>
 			{
-				System.Diagnostics.Debug.WriteLine("LayersModified event received - updating properties panel");
+				//System.Diagnostics.Debug.WriteLine("LayersModified event received - updating properties panel");
 				UpdatePropertiesPanel();
 			};
 
-			System.Diagnostics.Debug.WriteLine("SetupLayerChangeTracking: Layer change tracking initialized");
+			//System.Diagnostics.Debug.WriteLine("SetupLayerChangeTracking: Layer change tracking initialized");
 		}
 
 		/// <summary>
@@ -479,13 +479,13 @@ private void SetupCommandStateTracking()
 						{
 							// Disable selection mode when a command is active (unless it requires selection)
 							//viewport.DisableSelectionMode();
-						 System.Diagnostics.Debug.WriteLine($"Selection mode DISABLED for {doc.Title} (command active)");
+						 //System.Diagnostics.Debug.WriteLine($"Selection mode DISABLED for {doc.Title} (command active)");
 						}
 						else
 						{
 							// Enable selection mode when no command is active OR when command requires selection
 							//viewport.EnableSelectionMode();
-							System.Diagnostics.Debug.WriteLine($"Selection mode ENABLED for {doc.Title} (no command or command requires selection)");
+							//System.Diagnostics.Debug.WriteLine($"Selection mode ENABLED for {doc.Title} (no command or command requires selection)");
 						}
 					}
 				}
@@ -515,7 +515,7 @@ private void SetupCommandStateTracking()
 		{
 			if (sender is LayoutDocument doc && doc.IsSelected)
 			{
-				System.Diagnostics.Debug.WriteLine($"Document '{doc.Title}' was selected - updating properties");
+				//System.Diagnostics.Debug.WriteLine($"Document '{doc.Title}' was selected - updating properties");
 				UpdatePropertiesPanel();
 				
 				// Restore focus to command input when switching documents
@@ -547,19 +547,19 @@ private void SetupCommandStateTracking()
 			}
 			catch (Exception ex)
 			{
-				System.Diagnostics.Debug.WriteLine($"Failed to load layout: {ex.Message}");
+				//System.Diagnostics.Debug.WriteLine($"Failed to load layout: {ex.Message}");
 			}
 
 			// Cache the layers anchorable reference after layout is loaded
 			_layersAnchorable = FindLayoutAnchorable("layers");
 			
 			// Verify layers control is present
-			System.Diagnostics.Debug.WriteLine($"LayersControl initialized: {layersControl != null}");
+			//System.Diagnostics.Debug.WriteLine($"LayersControl initialized: {layersControl != null}");
 			if (layersControl != null)
 			{
-				System.Diagnostics.Debug.WriteLine($"LayersControl DataContext: {layersControl.DataContext != null}");
+				//System.Diagnostics.Debug.WriteLine($"LayersControl DataContext: {layersControl.DataContext != null}");
 			}
-			System.Diagnostics.Debug.WriteLine($"Layers LayoutAnchorable found: {_layersAnchorable != null}");
+			//System.Diagnostics.Debug.WriteLine($"Layers LayoutAnchorable found: {_layersAnchorable != null}");
 		}
 
 		private void OnUnloaded(object sender, RoutedEventArgs e)
@@ -575,11 +575,11 @@ private void SetupCommandStateTracking()
 				var layoutPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, LayoutFileName);
 				using var stream = new StreamWriter(layoutPath);
 				layoutSerializer.Serialize(stream);
-				System.Diagnostics.Debug.WriteLine($"Layout saved to: {layoutPath}");
+				//System.Diagnostics.Debug.WriteLine($"Layout saved to: {layoutPath}");
 			}
 			catch (Exception ex)
 			{
-				System.Diagnostics.Debug.WriteLine($"Failed to save layout: {ex.Message}");
+				//System.Diagnostics.Debug.WriteLine($"Failed to save layout: {ex.Message}");
 			}
 		}
 
@@ -589,11 +589,11 @@ private void SetupCommandStateTracking()
 			
 			if (!File.Exists(layoutPath))
 			{
-				System.Diagnostics.Debug.WriteLine($"Layout file not found: {layoutPath} - using default layout");
+				//System.Diagnostics.Debug.WriteLine($"Layout file not found: {layoutPath} - using default layout");
 				return;
 			}
 
-			System.Diagnostics.Debug.WriteLine($"Loading layout from: {layoutPath}");
+			//System.Diagnostics.Debug.WriteLine($"Loading layout from: {layoutPath}");
 
 			try
 			{
@@ -602,32 +602,32 @@ private void SetupCommandStateTracking()
 				// Handle missing content when deserializing
 				layoutSerializer.LayoutSerializationCallback += (s, args) =>
 				{
-					System.Diagnostics.Debug.WriteLine($"Layout deserialization callback for ContentId: {args.Model.ContentId}");
+					//System.Diagnostics.Debug.WriteLine($"Layout deserialization callback for ContentId: {args.Model.ContentId}");
 					
 					// Restore controls that might be missing from saved layout
 					switch (args.Model.ContentId)
 					{
 						case "commandInput":
 							args.Content = commandInputControl;
-							System.Diagnostics.Debug.WriteLine("Restored commandInput");
+							//System.Diagnostics.Debug.WriteLine("Restored commandInput");
 							break;
 						case "properties":
 							args.Content = propertiesControl;
-							System.Diagnostics.Debug.WriteLine("Restored properties");
+							//System.Diagnostics.Debug.WriteLine("Restored properties");
 							break;
                         case "settings":
                             args.Content = settingsControl;
-                            System.Diagnostics.Debug.WriteLine("Restored settings");
+                            //System.Diagnostics.Debug.WriteLine("Restored settings");
                             break;
                         case "layers":
 							args.Content = layersControl;
-							System.Diagnostics.Debug.WriteLine("Restored layers");
+							//System.Diagnostics.Debug.WriteLine("Restored layers");
 							break;
 						case "solutionExplorer":
 						case "output":
 						case "errorList":
 							// Keep default content for these
-							System.Diagnostics.Debug.WriteLine($"Keeping default content for {args.Model.ContentId}");
+							//System.Diagnostics.Debug.WriteLine($"Keeping default content for {args.Model.ContentId}");
 							break;
 						default:
 							// ✅ CHANGED: Don't cancel document deserialization
@@ -637,7 +637,7 @@ private void SetupCommandStateTracking()
 							{
 								// Just don't set args.Content - this allows the layout to load
 								// but the document won't be restored (which is what we want)
-								System.Diagnostics.Debug.WriteLine($"Skipping document restoration for: {args.Model.ContentId}");
+								//System.Diagnostics.Debug.WriteLine($"Skipping document restoration for: {args.Model.ContentId}");
 								// DON'T set args.Cancel = true
 							}
 							break;
@@ -657,16 +657,16 @@ private void SetupCommandStateTracking()
 					}
 				}
 				
-				System.Diagnostics.Debug.WriteLine("Layout loaded successfully");
+				//System.Diagnostics.Debug.WriteLine("Layout loaded successfully");
 			}
 			catch (Exception ex)
 			{
-				System.Diagnostics.Debug.WriteLine($"Error loading layout: {ex.Message}");
+				//System.Diagnostics.Debug.WriteLine($"Error loading layout: {ex.Message}");
 				// If layout loading fails, delete the corrupt file so we use default next time
 				try
 				{
 					File.Delete(layoutPath);
-					System.Diagnostics.Debug.WriteLine("Deleted corrupt layout file");
+					//System.Diagnostics.Debug.WriteLine("Deleted corrupt layout file");
 				}
 				catch { }
 			}
@@ -681,15 +681,15 @@ private void SetupCommandStateTracking()
                 // Subscribe to SelectionChanged event
                 viewModel.SelectionChanged += (s, e) =>
                 {
-                    System.Diagnostics.Debug.WriteLine("Selection changed - updating properties panel");
+                    //System.Diagnostics.Debug.WriteLine("Selection changed - updating properties panel");
                     UpdatePropertiesPanel();
                 };
 
-                System.Diagnostics.Debug.WriteLine("Wired up viewport selection events");
+                //System.Diagnostics.Debug.WriteLine("Wired up viewport selection events");
             }
             else
             {
-                System.Diagnostics.Debug.WriteLine("WARNING: ViewportViewModel not found when trying to wire selection events");
+                //System.Diagnostics.Debug.WriteLine("WARNING: ViewportViewModel not found when trying to wire selection events");
             }
         }
 
@@ -706,29 +706,29 @@ private void SetupCommandStateTracking()
                 if (show)
                 {
                     settingsAnchorable.Show();
-                    System.Diagnostics.Debug.WriteLine("Settings panel shown");
+                    //System.Diagnostics.Debug.WriteLine("Settings panel shown");
                 }
                 else
                 {
                     settingsAnchorable.Hide();
-                    System.Diagnostics.Debug.WriteLine("Settings panel hidden");
+                    //System.Diagnostics.Debug.WriteLine("Settings panel hidden");
                 }
             }
             else
             {
 				EnsureSettingsPanelVisible();
-                //System.Diagnostics.Debug.WriteLine("Settings panel LayoutAnchorable not found - searching entire layout tree");
+                ////System.Diagnostics.Debug.WriteLine("Settings panel LayoutAnchorable not found - searching entire layout tree");
 
                 //// Debug: Print entire layout structure
                 //PrintLayoutStructure(dockingManager.Layout?.RootPanel, 0);
 
                 //// Try to find it by control reference instead
                 //var parent = settingsControl.Parent;
-                //System.Diagnostics.Debug.WriteLine($"SettingsControl parent type: {parent?.GetType().Name ?? "null"}");
+                ////System.Diagnostics.Debug.WriteLine($"SettingsControl parent type: {parent?.GetType().Name ?? "null"}");
 
                 //if (parent is LayoutAnchorableControl anchorableControl)
                 //{
-                //    System.Diagnostics.Debug.WriteLine("Found settings through control parent");
+                //    //System.Diagnostics.Debug.WriteLine("Found settings through control parent");
                 //    settingsAnchorable = anchorableControl.Model as LayoutAnchorable;
                 //    if (settingsAnchorable != null)
                 //    {

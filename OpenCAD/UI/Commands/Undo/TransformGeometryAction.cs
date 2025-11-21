@@ -12,15 +12,15 @@ namespace UI.Commands.Undo
     public class TransformGeometryAction : IUndoableAction
     {
         private readonly List<OpenCADObject> _objects;
-        private readonly Matrix4x4 _matrix;
-        private readonly Matrix4x4 _inverse;
+        private readonly Matrix4D _matrix;
+        private readonly Matrix4D _inverse;
         public string Description { get; }
 
-        public TransformGeometryAction(IEnumerable<OpenCADObject> objects, Matrix4x4 matrix, string description)
+        public TransformGeometryAction(IEnumerable<OpenCADObject> objects, Matrix4D matrix, string description)
         {
             _objects = new List<OpenCADObject>(objects);
             _matrix = matrix;
-            if (!Matrix4x4.Invert(matrix, out _inverse))
+            if (!Matrix4D.TryInvert(matrix, out _inverse))
                 throw new InvalidOperationException("Transform matrix is not invertible.");
             Description = description;
         }

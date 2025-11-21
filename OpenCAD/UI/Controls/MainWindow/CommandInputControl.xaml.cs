@@ -108,7 +108,7 @@ namespace UI.Controls.MainWindow
                 {
                     // Return focus to command input after selection
                     FocusCommandInput();
-                    System.Diagnostics.Debug.WriteLine("Focus returned to command input after selection");
+                    //System.Diagnostics.Debug.WriteLine("Focus returned to command input after selection");
                 };
             }
         }

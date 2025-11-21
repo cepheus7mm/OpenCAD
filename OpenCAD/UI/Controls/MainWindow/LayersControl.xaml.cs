@@ -63,14 +63,14 @@ namespace UI.Controls.MainWindow
 				// "Current" column (first column, index 0) - Set this layer as current
 				ViewModel.SetLayerAsCurrent(layerItem);
 				e.Handled = true;
-				System.Diagnostics.Debug.WriteLine($"Layer '{layerItem.Name}' set as current via double-click");
+				//System.Diagnostics.Debug.WriteLine($"Layer '{layerItem.Name}' set as current via double-click");
 			}
 			else if (columnIndex == 1)
 			{
 				// "On / Off" column (second column, index 1) - Toggle visibility
 				ViewModel.ToggleLayerVisibility(layerItem);
 				e.Handled = true;
-				System.Diagnostics.Debug.WriteLine($"Layer '{layerItem.Name}' visibility toggled to {layerItem.IsVisible} via double-click");
+				//System.Diagnostics.Debug.WriteLine($"Layer '{layerItem.Name}' visibility toggled to {layerItem.IsVisible} via double-click");
 			}
 		}
 
@@ -182,7 +182,7 @@ namespace UI.Controls.MainWindow
 						selectedColor.G,
 						selectedColor.B);
 
-					System.Diagnostics.Debug.WriteLine($"Layer '{layerItem.Name}' color changed to {layerItem.Color}");
+					//System.Diagnostics.Debug.WriteLine($"Layer '{layerItem.Name}' color changed to {layerItem.Color}");
 				}
 			}
 		}

@@ -163,7 +163,7 @@ namespace OpenCAD
 
         //public void CompleteDeserialization()
         //{
-        //    System.Diagnostics.Debug.WriteLine($"  CompleteDeserialization for {GetType().Name} (ID: {ID})");
+        //    //System.Diagnostics.Debug.WriteLine($"  CompleteDeserialization for {GetType().Name} (ID: {ID})");
 
         //    try
         //    {
@@ -178,7 +178,7 @@ namespace OpenCAD
         //    }
         //    catch (Exception ex)
         //    {
-        //        System.Diagnostics.Debug.WriteLine($"    ERROR in CompleteDeserialization: {ex.Message}");
+        //        //System.Diagnostics.Debug.WriteLine($"    ERROR in CompleteDeserialization: {ex.Message}");
         //        throw;
         //    }
         //}
