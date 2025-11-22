@@ -803,6 +803,7 @@
 
         #endregion
 
+        public const string MoveCommandName = "move";
         #region Move Command Messages
 
         /// <summary>
