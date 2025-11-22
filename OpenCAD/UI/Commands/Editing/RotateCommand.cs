@@ -13,27 +13,20 @@ namespace UI.Commands.Editing
     [InputCommand("rotate", "Rotate selected objects", "ro")]
     public class RotateCommand : EditCommandBase
     {
-        protected override string SelectObjectsPrompt => OpenCADStrings.SelectObjectsToRotatePrompt;
-        protected override string SelectObjectsMessage => OpenCADStrings.SelectObjectsToRotateMessage + "\nClick objects to select them, then press ENTER to rotate (or ESC to cancel).";
+        protected new string _commandName = OpenCADStrings.RotateCommandName;
 
         private readonly List<OpenCADObject> _previewObjects = new();
 
         public override void Initialize(ICommandContext context)
         {
             base.Initialize(context);
-            var viewport = context.GetActiveViewport();
-            var viewModel = viewport?.DataContext as ViewportViewModel;
-            if (viewModel != null)
-            {
-                _pointInputHelper = new PointInputHelper(context, viewModel);
-            }
         }
 
         protected override async void OnObjectsSelected()
         {
             if (SelectedObjects == null || SelectedObjects.Count == 0)
             {
-                Context?.OutputMessage(OpenCADStrings.NoObjectsToRotate);
+                Context?.OutputMessage(NoObjectsMessage);
                 Cancel();
                 return;
             }
@@ -60,19 +53,12 @@ namespace UI.Commands.Editing
                 }
 
                 // Prompt for rotation center (base point)
-                CurrentPrompt = OpenCADStrings.RotateBasePointPrompt;
-                var basePoint = await _pointInputHelper!.GetPointAsync(
-                    OpenCADStrings.RotateBasePointPrompt,
-                    allowLastPoint: false,
-                    basePoint: null,
-                    _cancellationTokenSource.Token);
-
-                if (basePoint == null)
+                _basePoint = await GetBasePoint();
+                if (_basePoint == null)
                 {
                     Cancel();
                     return;
                 }
-                _basePoint = basePoint;
 
                 // Cache providers immediately (guard against await issues)
                 cachedViewport = Context?.GetActiveViewport();
@@ -105,15 +91,11 @@ namespace UI.Commands.Editing
                 }
 
                 // Ask for a target point that defines the rotation angle (relative to center)
-                CurrentPrompt = OpenCADStrings.RotateTargetPointPrompt;
-                var targetPoint = await _pointInputHelper.GetPointAsync(
-                    OpenCADStrings.RotateTargetPointPrompt,
-                    allowLastPoint: false,
-                    basePoint: _basePoint,
-                    _cancellationTokenSource.Token);
+                CurrentPrompt = TargetPointPrompt;
+                _targetPoint = await GetTargetPoint();
 
                 // If user cancelled
-                if (targetPoint == null)
+                if (_targetPoint == null)
                 {
                     // Clean up preview subscription/state before exiting
                     if (viewModel != null && previewHandler != null)
@@ -123,7 +105,6 @@ namespace UI.Commands.Editing
                     Cancel();
                     return;
                 }
-                _targetPoint = targetPoint;
 
                 // Use shared helper to build rotation matrix; treat invalid as user error
                 if (!Matrix4D.TryCreateRotationMatrix(_basePoint!, _targetPoint!, out var rotationMatrix))
@@ -141,7 +122,7 @@ namespace UI.Commands.Editing
                 // Apply rotation (use cached providers)
                 if (cachedDocument == null || cachedViewport == null)
                 {
-                    Context?.OutputMessage(OpenCADStrings.UnableToRotateObjectsMissingContext);
+                    Context?.OutputMessage(UnableToActOnObjectsMissingContext);
                     Cancel();
                     return;
                 }
@@ -195,13 +176,7 @@ namespace UI.Commands.Editing
                 if (viewModel != null && previewHandler != null)
                     viewModel.PropertyChanged -= previewHandler;
 
-                // Ensure point picking mode is disabled
-                var vp = Context?.GetActiveViewport();
-                var vm = vp?.DataContext as ViewportViewModel;
-                if (vm != null && vm.IsPointPickingMode)
-                    vm.DisablePointPickingMode();
-
-                RaiseCommandCompleted();
+                CommandCompleted();
             }
             catch (OperationCanceledException)
             {

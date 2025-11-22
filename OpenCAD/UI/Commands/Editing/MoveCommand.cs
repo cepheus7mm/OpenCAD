@@ -12,25 +12,20 @@ namespace UI.Commands.Editing
     [InputCommand("move", "Move selected objects", "m")]
     public class MoveCommand : EditCommandBase
     {
-        protected override string SelectObjectsPrompt => OpenCADStrings.SelectObjectsToMovePrompt;
-        protected override string SelectObjectsMessage => OpenCADStrings.SelectObjectsToMoveMessage + "\nClick objects to select them, then press ENTER to move (or ESC to cancel).";
+        protected new string _commandName = OpenCADStrings.MoveCommandName;
+
+        //protected override string SelectObjectsMessage => OpenCADStrings.SelectObjectsToMoveMessage + "\nClick objects to select them, then press ENTER to move (or ESC to cancel).";
 
         public override void Initialize(ICommandContext context)
         {
             base.Initialize(context);
-            var viewport = context.GetActiveViewport();
-            var viewModel = viewport?.DataContext as ViewportViewModel;
-            if (viewModel != null)
-            {
-                _pointInputHelper = new PointInputHelper(context, viewModel);
-            }
         }
 
         protected override async void OnObjectsSelected()
         {
             if (SelectedObjects == null || SelectedObjects.Count == 0)
             {
-                Context?.OutputMessage(OpenCADStrings.NoObjectsToMove);
+                Context?.OutputMessage(NoObjectsMessage);
                 Cancel();
                 return;
             }
@@ -40,39 +35,27 @@ namespace UI.Commands.Editing
             try
             {
                 // Prompt for base point
-                CurrentPrompt = OpenCADStrings.MoveBasePointPrompt;
-                var basePoint = await _pointInputHelper!.GetPointAsync(
-                    OpenCADStrings.MoveBasePointPrompt,
-                    allowLastPoint: false,
-                    basePoint: null,
-                    _cancellationTokenSource.Token);
+                _basePoint = await GetBasePoint();
 
-                if (basePoint == null)
+                if (_basePoint == null)
                 {
                     Cancel();
                     return;
                 }
-                _basePoint = basePoint;
 
                 // Start unified preview support provided by EditCommandBase
                 StartPreview(_basePoint);
 
                 try
                 {
-                    // Prompt for target point (PointInputHelper will enable preview mode / rubberband)
-                    CurrentPrompt = OpenCADStrings.MoveTargetPointPrompt;
-                    var targetPoint = await _pointInputHelper.GetPointAsync(
-                        OpenCADStrings.MoveTargetPointPrompt,
-                        allowLastPoint: false,
-                        basePoint: _basePoint,
-                        _cancellationTokenSource.Token);
+                    // Prompt for target point
+                    _targetPoint = await GetTargetPoint();
 
-                    if (targetPoint == null)
+                    if (_targetPoint == null)
                     {
                         Cancel();
                         return;
                     }
-                    _targetPoint = targetPoint;
 
                     // Perform the move WHILE cached providers are still available
                     MoveSelectedObjects();
@@ -80,18 +63,7 @@ namespace UI.Commands.Editing
                     // Stop preview after performing the real move (clears preview clones and cached refs)
                     StopPreview();
 
-                    // Ensure point picking mode is fully disabled before completing
-                    var viewport = Context?.GetActiveViewport();
-                    var viewModel = viewport?.DataContext as ViewportViewModel;
-                    if (viewModel != null && viewModel.IsPointPickingMode)
-                    {
-                        //System.Diagnostics.Debug.WriteLine("MoveCommand: Manually disabling point picking mode before completion");
-                        viewModel.DisablePointPickingMode();
-                    }
-
-                    // NOW raise command completed (after async work is done AND point picking is disabled)
-                    //System.Diagnostics.Debug.WriteLine("MoveCommand: Raising CommandCompleted");
-                    RaiseCommandCompleted();
+                    CommandCompleted();
                 }
                 finally
                 {
@@ -128,7 +100,7 @@ namespace UI.Commands.Editing
         {
             if (SelectedObjects == null || _basePoint == null || _targetPoint == null)
             {
-                Context?.OutputMessage(OpenCADStrings.UnableToMoveObjectsMissingContext);
+                Context?.OutputMessage(UnableToActOnObjectsMissingContext);
                 Cancel();
                 return;
             }
@@ -141,7 +113,7 @@ namespace UI.Commands.Editing
             if (document == null || viewport == null)
             {
                 //System.Diagnostics.Debug.WriteLine("MoveSelectedObjects: required document or viewport is null. Cancelling command.");
-                Context?.OutputMessage(OpenCADStrings.UnableToMoveObjectsMissingContext);
+                Context?.OutputMessage(UnableToActOnObjectsMissingContext);
                 Cancel();
                 return;
             }

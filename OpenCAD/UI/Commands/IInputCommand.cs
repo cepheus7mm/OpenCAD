@@ -31,7 +31,7 @@ namespace UI.Commands
         /// <summary>
         /// Event raised when the command completes
         /// </summary>
-        event EventHandler? CommandCompleted;
+        event EventHandler? CommandCompletedEvent;
         
         /// <summary>
         /// Initialize the command with context

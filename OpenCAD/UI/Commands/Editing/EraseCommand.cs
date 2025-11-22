@@ -7,8 +7,7 @@ namespace UI.Commands.Editing
     [InputCommand("erase", "Erase selected objects (or prompts for selection)", "e")]
     public class EraseCommand : EditCommandBase
     {
-        protected override string SelectObjectsPrompt => OpenCADStrings.SelectObjectsToErasePrompt;
-        protected override string SelectObjectsMessage => OpenCADStrings.SelectObjectsToEraseMessage + "\nClick objects to select them, then press ENTER to erase (or ESC to cancel).";
+        protected new string _commandName = OpenCADStrings.EraseCommandName;
 
         public override void Initialize(ICommandContext context)
         {
@@ -20,7 +19,7 @@ namespace UI.Commands.Editing
         {
             if (SelectedObjects == null || SelectedObjects.Count == 0)
             {
-                Context?.OutputMessage(OpenCADStrings.NoObjectsToErase);
+                Context?.OutputMessage(NoObjectsMessage);
                 return;
             }
 
@@ -30,7 +29,7 @@ namespace UI.Commands.Editing
 
             if (document == null || viewport == null)
             {
-                Context?.OutputMessage(OpenCADStrings.UnableToEraseObjectsMissingContext);
+                Context?.OutputMessage(UnableToActOnObjectsMissingContext);
                 Cancel();
                 return;
             }

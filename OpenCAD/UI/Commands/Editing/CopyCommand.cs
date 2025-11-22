@@ -12,25 +12,16 @@ namespace UI.Commands.Editing
     [InputCommand("copy", "Copy selected objects", "cp")]
     public class CopyCommand : EditCommandBase
     {
-        protected override string SelectObjectsPrompt => OpenCADStrings.SelectObjectsToMovePrompt; // reuse move prompt
-        protected override string SelectObjectsMessage => OpenCADStrings.SelectObjectsToMoveMessage + "\nClick objects to select them, then press ENTER to copy (or ESC to finish).";
-
         public override void Initialize(ICommandContext context)
         {
             base.Initialize(context);
-            var viewport = context.GetActiveViewport();
-            var viewModel = viewport?.DataContext as ViewportViewModel;
-            if (viewModel != null)
-            {
-                _pointInputHelper = new PointInputHelper(context, viewModel);
-            }
         }
 
         protected override async void OnObjectsSelected()
         {
             if (SelectedObjects == null || SelectedObjects.Count == 0)
             {
-                Context?.OutputMessage(OpenCADStrings.NoObjectsToMove);
+                Context?.OutputMessage(NoObjectsMessage);
                 Cancel();
                 return;
             }
@@ -39,22 +30,12 @@ namespace UI.Commands.Editing
 
             try
             {
-                // Prompt for base point (anchor for copies)
-                CurrentPrompt = OpenCADStrings.MoveBasePointPrompt;
-                var basePoint = await _pointInputHelper!.GetPointAsync(
-                    OpenCADStrings.MoveBasePointPrompt,
-                    allowLastPoint: false,
-                    basePoint: null,
-                    _cancellationTokenSource.Token);
-
-                if (basePoint == null)
+                _basePoint = await GetBasePoint();
+                if (_basePoint == null)
                 {
-                    // user cancelled before starting - finish command
-                    StopPreview();
-                    RaiseCommandCompleted();
+                    Cancel();
                     return;
                 }
-                _basePoint = basePoint;
 
                 // Start preview (keeps cached providers and preview subscription active)
                 StartPreview(_basePoint);
@@ -65,18 +46,11 @@ namespace UI.Commands.Editing
                     // Each target creates a copy; ESC (or cancel) ends the loop.
                     while (true)
                     {
-                        CurrentPrompt = OpenCADStrings.MoveTargetPointPrompt;
-                        var targetPoint = await _pointInputHelper.GetPointAsync(
-                            OpenCADStrings.MoveTargetPointPrompt,
-                            allowLastPoint: false,
-                            basePoint: _basePoint,
-                            _cancellationTokenSource.Token);
+                        _targetPoint = await GetTargetPoint();
 
                         // If null, user pressed ESC or cancelled -> finish gracefully
-                        if (targetPoint == null)
+                        if (_targetPoint == null)
                             break;
-
-                        _targetPoint = targetPoint;
 
                         // Commit a copy for this target while cached providers still exist
                         CommitCopyForCurrentTarget();
@@ -90,17 +64,8 @@ namespace UI.Commands.Editing
                     // User finished (ESC). Stop preview and complete command.
                     StopPreview();
 
-                    // Ensure point picking fully disabled
-                    var viewport = Context?.GetActiveViewport();
-                    var viewModel = viewport?.DataContext as ViewportViewModel;
-                    if (viewModel != null && viewModel.IsPointPickingMode)
-                    {
-                        //System.Diagnostics.Debug.WriteLine("CopyCommand: Manually disabling point picking mode before completion");
-                        viewModel.DisablePointPickingMode();
-                    }
-
                     //System.Diagnostics.Debug.WriteLine("CopyCommand: Raising CommandCompleted");
-                    RaiseCommandCompleted();
+                    CommandCompleted();
                 }
                 finally
                 {
@@ -113,7 +78,7 @@ namespace UI.Commands.Editing
                 // Token cancelled -> clear preview and finish
                 ClearPreviewClones();
                 StopPreview();
-                RaiseCommandCompleted();
+                CommandCompleted();
             }
         }
 
@@ -136,7 +101,7 @@ namespace UI.Commands.Editing
         {
             if (SelectedObjects == null || _basePoint == null || _targetPoint == null)
             {
-                Context?.OutputMessage(OpenCADStrings.UnableToMoveObjectsMissingContext);
+                Context?.OutputMessage(UnableToActOnObjectsMissingContext);
                 return;
             }
 
@@ -148,7 +113,7 @@ namespace UI.Commands.Editing
             if (document == null || viewport == null)
             {
                 //System.Diagnostics.Debug.WriteLine("CopySelectedObjects: required document or viewport is null. Cancelling command.");
-                Context?.OutputMessage(OpenCADStrings.UnableToMoveObjectsMissingContext);
+                Context?.OutputMessage(UnableToActOnObjectsMissingContext);
                 return;
             }
 
@@ -165,7 +130,7 @@ namespace UI.Commands.Editing
 
             if (clones.Count == 0)
             {
-                Context?.OutputMessage(OpenCADStrings.UnableToMoveObjectsMissingContext);
+                Context?.OutputMessage(UnableToActOnObjectsMissingContext);
                 return;
             }
 

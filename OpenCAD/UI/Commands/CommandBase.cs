@@ -33,7 +33,7 @@ namespace UI.Commands
         }
 
         public event EventHandler? PromptChanged;
-        public event EventHandler? CommandCompleted;
+        public event EventHandler? CommandCompletedEvent;
 
         public virtual void Initialize(ICommandContext context)
         {
@@ -58,7 +58,7 @@ namespace UI.Commands
         /// </summary>
         protected void RaiseCommandCompleted()
         {
-            CommandCompleted?.Invoke(this, EventArgs.Empty);
+            CommandCompletedEvent?.Invoke(this, EventArgs.Empty);
         }
 
         /// <summary>

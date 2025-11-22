@@ -23,6 +23,7 @@ namespace UI.Commands.Editing
         protected CancellationTokenSource? _cancellationTokenSource;
         private bool _needsSelection = false;
         private int _initialSelectionCount = 0;
+        protected string _commandName = string.Empty;
 
         // Preview fields (moved here for reuse)
         private readonly List<OpenCADObject> _previewObjects = new();
@@ -34,20 +35,43 @@ namespace UI.Commands.Editing
         protected OpenCADDocument? CachedDocument { get; private set; }
         protected UndoRedoManager? CachedUndoManager { get; private set; }
 
-        public override bool IsMultiStep => _needsSelection;
-        public override bool RequiresSelection => true;
+        public string SelectObjectsPrompt => string.Format(OpenCADStrings.SelectObjectsToActOnPrompt, _commandName);
 
-        /// <summary>
-        /// The prompt to display when asking the user to select objects.
-        /// Derived classes should set this in their constructor or before Execute.
-        /// </summary>
-        protected virtual string SelectObjectsPrompt => "Select objects to edit:";
+        public string SelectObjectsMessage => string.Format(OpenCADStrings.SelectObjectsToActOnMessage, _commandName);
+
+        public string NoObjectsMessage => OpenCADStrings.NoObjectsSelectedToActOnCancelled;
+
+        public string UnableToActOnObjectsMissingContext => OpenCADStrings.UnableToActOnObjectsMissingContext;
+
+        public string NoObjectsSelectedToActOnCancelled => OpenCADStrings.NoObjectsSelectedToActOnCancelled;
+
+        public string BasePointPrompt => OpenCADStrings.BasePointPrompt;
+
+        public string TargetPointPrompt => OpenCADStrings.TargetPointPrompt;
+
+        public string InvalidPointInput => OpenCADStrings.InvalidPointInput;
+
+        public override bool IsMultiStep => _needsSelection;
+
+        public override bool RequiresSelection => true;
 
         /// <summary>
         /// The message to display when entering selection mode.
         /// Derived classes should set this in their constructor or before Execute.
         /// </summary>
-        protected virtual string SelectObjectsMessage => "Click objects to select them, then press ENTER to continue (or ESC to cancel).";
+        //protected virtual string SelectObjectsMessage => "Click objects to select them, then press ENTER to continue (or ESC to cancel).";
+
+        public override void Initialize(ICommandContext context)
+        {
+            base.Initialize(context);
+            var viewport = context.GetActiveViewport();
+            var viewModel = viewport?.DataContext as ViewportViewModel;
+            if (viewModel != null)
+            {
+                _pointInputHelper = new PointInputHelper(context, viewModel);
+            }
+        }
+
 
         public override void Execute()
         {
@@ -113,7 +137,7 @@ namespace UI.Commands.Editing
                 var viewModel = viewport?.DataContext as ViewportViewModel;
                 if (viewModel == null || viewModel.SelectedObjects.Count == 0)
                 {
-                    Context?.OutputMessage(OpenCADStrings.NoObjectsSelectedCancelled);
+                    Context?.OutputMessage(NoObjectsMessage);
                     Cancel();
                     return false;
                 }
@@ -320,11 +344,11 @@ namespace UI.Commands.Editing
         /// </summary>
         protected virtual OpenCADObject? CreateTranslatedClone(OpenCADObject source, Vector3D translation, OpenCADDocument document)
         {
-            if (source is OpenCAD.Geometry.Line line)
+            if (source is Line line)
             {
                 var start = line.StartPoint + translation;
                 var end = line.EndPoint + translation;
-                var clone = new OpenCAD.Geometry.Line(document, start, end)
+                var clone = new Line(document, start, end)
                 {
                     Color = line.Color,
                     LineType = line.LineType,
@@ -346,5 +370,51 @@ namespace UI.Commands.Editing
         }
 
         #endregion
+
+        protected async Task<Point3D?> GetBasePoint()
+        {
+            // Prompt for base point (anchor for copies)
+            CurrentPrompt = BasePointPrompt;
+            var basePoint = await _pointInputHelper!.GetPointAsync(
+                BasePointPrompt,
+                allowLastPoint: false,
+                basePoint: null,
+                _cancellationTokenSource.Token);
+
+            if (basePoint == null)
+            {
+                // user cancelled before starting - finish command
+                StopPreview();
+                CommandCompleted();
+                return null;
+            }
+
+            return basePoint;
+        }
+
+        protected async Task<Point3D?> GetTargetPoint()
+        {
+            // Prompt for target point (destination for copies)
+            CurrentPrompt = TargetPointPrompt;
+            var targetPoint = await _pointInputHelper.GetPointAsync(
+                TargetPointPrompt,
+                allowLastPoint: false,
+                basePoint: _basePoint,
+                _cancellationTokenSource.Token);
+
+            return targetPoint;
+        }
+
+        protected void CommandCompleted()
+        {
+            // Ensure point picking fully disabled
+            var viewport = Context?.GetActiveViewport();
+            var viewModel = viewport?.DataContext as ViewportViewModel;
+            if (viewModel != null && viewModel.IsPointPickingMode)
+            {
+                viewModel.DisablePointPickingMode();
+            }
+            RaiseCommandCompleted();
+        }
     }
 }

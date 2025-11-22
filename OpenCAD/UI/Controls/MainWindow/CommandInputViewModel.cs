@@ -378,7 +378,7 @@ namespace UI.Controls.MainWindow
             {
                 _activeCommand = command;
                 _activeCommand.PromptChanged += OnCommandPromptChanged;
-                _activeCommand.CommandCompleted += OnCommandCompleted;
+                _activeCommand.CommandCompletedEvent += OnCommandCompleted;
                 UpdatePrompt();
                 OnPropertyChanged(nameof(HasActiveCommand));
                 ActiveCommandChanged?.Invoke(this, EventArgs.Empty);
@@ -431,7 +431,7 @@ namespace UI.Controls.MainWindow
             if (_activeCommand != null)
             {
                 _activeCommand.PromptChanged -= OnCommandPromptChanged;
-                _activeCommand.CommandCompleted -= OnCommandCompleted;
+                _activeCommand.CommandCompletedEvent -= OnCommandCompleted;
             }
         }
 

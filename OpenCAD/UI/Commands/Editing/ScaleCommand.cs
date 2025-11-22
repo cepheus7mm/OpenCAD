@@ -13,27 +13,20 @@ namespace UI.Commands.Editing
     [InputCommand("scale", "Scale selected objects", "sc")]
     public class ScaleCommand : EditCommandBase
     {
-        protected override string SelectObjectsPrompt => OpenCADStrings.SelectObjectsToScalePrompt;
-        protected override string SelectObjectsMessage => OpenCADStrings.SelectObjectsToScaleMessage + "\nClick objects to select them, then press ENTER to scale (or ESC to cancel).";
+        protected new string _commandName = OpenCADStrings.ScaleCommandName;
 
         private readonly List<OpenCADObject> _previewObjects = new();
 
         public override void Initialize(ICommandContext context)
         {
             base.Initialize(context);
-            var viewport = context.GetActiveViewport();
-            var viewModel = viewport?.DataContext as ViewportViewModel;
-            if (viewModel != null)
-            {
-                _pointInputHelper = new PointInputHelper(context, viewModel);
-            }
         }
 
         protected override async void OnObjectsSelected()
         {
             if (SelectedObjects == null || SelectedObjects.Count == 0)
             {
-                Context?.OutputMessage(OpenCADStrings.NoObjectsToScale);
+                Context?.OutputMessage(NoObjectsMessage);
                 Cancel();
                 return;
             }
@@ -58,19 +51,13 @@ namespace UI.Commands.Editing
                 }
 
                 // Prompt for scale center (base point)
-                CurrentPrompt = OpenCADStrings.ScaleBasePointPrompt;
-                var basePoint = await _pointInputHelper!.GetPointAsync(
-                    OpenCADStrings.ScaleBasePointPrompt,
-                    allowLastPoint: false,
-                    basePoint: null,
-                    _cancellationTokenSource.Token);
+                _basePoint = await GetBasePoint();
 
-                if (basePoint == null)
+                if (_basePoint == null)
                 {
                     Cancel();
                     return;
                 }
-                _basePoint = basePoint;
 
                 // Cache providers
                 cachedViewport = Context?.GetActiveViewport();
@@ -99,14 +86,9 @@ namespace UI.Commands.Editing
                 }
 
                 // Ask for target point that defines scale (distance from base -> scale factor)
-                CurrentPrompt = OpenCADStrings.ScaleTargetPointPrompt;
-                var targetPoint = await _pointInputHelper.GetPointAsync(
-                    OpenCADStrings.ScaleTargetPointPrompt,
-                    allowLastPoint: false,
-                    basePoint: _basePoint,
-                    _cancellationTokenSource.Token);
+                _targetPoint = await GetTargetPoint();
 
-                if (targetPoint == null)
+                if (_targetPoint == null)
                 {
                     // cleanup
                     if (viewModel != null && previewHandler != null)
@@ -116,7 +98,6 @@ namespace UI.Commands.Editing
                     Cancel();
                     return;
                 }
-                _targetPoint = targetPoint;
 
                 // Build scale matrix using shared helper (returns false for invalid / zero scale)
                 if (!Matrix4D.TryCreateUniformScaleMatrix(_basePoint!, _targetPoint!, out var finalMatrix))
@@ -133,7 +114,7 @@ namespace UI.Commands.Editing
 
                 if (cachedDocument == null || cachedViewport == null)
                 {
-                    Context?.OutputMessage(OpenCADStrings.UnableToScaleObjectsMissingContext);
+                    Context?.OutputMessage(UnableToActOnObjectsMissingContext);
                     Cancel();
                     return;
                 }
@@ -190,13 +171,7 @@ namespace UI.Commands.Editing
                 if (viewModel != null && previewHandler != null)
                     viewModel.PropertyChanged -= previewHandler;
 
-                // Ensure point picking mode disabled
-                var vp = Context?.GetActiveViewport();
-                var vm = vp?.DataContext as ViewportViewModel;
-                if (vm != null && vm.IsPointPickingMode)
-                    vm.DisablePointPickingMode();
-
-                RaiseCommandCompleted();
+                CommandCompleted();
             }
             catch (OperationCanceledException)
             {

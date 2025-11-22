@@ -652,31 +652,6 @@
         public const string UnableToAccessViewport = "Unable to access viewport.";
 
         /// <summary>
-        /// Prompt to select objects to erase
-        /// </summary>
-        public const string SelectObjectsToErasePrompt = "Select objects to erase (or press ESC to cancel):";
-
-        /// <summary>
-        /// Message when prompting user to select objects
-        /// </summary>
-        public const string SelectObjectsToEraseMessage = "Select objects to erase...";
-
-        /// <summary>
-        /// Message when no objects are selected and command is cancelled
-        /// </summary>
-        public const string NoObjectsSelectedCancelled = "No objects selected. Command cancelled.";
-
-        /// <summary>
-        /// Message when there are no objects to erase
-        /// </summary>
-        public const string NoObjectsToErase = "No objects to erase.";
-
-        /// <summary>
-        /// Error message when unable to erase objects due to missing document or viewport
-        /// </summary>
-        public const string UnableToEraseObjectsMissingContext = "Unable to erase objects: document or viewport not available.";
-
-        /// <summary>
         /// Format string for undo action description when erasing objects
         /// </summary>
         public const string UndoEraseObjectsFormat = "Erase {0} object(s)";
@@ -803,53 +778,62 @@
 
         #endregion
 
+        #region Edit Command Messages
+
         public const string MoveCommandName = "move";
+        public const string CopyCommandName = "copy";
+        public const string RotateCommandName = "rotate";
+        public const string ScaleCommandName = "scale";
+        public const string EraseCommandName = "erase";
+
+        /// <summary>
+        /// Generic prompt format to select objects for an edit action (replace {0} with command name)
+        /// </summary>
+        public const string SelectObjectsToActOnPrompt = "Select objects to {0} (or press ESC to cancel):";
+
+        /// <summary>
+        /// Generic message format to prompt selection for an edit action (replace {0} with command name)
+        /// </summary>
+        public const string SelectObjectsToActOnMessage = "Select objects to {0}...";
+
+        /// <summary>
+        /// Generic "no objects" format for edit actions (replace {0} with command name)
+        /// </summary>
+        public const string NoObjectsToActOn = "No objects to {0}.";
+
+        /// <summary>
+        /// Generic missing-context error format for edit actions (replace {0} with command name)
+        /// </summary>
+        public const string UnableToActOnObjectsMissingContext = "Unable to {0} objects: document or viewport not available.";
+
+        /// <summary>
+        /// Message when no objects are selected and command is cancelled
+        /// </summary>
+        public const string NoObjectsSelectedToActOnCancelled = "No objects selected. Command cancelled.";
+
+        /// <summary>
+        /// Prompt for specifying base point
+        /// </summary>
+        public const string BasePointPrompt = "Specify base point (enter coordinates or click in viewport):";
+
+        /// <summary>
+        /// Prompt for specifying target point
+        /// </summary>
+        public const string TargetPointPrompt = "Specify target point (enter coordinates or click in viewport):";
+
+
+        /// <summary>
+        /// Error message for invalid point input
+        /// </summary>
+        public const string InvalidPointInput = "Invalid point. Enter coordinates or click in the viewport.";
+
+        #endregion
         #region Move Command Messages
 
         /// <summary>
         /// Debug message for MoveCommand initialization
         /// </summary>
         public const string MoveCommandInitialized = "MoveCommand initialized";
-
-        /// <summary>
-        /// Prompt to select objects to move
-        /// </summary>
-        public const string SelectObjectsToMovePrompt = "Select objects to move (or press ESC to cancel):";
-
-        /// <summary>
-        /// Message when prompting user to select objects to move
-        /// </summary>
-        public const string SelectObjectsToMoveMessage = "Select objects to move...";
-
-        /// <summary>
-        /// Message when no objects are selected and command is cancelled
-        /// </summary>
-        public const string NoObjectsSelectedToMoveCancelled = "No objects selected. Command cancelled.";
-
-        /// <summary>
-        /// Message when there are no objects to move
-        /// </summary>
-        public const string NoObjectsToMove = "No objects to move.";
-
-        /// <summary>
-        /// Error message when unable to move objects due to missing document or viewport
-        /// </summary>
-        public const string UnableToMoveObjectsMissingContext = "Unable to move objects: document or viewport not available.";
-
-        /// <summary>
-        /// Prompt for specifying base point for move
-        /// </summary>
-        public const string MoveBasePointPrompt = "Specify base point (enter coordinates or click in viewport):";
-
-        /// <summary>
-        /// Prompt for specifying target point for move
-        /// </summary>
-        public const string MoveTargetPointPrompt = "Specify target point (enter coordinates or click in viewport):";
-
-        /// <summary>
-        /// Error message for invalid point input
-        /// </summary>
-        public const string InvalidPointInput = "Invalid point. Please enter coordinates or click in the viewport.";
 
         /// <summary>
         /// Format string for undo action description when moving objects
@@ -876,41 +860,6 @@
         public const string ScaleCommandInitialized = "ScaleCommand initialized";
 
         /// <summary>
-        /// Prompt to select objects to scale
-        /// </summary>
-        public const string SelectObjectsToScalePrompt = "Select objects to scale (or press ESC to cancel):";
-
-        /// <summary>
-        /// Message when prompting user to select objects to scale
-        /// </summary>
-        public const string SelectObjectsToScaleMessage = "Select objects to scale...";
-
-        /// <summary>
-        /// Message when no objects are selected and command is cancelled
-        /// </summary>
-        public const string NoObjectsSelectedToScaleCancelled = "No objects selected. Command cancelled.";
-
-        /// <summary>
-        /// Message when there are no objects to scale
-        /// </summary>
-        public const string NoObjectsToScale = "No objects to scale.";
-
-        /// <summary>
-        /// Error message when unable to scale objects due to missing document or viewport
-        /// </summary>
-        public const string UnableToScaleObjectsMissingContext = "Unable to scale objects: document or viewport not available.";
-
-        /// <summary>
-        /// Prompt for specifying base point (scale center)
-        /// </summary>
-        public const string ScaleBasePointPrompt = "Specify base point (enter coordinates or click in viewport):";
-
-        /// <summary>
-        /// Prompt for specifying target point (defines scale factor)
-        /// </summary>
-        public const string ScaleTargetPointPrompt = "Specify target point (enter coordinates or click in viewport):";
-
-        /// <summary>
         /// Format string for undo action description when scaling objects
         /// </summary>
         public const string UndoScaleObjectsFormat = "Scale {0} object(s)";
@@ -928,15 +877,6 @@
         #endregion
 
         #region Rotate Command Messages
-
-        public const string SelectObjectsToRotatePrompt = "Select objects to rotate:";
-        public const string SelectObjectsToRotateMessage = "Select objects to rotate.\nClick objects to select them, then press ENTER to rotate (or ESC to cancel).";
-        public const string NoObjectsToRotate = "No objects to rotate.";
-
-        public const string RotateBasePointPrompt = "Specify base point (rotation center)";
-        public const string RotateTargetPointPrompt = "Specify rotation angle by picking a point";
-
-        public const string UnableToRotateObjectsMissingContext = "Unable to rotate objects - missing document or viewport.";
 
         public const string UndoRotateObjectsFormat = "Rotate {0} object(s)";
         public const string ObjectsRotatedFormat = "{0} object(s) rotated.";
