@@ -13,10 +13,11 @@ namespace UI.Commands
             _clearHistory = clearHistory;
         }
 
-        public override void Execute()
+        public override Task Execute()
         {
             _clearHistory();
             Context?.OutputMessage("Command history cleared.");
+            return Task.CompletedTask;
         }
     }
 }

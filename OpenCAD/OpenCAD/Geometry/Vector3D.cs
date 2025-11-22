@@ -22,6 +22,15 @@ namespace OpenCAD.Geometry
             Z = z;
         }
 
+        public Vector3D(Vector3D other)
+        {
+            if (other == null)
+                throw new ArgumentNullException(nameof(other));
+            X = other.X;
+            Y = other.Y;
+            Z = other.Z;
+        }
+
         /// <summary>
         /// Distance from origin
         /// </summary>

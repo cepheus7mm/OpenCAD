@@ -41,7 +41,7 @@ namespace UI.Commands
         /// <summary>
         /// Execute the command
         /// </summary>
-        void Execute();
+        Task Execute();
         
         /// <summary>
         /// Process input for multi-step commands

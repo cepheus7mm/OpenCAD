@@ -244,5 +244,29 @@ namespace OpenCAD
 
             return ((OpenCADDocument)document).GetLayer(LayerID);
         }
-    }
+
+        public OpenCADObject Clone(OpenCADDocument? document = null)
+        {
+            var clone = (OpenCADObject)MemberwiseClone();
+            clone.ID = Guid.NewGuid();
+            clone._document = document ?? _document;
+            clone._parent = null;
+            // Deep copy properties
+            clone.properties = new ConcurrentDictionary<int, List<Property>>();
+            foreach (var kvp in properties)
+            {
+                List<Property> propListCopy = kvp.Value.Select(p => p.Clone()).ToList();
+                clone.properties[kvp.Key] = propListCopy;
+            }
+            // Deep copy children
+            clone.children = new ConcurrentDictionary<Guid, OpenCADObject>();
+            foreach (var child in children.Values)
+            {
+                var childClone = child.Clone(clone._document);
+                childClone._parent = clone;
+                clone.children[childClone.ID] = childClone;
+            }
+            return clone;
+		}
+	}
 }

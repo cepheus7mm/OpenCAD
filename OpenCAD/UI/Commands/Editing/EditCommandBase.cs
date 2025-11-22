@@ -24,16 +24,20 @@ namespace UI.Commands.Editing
         private bool _needsSelection = false;
         private int _initialSelectionCount = 0;
         protected string _commandName = string.Empty;
+        protected bool _preserveOriginal = false;
+        protected bool _isRepeatable = false;
 
         // Preview fields (moved here for reuse)
         private readonly List<OpenCADObject> _previewObjects = new();
-        private PropertyChangedEventHandler? _previewHandler;
+        protected PropertyChangedEventHandler? _previewHandler;
         private ViewportControl? _previewViewport;
 
         // Cached providers captured when preview starts (so awaits won't lose them)
         protected ViewportControl? CachedViewport { get; private set; }
         protected OpenCADDocument? CachedDocument { get; private set; }
         protected UndoRedoManager? CachedUndoManager { get; private set; }
+
+        protected ViewportViewModel? CachedViewModel { get; private set; }
 
         public string SelectObjectsPrompt => string.Format(OpenCADStrings.SelectObjectsToActOnPrompt, _commandName);
 
@@ -73,7 +77,7 @@ namespace UI.Commands.Editing
         }
 
 
-        public override void Execute()
+        public override async Task Execute()
         {
             var viewport = Context?.GetActiveViewport();
             if (viewport == null)
@@ -82,8 +86,9 @@ namespace UI.Commands.Editing
                 Cancel();
                 return;
             }
+            CachedViewport = viewport;
 
-            var viewModel = viewport.DataContext as ViewportViewModel;
+            var viewModel = CachedViewport.DataContext as ViewportViewModel;
             if (viewModel == null)
             {
                 Context?.OutputMessage(OpenCADStrings.UnableToAccessViewport);
@@ -91,12 +96,14 @@ namespace UI.Commands.Editing
                 return;
             }
 
-            if (viewModel.SelectedObjects.Count > 0)
+            CachedViewModel = viewModel;
+
+            if (CachedViewModel.SelectedObjects.Count > 0)
             {
                 // Pre-selected objects - proceed immediately
-                SelectedObjects = new List<OpenCADObject>(viewModel.SelectedObjects);
+                SelectedObjects = new List<OpenCADObject>(CachedViewModel.SelectedObjects);
                 _needsSelection = false;
-                OnObjectsSelected();
+                await OnObjectsSelected();
                 // Derived class will call RaiseCommandCompleted when done
             }
             else
@@ -106,7 +113,7 @@ namespace UI.Commands.Editing
                 _initialSelectionCount = 0;
                 CurrentPrompt = SelectObjectsPrompt;
                 Context?.OutputMessage(SelectObjectsMessage);
-                viewModel.SelectionChanged += OnSelectionChanged;
+                CachedViewModel.SelectionChanged += OnSelectionChanged;
             }
         }
 
@@ -184,9 +191,140 @@ namespace UI.Commands.Editing
 
         /// <summary>
         /// Called when objects have been selected and the command should proceed.
-        /// Derived classes must implement this to perform their specific action.
         /// </summary>
-        protected abstract void OnObjectsSelected();
+        protected virtual async Task OnObjectsSelected()
+        {
+            if (SelectedObjects == null || SelectedObjects.Count == 0)
+            {
+                Context?.OutputMessage(NoObjectsMessage);
+                Cancel();
+                return;
+            }
+
+            _cancellationTokenSource = new CancellationTokenSource();
+
+            try
+            {
+                // Prompt for base point
+                _basePoint = await GetBasePoint();
+
+                if (_basePoint == null)
+                {
+                    Cancel();
+                    return;
+                }
+
+                // Start unified preview support provided by EditCommandBase
+                StartPreview();
+
+                try
+                {
+                    do
+                    {
+                        // Prompt for target point
+                        _targetPoint = await GetTargetPoint();
+
+                        if (_targetPoint == null)
+                        {
+                            Cancel();
+                            return;
+                        }
+
+                        // Perform the transformation WHILE cached providers are still available
+                        TransformSelectedObjects();
+                    } while (_isRepeatable);
+                }
+                finally
+                {
+                    // Ensure preview is cleaned up if something goes wrong
+                    StopPreview();
+                } 
+            }
+            catch (OperationCanceledException)
+            {
+                // Ensure preview objects removed when cancelled
+                StopPreview();
+                Cancel();
+            }
+        }
+
+        protected abstract Matrix4D GetTransformation();
+
+        protected virtual void TransformSelectedObjects()
+        {
+            var transformationMatrix = GetTransformation();
+
+            if (transformationMatrix == Matrix4D.Identity)
+            {
+                return;
+            }
+
+            // Apply rotation (use cached providers)
+            if (CachedDocument == null || CachedViewport == null)
+            {
+                Context?.OutputMessage(UnableToActOnObjectsMissingContext);
+                Cancel();
+                return;
+            }
+
+            List<OpenCADObject> objectsToTransform = SelectedObjects!;
+            if (_preserveOriginal)
+            {
+                // Clone objects before transforming
+                var clonedObjects = new List<OpenCADObject>();
+                foreach (var obj in SelectedObjects!)
+                {
+                    var clone = obj.Clone(CachedDocument);
+                    if (clone != null)
+                    {
+                        CachedDocument.Add(clone);
+                        clonedObjects.Add(clone);
+                    }
+                }
+                objectsToTransform = clonedObjects;
+            }
+
+            if (CachedUndoManager != null)
+            {
+                try
+                {
+                    var action = new TransformGeometryAction(
+                        objectsToTransform,
+                        transformationMatrix,
+                        string.Format(OpenCADStrings.UndoTransformedObjectsFormat, objectsToTransform.Count, GetCommandName(capitized: true))
+                    );
+                    CachedUndoManager.ExecuteAction(action);
+                    Context?.OutputMessage(string.Format(OpenCADStrings.ObjectsTransformedFormat, objectsToTransform.Count, GetCommandName(true, true)));
+                }
+                catch (InvalidOperationException)
+                {
+                    // Non-invertible matrix should be treated as invalid input
+                    if (CachedViewport != null)
+                        ClearPreviewObjects(CachedViewport);
+                    if (CachedViewModel != null && _previewHandler != null)
+                        CachedViewModel.PropertyChanged -= _previewHandler;
+
+                    Context?.OutputMessage(OpenCADStrings.InvalidPointInput);
+                    Cancel();
+                    return;
+                }
+            }
+        }
+
+        private object? GetCommandName(bool capitized = false, bool pastTense = false)
+        {
+            var commandName = capitized ? char.ToUpper(_commandName[0]) + _commandName.Substring(1) : _commandName;
+            if (pastTense)
+            {
+                // Simple past tense conversion (may not be accurate for all commands)
+                if (commandName.EndsWith("e"))
+                    commandName += "d";
+                else
+                    commandName += "ed";
+                commandName = commandName.Replace("y", "i");
+            }
+            return commandName;
+        }
 
         #region Preview support (cloning + translation)
 
@@ -195,10 +333,8 @@ namespace UI.Commands.Editing
         /// Subscribes to ViewportViewModel.PreviewPoint changes and shows translated clones.
         /// Captures providers (viewport/document/undo manager) to avoid them becoming null after awaits.
         /// </summary>
-        protected void StartPreview(Point3D basePoint)
+        protected void StartPreview()
         {
-            _basePoint = basePoint;
-
             var viewport = Context?.GetActiveViewport();
             if (viewport == null) return;
 
@@ -206,9 +342,10 @@ namespace UI.Commands.Editing
             if (viewModel == null) return;
 
             // Cache providers immediately so awaiting user input cannot lose them
-            CachedViewport = Context?.GetActiveViewport();
+            CachedViewport = viewport;
             CachedDocument = Context?.GetDocument();
             CachedUndoManager = Context?.GetUndoRedoManager();
+            CachedViewModel = viewModel;
 
             // Remember viewport used for preview so we can remove clones later
             _previewViewport = viewport;
@@ -221,8 +358,8 @@ namespace UI.Commands.Editing
                     var previewPoint = viewModel.PreviewPoint;
                     if (previewPoint != null && _basePoint != null)
                     {
-                        Vector3D moveVector = previewPoint.AsVector3D() - _basePoint.AsVector3D();
-                        UpdatePreviewObjects(moveVector, viewport);
+                        _targetPoint = previewPoint;
+                        UpdatePreviewObjects(viewport);
                     }
                     else
                     {
@@ -266,15 +403,18 @@ namespace UI.Commands.Editing
             CachedViewport = null;
             CachedDocument = null;
             CachedUndoManager = null;
+            CachedViewModel = null;
 
             _basePoint = null;
+            _targetPoint = null;
+            CommandCompleted();
         }
 
         /// <summary>
         /// Update preview clones using the given translation vector.
         /// Existing preview clones are removed and replaced.
         /// </summary>
-        private void UpdatePreviewObjects(Vector3D moveVector, ViewportControl viewport)
+        private void UpdatePreviewObjects(ViewportControl viewport)
         {
             // Clear any existing preview clones first
             ClearPreviewObjects(viewport);
@@ -285,7 +425,7 @@ namespace UI.Commands.Editing
 
             foreach (var obj in SelectedObjects)
             {
-                var clone = CreateTranslatedClone(obj, moveVector, document);
+                var clone = CreateTranslatedClone(obj, GetTransformation(), document);
                 if (clone != null)
                 {
                     _previewObjects.Add(clone);
@@ -315,7 +455,6 @@ namespace UI.Commands.Editing
                     // Swallow errors during preview removal
                 }
             }
-
             _previewObjects.Clear();
             viewport.Refresh();
         }
@@ -342,26 +481,12 @@ namespace UI.Commands.Editing
         /// Create a translated clone for a given source object.
         /// Default implementation supports Line; override to support more types.
         /// </summary>
-        protected virtual OpenCADObject? CreateTranslatedClone(OpenCADObject source, Vector3D translation, OpenCADDocument document)
+        protected virtual OpenCADObject? CreateTranslatedClone(OpenCADObject source, Matrix4D translation, OpenCADDocument document)
         {
-            if (source is Line line)
+            if (source is GeometryBase geom)
             {
-                var start = line.StartPoint + translation;
-                var end = line.EndPoint + translation;
-                var clone = new Line(document, start, end)
-                {
-                    Color = line.Color,
-                    LineType = line.LineType,
-                    LineWeight = line.LineWeight
-                };
-                try
-                {
-                    clone.Layer = line.Layer;
-                }
-                catch
-                {
-                    // ignore if layer assignment fails
-                }
+                var clone = geom.Clone(document) as GeometryBase;
+                clone?.Transform(translation);
                 return clone;
             }
 
@@ -385,7 +510,6 @@ namespace UI.Commands.Editing
             {
                 // user cancelled before starting - finish command
                 StopPreview();
-                CommandCompleted();
                 return null;
             }
 

@@ -8,25 +8,26 @@ namespace UI.Commands
     [InputCommand("undo", "Undo the last action", "u")]
     public class UndoCommand : CommandBase
     {
-        public override void Execute()
+        public override Task Execute()
         {
             var undoManager = Context?.GetUndoRedoManager();
             
             if (undoManager == null)
             {
                 Context?.OutputMessage("Undo manager not available.");
-                return;
+                return Task.CompletedTask;
             }
 
             if (!undoManager.CanUndo)
             {
                 Context?.OutputMessage("Nothing to undo.");
-                return;
+                return Task.CompletedTask;
             }
 
             var description = undoManager.UndoDescription;
             undoManager.Undo();
             Context?.OutputMessage($"Undo: {description}");
+            return Task.CompletedTask;
         }
     }
 }

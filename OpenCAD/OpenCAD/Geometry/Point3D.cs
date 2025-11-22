@@ -17,6 +17,22 @@ namespace OpenCAD.Geometry
             Z = z;
         }
 
+        public Point3D()
+        {
+            X = 0;
+            Y = 0;
+            Z = 0;
+        }
+
+        public Point3D(Point3D other)
+        {
+            if (other == null)
+                throw new ArgumentNullException(nameof(other));
+            X = other.X;
+            Y = other.Y;
+            Z = other.Z;
+        }
+
         /// <summary>
         /// Distance from origin
         /// </summary>

@@ -30,7 +30,10 @@ namespace OpenCAD.Geometry
 
         public static Matrix4D Identity => new Matrix4D
         {
-            M11 = 1, M22 = 1, M33 = 1, M44 = 1
+            M11 = 1,
+            M22 = 1,
+            M33 = 1,
+            M44 = 1
         };
 
         public Matrix4D(
@@ -76,10 +79,10 @@ namespace OpenCAD.Geometry
             // M11 = cos, M21 = -sin
             // M12 = sin, M22 =  cos
             return new Matrix4D(
-                c,    s, 0, 0,
-               -s,    c, 0, 0,
-                0,    0, 1, 0,
-                0,    0, 0, 1);
+                c, s, 0, 0,
+               -s, c, 0, 0,
+                0, 0, 1, 0,
+                0, 0, 0, 1);
         }
 
         public static Matrix4D operator *(in Matrix4D left, in Matrix4D right)
@@ -254,6 +257,61 @@ namespace OpenCAD.Geometry
         public override string ToString()
         {
             return $"[{M11:F6} {M12:F6} {M13:F6} {M14:F6}; {M21:F6} {M22:F6} {M23:F6} {M24:F6}; {M31:F6} {M32:F6} {M33:F6} {M34:F6}; {M41:F6} {M42:F6} {M43:F6} {M44:F6}]";
+        }
+
+        public static double[] ToArray (in Matrix4D matrix)
+        {
+            return
+            [
+                matrix.M11, matrix.M12, matrix.M13, matrix.M14,
+                matrix.M21, matrix.M22, matrix.M23, matrix.M24,
+                matrix.M31, matrix.M32, matrix.M33, matrix.M34,
+                matrix.M41, matrix.M42, matrix.M43, matrix.M44
+            ];
+        }
+
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(
+                ToArray(this));
+        }
+
+        public override bool Equals(object? obj)
+        {
+            if (obj is Matrix4D other)
+            {
+                return M11 == other.M11 && M12 == other.M12 && M13 == other.M13 && M14 == other.M14 &&
+                       M21 == other.M21 && M22 == other.M22 && M23 == other.M23 && M24 == other.M24 &&
+                       M31 == other.M31 && M32 == other.M32 && M33 == other.M33 && M34 == other.M34 &&
+                       M41 == other.M41 && M42 == other.M42 && M43 == other.M43 && M44 == other.M44;
+            }
+            return false;
+        }
+
+        public static bool TryCreateTranslation(Point3D basePoint, Point3D targetPoint, out Matrix4D translation)
+        {
+            translation = CreateTranslation(
+                targetPoint.X - basePoint.X,
+                targetPoint.Y - basePoint.Y,
+                targetPoint.Z - basePoint.Z);
+            return IsInvertible(translation);
+        }
+
+        public static bool IsInvertible(Matrix4D translation)
+        {
+            return TryInvert(translation, out _);
+        }
+
+        public static bool operator ==(Matrix4D? a, Matrix4D? b)
+        {
+            if (a is null && b is null) return true;
+            if (a is null || b is null) return false;
+            return a.Equals(b);
+        }
+
+        public static bool operator !=(Matrix4D? a, Matrix4D? b)
+        {
+            return !(a == b);
         }
     }
 }

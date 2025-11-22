@@ -32,6 +32,7 @@ namespace UI.Commands
         private readonly ViewportViewModel? _viewModel;
         private TaskCompletionSource<PointOrKeywordResult>? _pointOrKeywordTaskSource;
         private EventHandler<PointPickedEventArgs>? _pointPickedHandler;
+        private EventHandler? _pointPickingCancelledHandler; // <-- ADDED
         private Point3D? _basePoint; // For preview line from base point
         private bool _allowLastPoint; // Store for keyboard input handling
         private string[]? _keywords; // Valid keywords for this input
@@ -115,6 +116,10 @@ namespace UI.Commands
                 _pointPickedHandler = (sender, e) => OnPointPicked(e.Point);
                 _viewModel.PointPicked += _pointPickedHandler;
                 
+                // Set up cancellation via viewport point-picking cancelled (ESC/right-click)
+                _pointPickingCancelledHandler = (s, e) => _pointOrKeywordTaskSource?.TrySetResult(new PointOrKeywordResult { IsCancelled = true });
+                _viewModel.PointPickingCancelled += _pointPickingCancelledHandler;
+
                 // Enable picking mode
                 _viewModel.EnablePointPickingMode();
 
@@ -158,6 +163,13 @@ namespace UI.Commands
                     {
                         _viewModel.PointPicked -= _pointPickedHandler;
                         _pointPickedHandler = null;
+                    }
+
+                    // Clean up point-picking cancelled handler
+                    if (_pointPickingCancelledHandler != null)
+                    {
+                        _viewModel.PointPickingCancelled -= _pointPickingCancelledHandler;
+                        _pointPickingCancelledHandler = null;
                     }
                     
                     _pointOrKeywordTaskSource = null;
@@ -299,6 +311,13 @@ namespace UI.Commands
                 {
                     _viewModel.PointPicked -= _pointPickedHandler;
                     _pointPickedHandler = null;
+                }
+
+                // Clean up point-picking cancelled handler
+                if (_viewModel != null && _pointPickingCancelledHandler != null)
+                {
+                    _viewModel.PointPickingCancelled -= _pointPickingCancelledHandler;
+                    _pointPickingCancelledHandler = null;
                 }
                 
                 _pointOrKeywordTaskSource = null;

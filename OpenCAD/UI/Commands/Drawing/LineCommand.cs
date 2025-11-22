@@ -41,7 +41,7 @@ namespace UI.Commands.Drawing
             System.Diagnostics.Debug.WriteLine(OpenCADStrings.LineCommandInitialized);
         }
 
-        public override async void Execute()
+        public override async Task Execute()
         {
             if (_pointInputHelper == null)
                 return;

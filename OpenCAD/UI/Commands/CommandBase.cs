@@ -40,7 +40,7 @@ namespace UI.Commands
             Context = context;
         }
 
-        public abstract void Execute();
+        public abstract Task Execute();
 
         public virtual bool ProcessInput(string input)
         {

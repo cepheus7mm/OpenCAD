@@ -12,71 +12,16 @@ namespace UI.Commands.Editing
     [InputCommand("move", "Move selected objects", "m")]
     public class MoveCommand : EditCommandBase
     {
-        protected new string _commandName = OpenCADStrings.MoveCommandName;
-
-        //protected override string SelectObjectsMessage => OpenCADStrings.SelectObjectsToMoveMessage + "\nClick objects to select them, then press ENTER to move (or ESC to cancel).";
 
         public override void Initialize(ICommandContext context)
         {
             base.Initialize(context);
+            _commandName = OpenCADStrings.MoveCommandName;
         }
 
-        protected override async void OnObjectsSelected()
+        protected override async Task OnObjectsSelected()
         {
-            if (SelectedObjects == null || SelectedObjects.Count == 0)
-            {
-                Context?.OutputMessage(NoObjectsMessage);
-                Cancel();
-                return;
-            }
-
-            _cancellationTokenSource = new CancellationTokenSource();
-
-            try
-            {
-                // Prompt for base point
-                _basePoint = await GetBasePoint();
-
-                if (_basePoint == null)
-                {
-                    Cancel();
-                    return;
-                }
-
-                // Start unified preview support provided by EditCommandBase
-                StartPreview(_basePoint);
-
-                try
-                {
-                    // Prompt for target point
-                    _targetPoint = await GetTargetPoint();
-
-                    if (_targetPoint == null)
-                    {
-                        Cancel();
-                        return;
-                    }
-
-                    // Perform the move WHILE cached providers are still available
-                    MoveSelectedObjects();
-
-                    // Stop preview after performing the real move (clears preview clones and cached refs)
-                    StopPreview();
-
-                    CommandCompleted();
-                }
-                finally
-                {
-                    // Ensure preview is cleaned up if something goes wrong
-                    StopPreview();
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                // Ensure preview objects removed when cancelled
-                StopPreview();
-                Cancel();
-            }
+            await base.OnObjectsSelected();
         }
 
         public override bool ProcessInput(string input)
@@ -96,96 +41,13 @@ namespace UI.Commands.Editing
             return false;
         }
 
-        private void MoveSelectedObjects()
+        protected override Matrix4D GetTransformation()
         {
-            if (SelectedObjects == null || _basePoint == null || _targetPoint == null)
+            if (!Matrix4D.TryCreateTranslation(_basePoint!, _targetPoint!, out Matrix4D translation))
             {
-                Context?.OutputMessage(UnableToActOnObjectsMissingContext);
-                Cancel();
-                return;
+                return Matrix4D.Identity;
             }
-
-            // Prefer cached references captured by EditCommandBase; fall back to context providers
-            var document = CachedDocument ?? Context?.GetDocument();
-            var viewport = CachedViewport ?? Context?.GetActiveViewport();
-            var undoManager = CachedUndoManager ?? Context?.GetUndoRedoManager();
-
-            if (document == null || viewport == null)
-            {
-                //System.Diagnostics.Debug.WriteLine("MoveSelectedObjects: required document or viewport is null. Cancelling command.");
-                Context?.OutputMessage(UnableToActOnObjectsMissingContext);
-                Cancel();
-                return;
-            }
-
-            Vector3D v = _targetPoint.AsVector3D() - _basePoint.AsVector3D();
-
-            // Build a double-precision translation matrix (Matrix4D)
-            var translation = Matrix4D.CreateTranslation(v.X, v.Y, v.Z);
-
-            if (undoManager != null)
-            {
-                var action = new TransformGeometryAction(
-                    SelectedObjects,
-                    translation,
-                    string.Format(OpenCADStrings.UndoMoveObjectsFormat, SelectedObjects.Count)
-                );
-                undoManager.ExecuteAction(action);
-                Context?.OutputMessage(string.Format(OpenCADStrings.ObjectsMovedFormat, SelectedObjects.Count));
-            }
-            else
-            {
-                // Apply transform directly
-                foreach (var obj in SelectedObjects)
-                {
-                    if (obj is GeometryBase geom)
-                    {
-                        try { geom.Transform(translation); }
-                        catch (NotImplementedException)
-                        {
-                            geom.Move(v);
-                        }
-                    }
-                }
-                Context?.OutputMessage(string.Format(OpenCADStrings.ObjectsMovedNoUndoFormat, SelectedObjects.Count));
-            }
-
-            var viewModel = viewport?.DataContext as ViewportViewModel;
-            viewModel?.ClearSelection();
-            viewport?.Refresh();
-        }
-    }
-
-    /// <summary>
-    /// Undoable action for moving geometry.
-    /// </summary>
-    public class MoveGeometryAction : IUndoableAction
-    {
-        private readonly List<OpenCADObject> _objects;
-        private readonly Vector3D _moveVector;
-        private readonly string _description;
-
-        public MoveGeometryAction(List<OpenCADObject> objects, Vector3D moveVector, string description)
-        {
-            _objects = objects.Select(o => o).ToList();
-            _moveVector = moveVector;
-            _description = description;
-        }
-
-        public string Description => _description;
-
-        public void Execute()
-        {
-            foreach (var obj in _objects)
-                if (obj is GeometryBase geom)
-                    geom.Move(_moveVector);
-        }
-
-        public void Undo()
-        {
-            foreach (var obj in _objects)
-                if (obj is GeometryBase geom)
-                    geom.Move(-_moveVector);
+            return translation;
         }
     }
 }

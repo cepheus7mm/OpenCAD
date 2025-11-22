@@ -27,7 +27,7 @@ namespace UI.Commands
             }
         }
 
-        public override void Execute()
+        public override Task Execute()
         {
             Context?.OutputMessage("Available commands:");
 
@@ -43,6 +43,7 @@ namespace UI.Commands
             Context?.OutputMessage("Point format: x y z (e.g., 0 0 0 or 5.5 10 0)");
             Context?.OutputMessage("Press Enter at start point prompt to use last entered point");
             Context?.OutputMessage("Press ESC to cancel current command");
+            return Task.CompletedTask;
         }
     }
 }

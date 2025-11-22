@@ -1,4 +1,5 @@
 ﻿using OpenCAD;
+using OpenCAD.Geometry;
 using UI.Commands.Undo;
 using UI.Controls.Viewport;
 
@@ -7,15 +8,14 @@ namespace UI.Commands.Editing
     [InputCommand("erase", "Erase selected objects (or prompts for selection)", "e")]
     public class EraseCommand : EditCommandBase
     {
-        protected new string _commandName = OpenCADStrings.EraseCommandName;
-
         public override void Initialize(ICommandContext context)
         {
             base.Initialize(context);
             System.Diagnostics.Debug.WriteLine(OpenCADStrings.EraseCommandInitialized);
+            _commandName = OpenCADStrings.EraseCommandName;
         }
 
-        protected override void OnObjectsSelected()
+        protected override async Task OnObjectsSelected()
         {
             if (SelectedObjects == null || SelectedObjects.Count == 0)
             {
@@ -58,6 +58,11 @@ namespace UI.Commands.Editing
             var viewModel = viewport.DataContext as ViewportViewModel;
             viewModel?.ClearSelection();
             viewport.Refresh();
+        }
+
+        protected override Matrix4D GetTransformation()
+        {
+            throw new NotImplementedException();
         }
     }
 }

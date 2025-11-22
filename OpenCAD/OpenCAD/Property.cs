@@ -109,9 +109,76 @@ namespace OpenCAD
             }
         }
 
-    }
+        internal Property Clone()
+        {
+            var name = _name.Clone() as string;
+            var compilerName = _compilerName.Clone() as string;
 
-    public class PropertyJsonConverter : JsonConverter<Property>
+            object value;
+            switch (Type)
+            {
+                case PropertyType.Boolean:
+                    value = (bool)_value;
+                    break;
+                case PropertyType.Integer:
+                    value = (int)_value;
+                    break;
+                case PropertyType.Double:
+                    value = (double)_value;
+                    break;
+                case PropertyType.String:
+                    value = (string)_value;
+                    break;
+                case PropertyType.Color:
+                    value = (Color)_value;
+                    break;
+                case PropertyType.Point:
+                    value = new Point3D((Point3D)_value);
+                    break;
+                case PropertyType.Vector:
+                    value = new Vector3D((Vector3D)_value);
+                    break;
+                case PropertyType.Curve:
+                    throw new NotImplementedException();
+                case PropertyType.Surface:
+                    throw new NotImplementedException();
+                case PropertyType.Solid:
+                    throw new NotImplementedException();
+                case PropertyType.Material:
+                    throw new NotImplementedException();
+                case PropertyType.Texture:
+                    throw new NotImplementedException();
+                case PropertyType.Layer:
+                    throw new NotImplementedException();
+                case PropertyType.LineType:
+                    value = (LineType)_value;
+                    break;
+                case PropertyType.LineWeight:
+                    value = (LineWeight)_value;
+                    break;
+                case PropertyType.ID:
+                    value = (Guid)_value;
+                    break;
+                case PropertyType.UInt:
+                    value = (uint)_value;
+                    break;
+                case PropertyType.SystemOfUnits:
+                    value = (UnitSystem)_value;
+                    break;
+                case PropertyType.LinearUnits:
+                    value = (LinearType)_value;
+                    break;
+                case PropertyType.AngularUnits:
+                    value = (AngularType)_value;
+                    break;
+                default:
+                    throw new NotSupportedException($"Clone is not supported for PropertyType {Type}");
+            }
+            return new Property(Type, name!, value, compilerName!);
+    }
+}
+
+public class PropertyJsonConverter : JsonConverter<Property>
     {
         public override Property? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {

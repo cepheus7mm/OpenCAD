@@ -827,60 +827,25 @@
         /// </summary>
         public const string InvalidPointInput = "Invalid point. Enter coordinates or click in the viewport.";
 
-        #endregion
-        #region Move Command Messages
-
         /// <summary>
-        /// Debug message for MoveCommand initialization
+        /// Format string for message displayed when objects are moved
         /// </summary>
-        public const string MoveCommandInitialized = "MoveCommand initialized";
+        public const string ObjectsTransformedFormat = "{1} {0} object(s).";
 
         /// <summary>
         /// Format string for undo action description when moving objects
         /// </summary>
-        public const string UndoMoveObjectsFormat = "Move {0} object(s)";
-
-        /// <summary>
-        /// Format string for message displayed when objects are moved
-        /// </summary>
-        public const string ObjectsMovedFormat = "Moved {0} object(s).";
+        public const string UndoTransformedObjectsFormat = "{1} {0} object(s)";
 
         /// <summary>
         /// Format string for message displayed when objects are moved without undo support
         /// </summary>
-        public const string ObjectsMovedNoUndoFormat = "Moved {0} object(s) (no undo available).";
-
-        #endregion
-
-        #region Scale Command Messages
+        public const string ObjectsTransformedNoUndoFormat = "{1} {0} object(s) (no undo available).";
 
         /// <summary>
-        /// Debug message for ScaleCommand initialization
+        /// Debug message for Command initialization
         /// </summary>
-        public const string ScaleCommandInitialized = "ScaleCommand initialized";
-
-        /// <summary>
-        /// Format string for undo action description when scaling objects
-        /// </summary>
-        public const string UndoScaleObjectsFormat = "Scale {0} object(s)";
-
-        /// <summary>
-        /// Format string for message displayed when objects are scaled
-        /// </summary>
-        public const string ObjectsScaledFormat = "Scaled {0} object(s).";
-
-        /// <summary>
-        /// Format string for message displayed when objects are scaled without undo support
-        /// </summary>
-        public const string ObjectsScaledNoUndoFormat = "Scaled {0} object(s) (no undo available).";
-
-        #endregion
-
-        #region Rotate Command Messages
-
-        public const string UndoRotateObjectsFormat = "Rotate {0} object(s)";
-        public const string ObjectsRotatedFormat = "{0} object(s) rotated.";
-        public const string ObjectsRotatedNoUndoFormat = "{0} object(s) rotated (no undo available).";
+        public const string CommandInitialized = "{0}Command initialized";
 
         #endregion
     }
