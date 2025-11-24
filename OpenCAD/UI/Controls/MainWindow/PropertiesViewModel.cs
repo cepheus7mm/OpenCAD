@@ -462,7 +462,7 @@ namespace UI.Controls.MainWindow
 			{
 				PropertyType.Boolean => bool.Parse(stringValue),
 				PropertyType.Integer => int.Parse(stringValue),
-				PropertyType.Double => double.Parse(stringValue),
+				PropertyType.DoubleLength => double.Parse(stringValue),
 				PropertyType.String => stringValue,
 				_ => stringValue // Default to string for complex types
 			};

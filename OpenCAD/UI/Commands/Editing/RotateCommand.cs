@@ -38,7 +38,7 @@ namespace UI.Commands.Editing
 
         protected override Matrix4D GetTransformation()
         {
-            if (!Matrix4D.TryCreateRotationMatrix(_basePoint!, _targetPoint!, out var transformation))
+            if (!Matrix4D.TryCreateRotationMatrix(BasePoint!, TargetPoint!, out var transformation))
             {
                 return Matrix4D.Identity;
             }

@@ -162,9 +162,6 @@ namespace UI.Commands.Drawing
             if (document != null)
             {
                 line = new Line(document, start, end);
-                // Apply current layer and drawing properties to the new line
-                //document.ApplyCurrentProperties(line);
-                //System.Diagnostics.Debug.WriteLine($"Line created on layer: {document.CurrentLayer?.Name ?? "none"}");
             }
             else
             {

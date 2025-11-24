@@ -2,9 +2,9 @@
 using OpenCAD.Geometry;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using UI.Controls.Viewport;
 using UI.Commands.Undo;
 
@@ -12,32 +12,15 @@ namespace UI.Commands.Editing
 {
     /// <summary>
     /// Base class for editing commands that require object selection.
-    /// Includes preview support (translated clones) for point-pick workflows.
+    /// Includes preview support (uses shared preview in CommandBase).
     /// </summary>
     public abstract class EditCommandBase : CommandBase
     {
-        protected List<OpenCADObject>? SelectedObjects;
-        protected PointInputHelper? _pointInputHelper;
-        protected Point3D? _basePoint;
-        protected Point3D? _targetPoint;
-        protected CancellationTokenSource? _cancellationTokenSource;
         private bool _needsSelection = false;
         private int _initialSelectionCount = 0;
         protected string _commandName = string.Empty;
         protected bool _preserveOriginal = false;
         protected bool _isRepeatable = false;
-
-        // Preview fields (moved here for reuse)
-        private readonly List<OpenCADObject> _previewObjects = new();
-        protected PropertyChangedEventHandler? _previewHandler;
-        private ViewportControl? _previewViewport;
-
-        // Cached providers captured when preview starts (so awaits won't lose them)
-        protected ViewportControl? CachedViewport { get; private set; }
-        protected OpenCADDocument? CachedDocument { get; private set; }
-        protected UndoRedoManager? CachedUndoManager { get; private set; }
-
-        protected ViewportViewModel? CachedViewModel { get; private set; }
 
         public string SelectObjectsPrompt => string.Format(OpenCADStrings.SelectObjectsToActOnPrompt, _commandName);
 
@@ -68,14 +51,8 @@ namespace UI.Commands.Editing
         public override void Initialize(ICommandContext context)
         {
             base.Initialize(context);
-            var viewport = context.GetActiveViewport();
-            var viewModel = viewport?.DataContext as ViewportViewModel;
-            if (viewModel != null)
-            {
-                _pointInputHelper = new PointInputHelper(context, viewModel);
-            }
+            // Point input is now obtained via CommandBase.GetPoint, so no local PointInputHelper is required here.
         }
-
 
         public override async Task Execute()
         {
@@ -86,9 +63,8 @@ namespace UI.Commands.Editing
                 Cancel();
                 return;
             }
-            CachedViewport = viewport;
 
-            var viewModel = CachedViewport.DataContext as ViewportViewModel;
+            var viewModel = viewport.DataContext as ViewportViewModel;
             if (viewModel == null)
             {
                 Context?.OutputMessage(OpenCADStrings.UnableToAccessViewport);
@@ -96,12 +72,10 @@ namespace UI.Commands.Editing
                 return;
             }
 
-            CachedViewModel = viewModel;
-
-            if (CachedViewModel.SelectedObjects.Count > 0)
+            if (viewModel.SelectedObjects.Count > 0)
             {
                 // Pre-selected objects - proceed immediately
-                SelectedObjects = new List<OpenCADObject>(CachedViewModel.SelectedObjects);
+                SelectedObjects = new List<OpenCADObject>(viewModel.SelectedObjects);
                 _needsSelection = false;
                 await OnObjectsSelected();
                 // Derived class will call RaiseCommandCompleted when done
@@ -113,7 +87,7 @@ namespace UI.Commands.Editing
                 _initialSelectionCount = 0;
                 CurrentPrompt = SelectObjectsPrompt;
                 Context?.OutputMessage(SelectObjectsMessage);
-                CachedViewModel.SelectionChanged += OnSelectionChanged;
+                viewModel.SelectionChanged += OnSelectionChanged;
             }
         }
 
@@ -181,12 +155,11 @@ namespace UI.Commands.Editing
 
             CurrentPrompt = string.Empty;
             SelectedObjects = null;
-            _pointInputHelper?.Cancel();
             _needsSelection = false;
             _initialSelectionCount = 0;
             _cancellationTokenSource?.Cancel();
-            _basePoint = null;
-            _targetPoint = null;
+            BasePoint = null;
+            TargetPoint = null;
         }
 
         /// <summary>
@@ -205,26 +178,26 @@ namespace UI.Commands.Editing
 
             try
             {
-                // Prompt for base point
-                _basePoint = await GetBasePoint();
+                // Prompt for base point using shared GetPoint on CommandBase
+                BasePoint = await GetPoint(BasePointPrompt, null, null);
 
-                if (_basePoint == null)
+                if (BasePoint == null)
                 {
                     Cancel();
                     return;
                 }
 
-                // Start unified preview support provided by EditCommandBase
+                // Start unified preview support (now provided by CommandBase)
                 StartPreview();
 
                 try
                 {
                     do
                     {
-                        // Prompt for target point
-                        _targetPoint = await GetTargetPoint();
+                        // Prompt for target point using shared GetPoint on CommandBase
+                        TargetPoint = await GetPoint(TargetPointPrompt, null, null);
 
-                        if (_targetPoint == null)
+                        if (TargetPoint == null)
                         {
                             Cancel();
                             return;
@@ -324,221 +297,6 @@ namespace UI.Commands.Editing
                 commandName = commandName.Replace("y", "i");
             }
             return commandName;
-        }
-
-        #region Preview support (cloning + translation)
-
-        /// <summary>
-        /// Start preview mode using the provided base point.
-        /// Subscribes to ViewportViewModel.PreviewPoint changes and shows translated clones.
-        /// Captures providers (viewport/document/undo manager) to avoid them becoming null after awaits.
-        /// </summary>
-        protected void StartPreview()
-        {
-            var viewport = Context?.GetActiveViewport();
-            if (viewport == null) return;
-
-            var viewModel = viewport.DataContext as ViewportViewModel;
-            if (viewModel == null) return;
-
-            // Cache providers immediately so awaiting user input cannot lose them
-            CachedViewport = viewport;
-            CachedDocument = Context?.GetDocument();
-            CachedUndoManager = Context?.GetUndoRedoManager();
-            CachedViewModel = viewModel;
-
-            // Remember viewport used for preview so we can remove clones later
-            _previewViewport = viewport;
-
-            // Attach handler to respond to PreviewPoint changes
-            _previewHandler = (sender, e) =>
-            {
-                if (e.PropertyName == nameof(ViewportViewModel.PreviewPoint))
-                {
-                    var previewPoint = viewModel.PreviewPoint;
-                    if (previewPoint != null && _basePoint != null)
-                    {
-                        _targetPoint = previewPoint;
-                        UpdatePreviewObjects(viewport);
-                    }
-                    else
-                    {
-                        ClearPreviewObjects(viewport);
-                    }
-                }
-            };
-
-            viewModel.PropertyChanged += _previewHandler;
-        }
-
-        /// <summary>
-        /// Stop preview mode and remove any preview clones.
-        /// Clears cached providers.
-        /// </summary>
-        protected void StopPreview()
-        {
-            try
-            {
-                if (_previewViewport != null)
-                {
-                    var vm = _previewViewport.DataContext as ViewportViewModel;
-                    if (vm != null && _previewHandler != null)
-                    {
-                        vm.PropertyChanged -= _previewHandler;
-                    }
-                }
-            }
-            catch
-            {
-                // ignore cleanup errors
-            }
-
-            if (_previewViewport != null)
-                ClearPreviewObjects(_previewViewport);
-
-            _previewHandler = null;
-            _previewViewport = null;
-
-            // Clear cached provider references
-            CachedViewport = null;
-            CachedDocument = null;
-            CachedUndoManager = null;
-            CachedViewModel = null;
-
-            _basePoint = null;
-            _targetPoint = null;
-            CommandCompleted();
-        }
-
-        /// <summary>
-        /// Update preview clones using the given translation vector.
-        /// Existing preview clones are removed and replaced.
-        /// </summary>
-        private void UpdatePreviewObjects(ViewportControl viewport)
-        {
-            // Clear any existing preview clones first
-            ClearPreviewObjects(viewport);
-
-            var document = viewport.Document;
-            if (document == null || SelectedObjects == null)
-                return;
-
-            foreach (var obj in SelectedObjects)
-            {
-                var clone = CreateTranslatedClone(obj, GetTransformation(), document);
-                if (clone != null)
-                {
-                    _previewObjects.Add(clone);
-                    viewport.AddObject(clone);
-                }
-            }
-
-            viewport.Refresh();
-        }
-
-        /// <summary>
-        /// Remove preview clones previously added to viewport/document.
-        /// </summary>
-        protected void ClearPreviewObjects(ViewportControl viewport)
-        {
-            if (_previewObjects.Count == 0)
-                return;
-
-            foreach (var p in _previewObjects.ToList())
-            {
-                try
-                {
-                    viewport.RemoveObject(p);
-                }
-                catch
-                {
-                    // Swallow errors during preview removal
-                }
-            }
-            _previewObjects.Clear();
-            viewport.Refresh();
-        }
-        
-        /// <summary>
-        /// Remove preview clones previously added to the current preview viewport,
-        /// but keep preview mode active (do not unsubscribe handlers or clear cached providers).
-        /// Useful when a command wants to commit a copy/move while continuing point picking.
-        /// </summary>
-        protected void ClearPreviewClones()
-        {
-            try
-            {
-                if (_previewViewport != null)
-                    ClearPreviewObjects(_previewViewport);
-            }
-            catch
-            {
-                // ignore
-            }
-        }
-
-        /// <summary>
-        /// Create a translated clone for a given source object.
-        /// Default implementation supports Line; override to support more types.
-        /// </summary>
-        protected virtual OpenCADObject? CreateTranslatedClone(OpenCADObject source, Matrix4D translation, OpenCADDocument document)
-        {
-            if (source is GeometryBase geom)
-            {
-                var clone = geom.Clone(document) as GeometryBase;
-                clone?.Transform(translation);
-                return clone;
-            }
-
-            // Default: unsupported geometry -> no preview clone
-            return null;
-        }
-
-        #endregion
-
-        protected async Task<Point3D?> GetBasePoint()
-        {
-            // Prompt for base point (anchor for copies)
-            CurrentPrompt = BasePointPrompt;
-            var basePoint = await _pointInputHelper!.GetPointAsync(
-                BasePointPrompt,
-                allowLastPoint: false,
-                basePoint: null,
-                _cancellationTokenSource.Token);
-
-            if (basePoint == null)
-            {
-                // user cancelled before starting - finish command
-                StopPreview();
-                return null;
-            }
-
-            return basePoint;
-        }
-
-        protected async Task<Point3D?> GetTargetPoint()
-        {
-            // Prompt for target point (destination for copies)
-            CurrentPrompt = TargetPointPrompt;
-            var targetPoint = await _pointInputHelper.GetPointAsync(
-                TargetPointPrompt,
-                allowLastPoint: false,
-                basePoint: _basePoint,
-                _cancellationTokenSource.Token);
-
-            return targetPoint;
-        }
-
-        protected void CommandCompleted()
-        {
-            // Ensure point picking fully disabled
-            var viewport = Context?.GetActiveViewport();
-            var viewModel = viewport?.DataContext as ViewportViewModel;
-            if (viewModel != null && viewModel.IsPointPickingMode)
-            {
-                viewModel.DisablePointPickingMode();
-            }
-            RaiseCommandCompleted();
         }
     }
 }

@@ -104,6 +104,7 @@ namespace GraphicsEngine
                 throw new InvalidOperationException("ShaderProgram must be initialized before registering renderers");
 
             _renderers.Add(new LineRenderer(_shaderProgram));
+            _renderers.Add(new ArcRenderer(_shaderProgram));
             //System.Diagnostics.Debug.WriteLine($"Registered {_renderers.Count} renderer(s)");
         }
 

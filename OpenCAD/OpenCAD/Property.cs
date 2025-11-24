@@ -15,7 +15,8 @@ namespace OpenCAD
     {
         Boolean,
         Integer,
-        Double,
+        DoubleLength,
+        DoubleAngle,
         String,
         Color,
         Point,
@@ -67,7 +68,8 @@ namespace OpenCAD
             {
                 PropertyType.Boolean => ((bool)_value).ToString(),
                 PropertyType.Integer => ((int)_value).ToString(),
-                PropertyType.Double => document is null ? ((double)_value).ToString() : document.ValueToString((double)_value, OpenCADDocument.UnitFormatType.Linear),
+                PropertyType.DoubleLength => document is null ? ((double)_value).ToString() : document.ValueToString((double)_value, OpenCADDocument.UnitFormatType.Linear),
+                PropertyType.DoubleAngle => document is null ? ((double)_value).ToString() : document.ValueToString((double)_value, OpenCADDocument.UnitFormatType.Angular),
                 PropertyType.String => (string)_value,
                 PropertyType.Color => document is null ? ((Color)_value).ToArgb().ToString("X8") : document.ColorToString((Color)_value),
                 PropertyType.Point => document is null ? ((Point3D)_value).ToString() : document.PointToString((Point3D)_value),
@@ -89,7 +91,7 @@ namespace OpenCAD
                 case PropertyType.UInt:
                     _value = uint.Parse(strValue);
                     break;
-                case PropertyType.Double:
+                case PropertyType.DoubleLength:
                     _value = document is null ? double.Parse(strValue) : document.StringToValue(strValue, OpenCADDocument.UnitFormatType.Linear);
                     break;
                 case PropertyType.String:
@@ -123,7 +125,8 @@ namespace OpenCAD
                 case PropertyType.Integer:
                     value = (int)_value;
                     break;
-                case PropertyType.Double:
+                case PropertyType.DoubleLength:
+                case PropertyType.DoubleAngle:
                     value = (double)_value;
                     break;
                 case PropertyType.String:
@@ -221,7 +224,7 @@ public class PropertyJsonConverter : JsonConverter<Property>
                                 : throw new JsonException("Expected string for Guid"),
                             PropertyType.Boolean => reader.GetBoolean(),
                             PropertyType.Integer => reader.GetInt32(),
-                            PropertyType.Double => reader.GetDouble(),
+                            PropertyType.DoubleLength => reader.GetDouble(),
                             PropertyType.String => reader.GetString(),
                             PropertyType.Color => reader.TokenType == JsonTokenType.Number
                                 ? Color.FromArgb(reader.GetInt32())
@@ -278,7 +281,7 @@ public class PropertyJsonConverter : JsonConverter<Property>
                 case PropertyType.Integer:
                     writer.WriteNumberValue((int)value.Value);
                     break;
-                case PropertyType.Double:
+                case PropertyType.DoubleLength:
                     writer.WriteNumberValue((double)value.Value);
                     break;
                 case PropertyType.String:

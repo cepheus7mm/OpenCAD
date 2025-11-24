@@ -1,3 +1,4 @@
+using OpenCAD.Geometry;
 using System.Drawing;
 
 namespace OpenCAD.Interfaces
@@ -11,7 +12,7 @@ namespace OpenCAD.Interfaces
         /// <summary>
         /// Gets the layer object this drawable is on.
         /// </summary>
-        OpenCADLayer Layer { get; set; }
+        OpenCADLayer? Layer { get; set; }
 
         /// <summary>
         /// Gets the effective color for rendering this object.
@@ -33,5 +34,15 @@ namespace OpenCAD.Interfaces
         /// </summary>
         /// <param name="layer">The layer to use for ByLayer resolution.</param>
         LineWeight LineWeight { get; set; }
+
+        public abstract Vector3D? GetFirstDerivate(Point3D point);
+
+        public abstract Vector3D? GetSecondDerivate(Point3D point);
+
+        public abstract double GetParameterAtPoint(Point3D point);
+
+        public abstract Point3D GetPointAtParameter(double parameter);
+
+        public abstract Point3D GetClosestPointTo(Point3D point, bool extend = false);
     }
 }

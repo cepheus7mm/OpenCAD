@@ -15,89 +15,96 @@ namespace GraphicsEngine
 
         public ShaderProgram()
         {
-            // Updated shaders to support quad-based line rendering with glow effect
+            // Updated shaders to support per-vertex distance attribute for correct stipple scaling
             string vertexShaderSource = @"
                 #version 330 core
                 layout (location = 0) in vec3 aPosition;
+                layout (location = 1) in float aDistance; // per-vertex cumulative distance (in world units)
 
                 uniform mat4 mvp;
                 uniform vec2 viewport;
 
                 out vec2 fragScreenPos; // Screen-space position of fragment
+                out float vDistance;    // Interpolated distance along curve (in world units)
 
                 void main()
                 {
                     vec4 clipPos = mvp * vec4(aPosition, 1.0);
                     gl_Position = clipPos;
                     
-                    // Convert to screen space for distance calculations
+                    // Convert to screen space for distance calculations (thickness)
                     vec3 ndc = clipPos.xyz / clipPos.w;
                     fragScreenPos = (ndc.xy * 0.5 + 0.5) * viewport;
+
+                    // pass per-vertex world-distance (will be interpolated across segment)
+                    vDistance = aDistance;
                 }";
 
             string fragmentShaderSource = @"
                 #version 330 core
 
                 uniform vec4 color;
-                uniform vec2 lineStart;      // Screen space
+                uniform vec2 lineStart;      // Screen space (for thickness calculation)
                 uniform vec2 lineEnd;        // Screen space
                 uniform vec2 viewport;
                 uniform int lineTypePattern;
                 uniform float lineWidth;     // Actual line width in pixels
                 uniform float glowRadius;    // Glow halo size in pixels (0 = no glow)
+                uniform float lineTypeScale; // Per-object scale applied to world-unit pattern lengths
 
                 in vec2 fragScreenPos;
+                in float vDistance; // interpolated world-units along-curve
                 out vec4 FragColor;
 
-                // Distance from point to line segment
+                // Distance from point to line segment (screen-space) used for thickness
                 float distanceToSegment(vec2 p, vec2 a, vec2 b) {
                     vec2 pa = p - a;
                     vec2 ba = b - a;
-                    float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+                    float denom = dot(ba, ba);
+                    if (denom <= 0.000001) return length(pa);
+                    float h = clamp(dot(pa, ba) / denom, 0.0, 1.0);
                     return length(pa - ba * h);
                 }
 
                 void main() {
-                    // Calculate distance from fragment to line
+                    // Calculate distance from fragment to chord (used for thickness)
                     float dist = distanceToSegment(fragScreenPos, lineStart, lineEnd);
-                    
-                    // Line stippling logic
-                    vec2 lineVec = lineEnd - lineStart;
-                    float lineLength = length(lineVec);
-                    
-                    if (lineLength > 0.1) {
-                        vec2 lineDir = lineVec / lineLength;
-                        vec2 fragVec = fragScreenPos - lineStart;
-                        float alongLine = dot(fragVec, lineDir);
-                        
-                        // Apply line type patterns
+
+                    // Use per-fragment interpolated distance along curve (in world units)
+                    float alongLine = vDistance;
+
+                    // If we don't have a valid alongLine (negative large sentinel), skip stipple
+                    bool hasAlong = alongLine >= 0.0;
+
+                    // Apply line type patterns (pattern lengths are in world units, multiplied by lineTypeScale)
+                    if (hasAlong && lineTypePattern != 0) {
                         if (lineTypePattern == 1) { // Dashed
-                            float dashLength = 10.0;
-                            float gapLength = 5.0;
+                            float dashLength = 0.25 * lineTypeScale;
+                            float gapLength = 0.125 * lineTypeScale;
                             float cycle = dashLength + gapLength;
                             float pos = mod(alongLine, cycle);
                             if (pos > dashLength) discard;
                         }
                         else if (lineTypePattern == 2) { // Dotted
-                            float dotLength = 2.0;
-                            float gapLength = 4.0;
+                            float dotLength = 0.05 * lineTypeScale;
+                            float gapLength = 0.10 * lineTypeScale;
                             float cycle = dotLength + gapLength;
                             float pos = mod(alongLine, cycle);
                             if (pos > dotLength) discard;
                         }
                         else if (lineTypePattern == 3) { // DashDot
-                            float dashLength = 10.0;
-                            float dotLength = 2.0;
-                            float gapLength = 4.0;
+                            float dashLength = 0.25 * lineTypeScale;
+                            float dotLength = 0.05 * lineTypeScale;
+                            float gapLength = 0.10 * lineTypeScale;
                             float cycle = dashLength + gapLength + dotLength + gapLength;
                             float pos = mod(alongLine, cycle);
                             if ((pos > dashLength && pos < dashLength + gapLength) || 
                                 (pos > dashLength + gapLength + dotLength)) discard;
                         }
                         else if (lineTypePattern == 4) { // DashDotDot
-                            float dashLength = 10.0;
-                            float dotLength = 2.0;
-                            float gapLength = 4.0;
+                            float dashLength = 0.25 * lineTypeScale;
+                            float dotLength = 0.05 * lineTypeScale;
+                            float gapLength = 0.10 * lineTypeScale;
                             float cycle = dashLength + gapLength + dotLength + gapLength + dotLength + gapLength;
                             float pos = mod(alongLine, cycle);
                             if ((pos > dashLength && pos < dashLength + gapLength) || 
@@ -105,25 +112,25 @@ namespace GraphicsEngine
                                 (pos > dashLength + 2.0 * gapLength + 2.0 * dotLength)) discard;
                         }
                         else if (lineTypePattern == 5) { // Center
-                            float longDash = 20.0;
-                            float shortDash = 5.0;
-                            float gapLength = 4.0;
+                            float longDash = 0.5 * lineTypeScale;
+                            float shortDash = 0.125 * lineTypeScale;
+                            float gapLength = 0.1 * lineTypeScale;
                             float cycle = longDash + gapLength + shortDash + gapLength;
                             float pos = mod(alongLine, cycle);
                             if ((pos > longDash && pos < longDash + gapLength) ||
                                 (pos > longDash + gapLength + shortDash)) discard;
                         }
                         else if (lineTypePattern == 6) { // Hidden
-                            float dashLength = 5.0;
-                            float gapLength = 3.0;
+                            float dashLength = 0.125 * lineTypeScale;
+                            float gapLength = 0.075 * lineTypeScale;
                             float cycle = dashLength + gapLength;
                             float pos = mod(alongLine, cycle);
                             if (pos > dashLength) discard;
                         }
                         else if (lineTypePattern == 7) { // Phantom
-                            float longDash = 20.0;
-                            float shortDash = 5.0;
-                            float gapLength = 4.0;
+                            float longDash = 0.5 * lineTypeScale;
+                            float shortDash = 0.125 * lineTypeScale;
+                            float gapLength = 0.1 * lineTypeScale;
                             float cycle = longDash + gapLength + shortDash + gapLength + shortDash + gapLength;
                             float pos = mod(alongLine, cycle);
                             if ((pos > longDash && pos < longDash + gapLength) ||
@@ -131,14 +138,14 @@ namespace GraphicsEngine
                                 (pos > longDash + 2.0 * gapLength + 2.0 * shortDash)) discard;
                         }
                         else if (lineTypePattern == 8) { // Fine dashed (for selection)
-                            float dashLength = 6.0;
-                            float gapLength = 3.0;
+                            float dashLength = 0.15 * lineTypeScale;
+                            float gapLength = 0.075 * lineTypeScale;
                             float cycle = dashLength + gapLength;
                             float pos = mod(alongLine, cycle);
                             if (pos > dashLength) discard;
                         }
                     }
-                    
+
                     // Distance-based rendering with optional glow
                     if (glowRadius > 0.0) {
                         float halfWidth = lineWidth * 0.5;

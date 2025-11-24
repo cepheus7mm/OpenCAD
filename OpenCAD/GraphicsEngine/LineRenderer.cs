@@ -43,8 +43,14 @@ namespace GraphicsEngine
             GL.BindVertexArray(_vao);
             GL.BindBuffer(BufferTarget.ArrayBuffer, _vbo);
 
-            GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, 3 * sizeof(float), 0);
+            // Interleaved layout: vec3 position + float distance (in world units)
+            int stride = 4 * sizeof(float);
+            GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, stride, 0);
             GL.EnableVertexAttribArray(0);
+
+            // location 1 = per-vertex cumulative distance (in world units)
+            GL.VertexAttribPointer(1, 1, VertexAttribPointerType.Float, false, stride, 3 * sizeof(float));
+            GL.EnableVertexAttribArray(1);
 
             GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
             GL.BindVertexArray(0);
@@ -138,11 +144,11 @@ namespace GraphicsEngine
 
                 if (isOrtho)
                 {
-                    RenderOrthographic(start, end, context.ProjectionMatrix, color, lineWidth, lineTypePattern, useThinLineRendering, glowRadius);
+                    RenderOrthographic(start, end, context.ProjectionMatrix, color, lineWidth, lineTypePattern, useThinLineRendering, glowRadius, line.LinetypeScale);
                 }
                 else
                 {
-                    RenderPerspective(start, end, context.ViewMatrix, context.ProjectionMatrix, color, lineWidth, lineTypePattern, useThinLineRendering, glowRadius);
+                    RenderPerspective(start, end, context.ViewMatrix, context.ProjectionMatrix, color, lineWidth, lineTypePattern, useThinLineRendering, glowRadius, line.LinetypeScale);
                 }
             }
             catch (Exception ex)
@@ -226,7 +232,7 @@ namespace GraphicsEngine
         }
 
         private void RenderOrthographic(Point3D start, Point3D end, Matrix4x4 projectionMatrix, 
-            Vector4 color, float lineWidth, int lineTypePattern, bool useThinLineRendering, float glowRadius = 0.0f)
+            Vector4 color, float lineWidth, int lineTypePattern, bool useThinLineRendering, float glowRadius = 0.0f, double linetypeScale = 1.0)
         {
             // CPU path: derive ortho window from projection (row-major)
             float sx = projectionMatrix.M11;
@@ -282,16 +288,26 @@ namespace GraphicsEngine
                     (ndcBy * 0.5f + 0.5f) * _viewport.Y
                 );
 
+                // Compute total world length (object units)
+                float totalWorldLength = Vector2.Distance(new Vector2(ax, ay), new Vector2(bx, by));
+                if (totalWorldLength < 1e-6f) totalWorldLength = 1.0f;
+
                 // Set up shader uniforms
                 _shaderProgram.Use();
                 _shaderProgram.SetMatrix4("mvp", Matrix4x4.Identity);
                 _shaderProgram.SetVector4("color", color);
                 _shaderProgram.SetInt("lineTypePattern", lineTypePattern);
+                _shaderProgram.SetVector2("viewport", _viewport);
                 _shaderProgram.SetVector2("lineStart", screenStart);
                 _shaderProgram.SetVector2("lineEnd", screenEnd);
-                _shaderProgram.SetVector2("viewport", _viewport);
                 _shaderProgram.SetFloat("lineWidth", lineWidth);
                 _shaderProgram.SetFloat("glowRadius", glowRadius);
+
+                // Pass per-object linetype scale so shader multiplies pattern lengths correctly (world units)
+                _shaderProgram.SetFloat("lineTypeScale", (float)linetypeScale);
+
+                // Pass total world length optionally
+                _shaderProgram.SetFloat("lineLength", totalWorldLength);
 
                 // Bind VAO (vertex attributes already configured in constructor)
                 GL.BindVertexArray(_vao);
@@ -309,15 +325,30 @@ namespace GraphicsEngine
 
                     if (ndcVerts != null)
                     {
-                        GL.BindBuffer(BufferTarget.ArrayBuffer, _vbo);
-                        GL.BufferData(BufferTarget.ArrayBuffer, ndcVerts.Length * sizeof(float), ndcVerts, BufferUsageHint.DynamicDraw);
+                        // Build interleaved buffer: position (ndc) + distance (world units)
+                        int vertexCount = ndcVerts.Length / 3; // should be 6
+                        float[] interleaved = new float[vertexCount * 4];
+                        for (int i = 0; i < vertexCount; i++)
+                        {
+                            int vi = i * 3;
+                            int ii = i * 4;
+                            interleaved[ii + 0] = ndcVerts[vi + 0];
+                            interleaved[ii + 1] = ndcVerts[vi + 1];
+                            interleaved[ii + 2] = ndcVerts[vi + 2];
+                            // triangles are v0,v1,v2, v2,v1,v3 - assign start=0 or end=totalWorldLength
+                            float dist = (i == 0 || i == 1 || i == 4) ? 0f : totalWorldLength;
+                            interleaved[ii + 3] = dist;
+                        }
 
-                        GL.DrawArrays(PrimitiveType.Triangles, 0, 6);
+                        GL.BindBuffer(BufferTarget.ArrayBuffer, _vbo);
+                        GL.BufferData(BufferTarget.ArrayBuffer, interleaved.Length * sizeof(float), interleaved, BufferUsageHint.DynamicDraw);
+
+                        GL.DrawArrays(PrimitiveType.Triangles, 0, vertexCount);
                         
                         if (_debugTilt)
                         {
-                            float lineLen = Vector2.Distance(screenStart, screenEnd);
-                            Debug.WriteLine($"[LR][CPU-ORTHO-GLOW] screenLen={lineLen:F1}px color=({color.X:F2},{color.Y:F2},{color.Z:F2},{color.W:F2}) lineWidth={lineWidth:F2} glowRadius={glowRadius:F2}");
+                            float lineLen = totalWorldLength;
+                            Debug.WriteLine($"[LR][CPU-ORTHO-GLOW] worldLen={lineLen:F3} color=({color.X:F2},{color.Y:F2},{color.Z:F2},{color.W:F2}) lineWidth={lineWidth:F2} glowRadius={glowRadius:F2}");
                         }
                     }
                 }
@@ -325,23 +356,23 @@ namespace GraphicsEngine
                 {
                     if (useThinLineRendering)
                     {
-                        // Simple line rendering for thin lines
-                        float[] ndcVerts =
+                        // Simple line rendering for thin lines — upload interleaved pos+distance for two verts (world distance)
+                        float[] interleaved =
                         {
-                            ndcAx, ndcAy, 0f,
-                            ndcBx, ndcBy, 0f
+                            ndcAx, ndcAy, 0f, 0f,                  // start, distance=0 (distance stored in attribute but position is NDC)
+                            ndcBx, ndcBy, 0f, totalWorldLength    // end, distance=world length
                         };
 
                         GL.BindBuffer(BufferTarget.ArrayBuffer, _vbo);
-                        GL.BufferData(BufferTarget.ArrayBuffer, ndcVerts.Length * sizeof(float), ndcVerts, BufferUsageHint.DynamicDraw);
+                        GL.BufferData(BufferTarget.ArrayBuffer, interleaved.Length * sizeof(float), interleaved, BufferUsageHint.DynamicDraw);
 
                         GL.LineWidth(lineWidth);
                         GL.DrawArrays(PrimitiveType.Lines, 0, 2);
 
                         if (_debugTilt)
                         {
-                            float lineLen = Vector2.Distance(screenStart, screenEnd);
-                            Debug.WriteLine($"[LR][CPU-ORTHO-THIN] screenLen={lineLen:F1}px color=({color.X:F2},{color.Y:F2},{color.Z:F2},{color.W:F2}) lineWidth={lineWidth:F2} pattern={lineTypePattern}");
+                            float lineLen = totalWorldLength;
+                            Debug.WriteLine($"[LR][CPU-ORTHO-THIN] worldLen={lineLen:F3} color=({color.X:F2},{color.Y:F2},{color.Z:F2},{color.W:F2}) lineWidth={lineWidth:F2} pattern={lineTypePattern}");
                         }
                     }
                     else
@@ -357,29 +388,43 @@ namespace GraphicsEngine
 
                         if (ndcVerts != null)
                         {
-                            GL.BindBuffer(BufferTarget.ArrayBuffer, _vbo);
-                            GL.BufferData(BufferTarget.ArrayBuffer, ndcVerts.Length * sizeof(float), ndcVerts, BufferUsageHint.DynamicDraw);
+                            // Build interleaved buffer: position (ndc) + distance (world units)
+                            int vertexCount = ndcVerts.Length / 3; // 6
+                            float[] interleaved = new float[vertexCount * 4];
+                            for (int i = 0; i < vertexCount; i++)
+                            {
+                                int vi = i * 3;
+                                int ii = i * 4;
+                                interleaved[ii + 0] = ndcVerts[vi + 0];
+                                interleaved[ii + 1] = ndcVerts[vi + 1];
+                                interleaved[ii + 2] = ndcVerts[vi + 2];
+                                float dist = (i == 0 || i == 1 || i == 4) ? 0f : totalWorldLength;
+                                interleaved[ii + 3] = dist;
+                            }
 
-                            GL.DrawArrays(PrimitiveType.Triangles, 0, 6);
+                            GL.BindBuffer(BufferTarget.ArrayBuffer, _vbo);
+                            GL.BufferData(BufferTarget.ArrayBuffer, interleaved.Length * sizeof(float), interleaved, BufferUsageHint.DynamicDraw);
+
+                            GL.DrawArrays(PrimitiveType.Triangles, 0, vertexCount);
 
                             if (_debugTilt)
                             {
-                                float lineLen = Vector2.Distance(screenStart, screenEnd);
-                                Debug.WriteLine($"[LR][CPU-ORTHO-QUAD] screenLen={lineLen:F1}px color=({color.X:F2},{color.Y:F2},{color.Z:F2},{color.W:F2}) lineWidth={lineWidth:F2} pattern={lineTypePattern}");
+                                float lineLen = totalWorldLength;
+                                Debug.WriteLine($"[LR][CPU-ORTHO-QUAD] worldLen={lineLen:F3} color=({color.X:F2},{color.Y:F2},{color.Z:F2},{color.W:F2}) lineWidth={lineWidth:F2} pattern={lineTypePattern}");
                             }
                         }
                         else
                         {
                             // Fallback to simple line rendering if quad creation failed
                             Debug.WriteLine("[LR] Falling back to simple line rendering for degenerate thick line");
-                            float[] ndcVertsFallback =
+                            float[] interleavedFallback =
                             {
-                                ndcAx, ndcAy, 0f,
-                                ndcBx, ndcBy, 0f
+                                ndcAx, ndcAy, 0f, 0f,
+                                ndcBx, ndcBy, 0f, totalWorldLength
                             };
 
                             GL.BindBuffer(BufferTarget.ArrayBuffer, _vbo);
-                            GL.BufferData(BufferTarget.ArrayBuffer, ndcVertsFallback.Length * sizeof(float), ndcVertsFallback, BufferUsageHint.DynamicDraw);
+                            GL.BufferData(BufferTarget.ArrayBuffer, interleavedFallback.Length * sizeof(float), interleavedFallback, BufferUsageHint.DynamicDraw);
 
                             GL.LineWidth(lineWidth);
                             GL.DrawArrays(PrimitiveType.Lines, 0, 2);
@@ -393,7 +438,7 @@ namespace GraphicsEngine
             }
         }
 
-        private void RenderPerspective(Point3D start, Point3D end, Matrix4x4 viewMatrix, Matrix4x4 projectionMatrix, Vector4 color, float lineWidth, int lineTypePattern, bool useThinLineRendering, float glowRadius)
+        private void RenderPerspective(Point3D start, Point3D end, Matrix4x4 viewMatrix, Matrix4x4 projectionMatrix, Vector4 color, float lineWidth, int lineTypePattern, bool useThinLineRendering, float glowRadius, double linetypeScale)
         {
             // Get viewport dimensions
             int[] viewport = new int[4];
@@ -436,7 +481,7 @@ namespace GraphicsEngine
                 return;
             }
 
-            // Convert to screen space for stippling
+            // Convert to screen space for stippling (used for thickness)
             Vector2 screenStart = new Vector2(
                 (ndcStart.X * 0.5f + 0.5f) * _viewport.X,
                 (ndcStart.Y * 0.5f + 0.5f) * _viewport.Y
@@ -445,6 +490,10 @@ namespace GraphicsEngine
                 (ndcEnd.X * 0.5f + 0.5f) * _viewport.X,
                 (ndcEnd.Y * 0.5f + 0.5f) * _viewport.Y
             );
+
+            // Compute total world length (object units)
+            float totalWorldLength = Vector3.Distance(new Vector3((float)start.X, (float)start.Y, (float)start.Z), new Vector3((float)end.X, (float)end.Y, (float)end.Z));
+            if (totalWorldLength < 1e-6f) totalWorldLength = 1.0f;
 
             // Set up shader uniforms
             _shaderProgram.Use();
@@ -456,20 +505,23 @@ namespace GraphicsEngine
             _shaderProgram.SetFloat("lineWidth", lineWidth);
             _shaderProgram.SetFloat("glowRadius", glowRadius);
 
+            // Pass per-object linetype scale (world units)
+            _shaderProgram.SetFloat("lineTypeScale", (float)linetypeScale);
+
             // Bind VAO (vertex attributes already configured in constructor)
             GL.BindVertexArray(_vao);
 
             if (useThinLineRendering)
             {
-                // Simple line rendering for thin lines
-                float[] vertices =
+                // Simple line rendering for thin lines — upload interleaved pos (world) + distance (world units)
+                float[] interleaved =
                 {
-                    (float)start.X, (float)start.Y, (float)start.Z,
-                    (float)end.X,   (float)end.Y,   (float)end.Z
+                    (float)start.X, (float)start.Y, (float)start.Z, 0f,
+                    (float)end.X,   (float)end.Y,   (float)end.Z,   totalWorldLength
                 };
 
                 GL.BindBuffer(BufferTarget.ArrayBuffer, _vbo);
-                GL.BufferData(BufferTarget.ArrayBuffer, vertices.Length * sizeof(float), vertices, BufferUsageHint.DynamicDraw);
+                GL.BufferData(BufferTarget.ArrayBuffer, interleaved.Length * sizeof(float), interleaved, BufferUsageHint.DynamicDraw);
 
                 _shaderProgram.SetMatrix4("mvp", mvpRow);
 
@@ -478,8 +530,8 @@ namespace GraphicsEngine
 
                 if (_debugTilt)
                 {
-                    float lineLen = Vector2.Distance(screenStart, screenEnd);
-                    Debug.WriteLine($"[LR][PERSP-THIN] screenLen={lineLen:F1}px color=({color.X:F2},{color.Y:F2},{color.Z:F2},{color.W:F2}) lineWidth={lineWidth:F2} pattern={lineTypePattern}");
+                    float lineLen = totalWorldLength;
+                    Debug.WriteLine($"[LR][PERSP-THIN] worldLen={lineLen:F3} color=({color.X:F2},{color.Y:F2},{color.Z:F2},{color.W:F2}) lineWidth={lineWidth:F2} pattern={lineTypePattern}");
                 }
             }
             else
@@ -490,31 +542,45 @@ namespace GraphicsEngine
 
                 if (ndcVerts != null)
                 {
+                    // Build interleaved buffer: position (ndc) + distance (world units)
+                    int vertexCount = ndcVerts.Length / 3; // 6
+                    float[] interleaved = new float[vertexCount * 4];
+                    for (int i = 0; i < vertexCount; i++)
+                    {
+                        int vi = i * 3;
+                        int ii = i * 4;
+                        interleaved[ii + 0] = ndcVerts[vi + 0];
+                        interleaved[ii + 1] = ndcVerts[vi + 1];
+                        interleaved[ii + 2] = ndcVerts[vi + 2];
+                        float dist = (i == 0 || i == 1 || i == 4) ? 0f : totalWorldLength;
+                        interleaved[ii + 3] = dist;
+                    }
+
                     GL.BindBuffer(BufferTarget.ArrayBuffer, _vbo);
-                    GL.BufferData(BufferTarget.ArrayBuffer, ndcVerts.Length * sizeof(float), ndcVerts, BufferUsageHint.DynamicDraw);
+                    GL.BufferData(BufferTarget.ArrayBuffer, interleaved.Length * sizeof(float), interleaved, BufferUsageHint.DynamicDraw);
 
                     _shaderProgram.SetMatrix4("mvp", Matrix4x4.Identity); // Already in NDC
 
-                    GL.DrawArrays(PrimitiveType.Triangles, 0, 6);
+                    GL.DrawArrays(PrimitiveType.Triangles, 0, vertexCount);
 
                     if (_debugTilt)
                     {
-                        float lineLen = Vector2.Distance(screenStart, screenEnd);
-                        Debug.WriteLine($"[LR][PERSP-QUAD] screenLen={lineLen:F1}px color=({color.X:F2},{color.Y:F2},{color.Z:F2},{color.W:F2}) lineWidth={lineWidth:F2} pattern={lineTypePattern}");
+                        float lineLen = totalWorldLength;
+                        Debug.WriteLine($"[LR][PERSP-QUAD] worldLen={lineLen:F3} color=({color.X:F2},{color.Y:F2},{color.Z:F2},{color.W:F2}) lineWidth={lineWidth:F2} pattern={lineTypePattern}");
                     }
                 }
                 else
                 {
                     // Fallback to simple line rendering if quad creation failed
                     Debug.WriteLine("[LR] Falling back to simple line rendering for degenerate thick line");
-                    float[] verticesFallback =
+                    float[] interleavedFallback =
                     {
-                        (float)start.X, (float)start.Y, (float)start.Z,
-                        (float)end.X,   (float)end.Y,   (float)end.Z
+                        (float)start.X, (float)start.Y, (float)start.Z, 0f,
+                        (float)end.X,   (float)end.Y,   (float)end.Z,   totalWorldLength
                     };
 
                     GL.BindBuffer(BufferTarget.ArrayBuffer, _vbo);
-                    GL.BufferData(BufferTarget.ArrayBuffer, verticesFallback.Length * sizeof(float), verticesFallback, BufferUsageHint.DynamicDraw);
+                    GL.BufferData(BufferTarget.ArrayBuffer, interleavedFallback.Length * sizeof(float), interleavedFallback, BufferUsageHint.DynamicDraw);
 
                     _shaderProgram.SetMatrix4("mvp", mvpRow);
 

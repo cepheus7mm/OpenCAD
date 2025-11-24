@@ -65,8 +65,8 @@ namespace OpenCAD.Settings // CHANGED
         [JsonIgnore, XmlIgnore]
         public double PickboxSize
         {
-            get => GetPropertyValue<double>(PropertyType.Double, nameof(PickboxSize));
-            set => SetPropertyValue(PropertyType.Double, nameof(PickboxSize), OpenCADStrings.PickboxSize, value);
+            get => GetPropertyValue<double>(PropertyType.DoubleLength, nameof(PickboxSize));
+            set => SetPropertyValue(PropertyType.DoubleLength, nameof(PickboxSize), OpenCADStrings.PickboxSize, value);
         }
     }
 }

@@ -30,14 +30,14 @@ namespace OpenCAD.Geometry
         [JsonIgnore, XmlIgnore]
         public Point3D StartPoint
         {
-            get => GetPropertyValue<Point3D>(PropertyType.Point, nameof(StartPoint));
+            get => GetPropertyValue<Point3D>(PropertyType.Point, nameof(StartPoint)) ?? new Point3D();
             set => SetPropertyValue(PropertyType.Point, nameof(StartPoint), OpenCADStrings.StartPoint, value);
         }
 
         [JsonIgnore, XmlIgnore]
         public Point3D EndPoint
         {
-            get => GetPropertyValue<Point3D>(PropertyType.Point, nameof(EndPoint));
+            get => GetPropertyValue<Point3D>(PropertyType.Point, nameof(EndPoint)) ?? new Point3D();
             set => SetPropertyValue(PropertyType.Point, nameof(EndPoint), OpenCADStrings.EndPoint, value);
         }
 
@@ -46,15 +46,51 @@ namespace OpenCAD.Geometry
 
         [JsonIgnore, XmlIgnore]
         public override double Angle => StartPoint.AngleTo(EndPoint);
+        
+        public override Vector3D? GetFirstDerivate(Point3D point)
+        {
+            // For a straight line the first derivative (tangent) is constant:
+            // the normalized direction vector from StartPoint to EndPoint.
+            var dir = EndPoint - StartPoint; // returns Vector3D
+            double len = dir.Length;
+
+            // If the line has zero length there is no well-defined tangent.
+            if (len <= double.Epsilon)
+                return null;
+
+            return new Vector3D(dir.X / len, dir.Y / len, dir.Z / len);
+        }
+
+        public override double GetParameterAtPoint(Point3D point)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override Point3D GetPointAtParameter(double parameter)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override Point3D GetClosestPointTo(Point3D point, bool extend = false)
+        {
+            var lineVec = EndPoint - StartPoint;
+            var pointVec = point - StartPoint;
+            double lineLenSq = lineVec.LengthSquared;
+            if (lineLenSq < double.Epsilon)
+                return StartPoint; // Line is a point
+            double t = Vector3D.Dot(pointVec, lineVec) / lineLenSq;
+            if (!extend)
+                t = Math.Max(0, Math.Min(1, t)); // Clamp to [0, 1]
+            return StartPoint + lineVec * t;
+        }
+
+        public override Vector3D? GetSecondDerivate(Point3D point)
+        {
+            var firstDerivate = GetFirstDerivate(EndPoint);
+            return firstDerivate?.Rotate(Math.PI / 2, _normal);
+        }
 
         #region Editing
-
-        public override bool Move(Vector3D translation)
-        {
-            StartPoint += translation;
-            EndPoint += translation;
-            return true;
-        }
 
         public override bool Transform(Matrix4D transformation)
         {

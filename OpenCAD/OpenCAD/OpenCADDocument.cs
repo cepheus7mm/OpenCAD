@@ -57,6 +57,7 @@ namespace OpenCAD
             Add(viewportSettings);
 
             CurrentViewportSettingsID = viewportSettings.ID;
+            LastGeometricChild = Guid.Empty;
         }
 
         public OpenCADDocument(string filename, string description = "") : this()
@@ -224,6 +225,33 @@ namespace OpenCAD
         {
             get => GetPropertyValue<LineWeight>(PropertyType.LineWeight, nameof(CurrentLineWeight));
             set => SetPropertyValue(PropertyType.LineWeight, nameof(CurrentLineWeight), OpenCADStrings.CurrentLineWeight, value);
+        }
+
+        [JsonIgnore, XmlIgnore]
+        public Guid? LastGeometricChild
+        {
+            get => GetPropertyValue<Guid?>(PropertyType.ID, nameof(LastGeometricChild));
+            private set => SetPropertyValue(PropertyType.ID, nameof(LastGeometricChild), OpenCADStrings.LastGeometricChild, value);
+        }
+
+        public override bool Add(OpenCADObject obj)
+        {            
+            var added = base.Add(obj);
+            if (added && obj is IDrawable)
+            {
+                LastGeometricChild = obj.ID;
+            }
+            return added;
+        }
+
+        public IDrawable? GetLastGeometricChild()
+        {
+            if (LastGeometricChild.HasValue && LastGeometricChild != Guid.Empty)
+            {
+                var obj = GetChild(LastGeometricChild.Value);
+                return obj as IDrawable;
+            }
+            return null;
         }
 
         /// <summary>

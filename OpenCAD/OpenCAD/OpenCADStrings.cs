@@ -43,6 +43,8 @@
         /// </summary>
         public const string CurrentViewportSettingsID = "Current Viewport Settings ID";
 
+        public const string LinetypeScale = "Linetype Scale";
+
         /// <summary>
         /// Property name for grid color properties
         /// </summary>
@@ -122,6 +124,11 @@
         /// Property name for current line weight
         /// </summary>
         public const string CurrentLineWeight = "Current LineWeight";
+
+        /// <summary>
+        /// Property name for current line weight
+        /// </summary>
+        public const string LastGeometricChild = "Last Geometric Child";
 
         /// <summary>
         /// Property name for layers container ID
@@ -633,7 +640,28 @@
         public const string ViewportNull = "null";
 
         #endregion
+        #region Arc Command Messages
 
+
+        public const string ArcCommandInitialized = "ArcCommand initialized";
+
+        public const string ArcPointPrompt = "Specify {0} point of arc";
+
+        public const string Center = "center";
+
+        public const string Start = "start";
+
+        public const string End = "end";
+
+        public const string ArcRadiusPrompt = "Specify radius of arc or pick two points";
+
+        public const string ArcEndAnglePrompt = "Specify end angle or pick a point:";
+
+        public const string ArcCreated = "Arc created with center ({0:F3}, {1:F3}, {2:F3}), radius {3:F3}, from angle {4:F3} to {5:F3}";
+
+        public const string UndoCreateArc = "Create Arc with center ({0:F3}, {1:F3}, {2:F3}), radius {3:F3}, from angle {4:F3} to {5:F3}";
+
+        #endregion
         #region Erase Command Messages
 
         /// <summary>
@@ -698,6 +726,16 @@
         /// Message format when a point is selected
         /// </summary>
         public const string PointSelectedFormat = "Point selected: ({0:F3}, {1:F3}, {2:F3})";
+
+        /// <summary>
+        /// String prompt for first point input
+        /// </summary>
+        public const string FirstPointPrompt = "Specify first point:";
+
+        /// <summary>
+        /// String prompt for second point input
+        /// </summary>
+        public const string SecondPointPrompt = "Specify second point:";
 
         #endregion
 

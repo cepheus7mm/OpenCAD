@@ -36,6 +36,10 @@ namespace OpenCAD.Geometry
         /// </summary>
         public double Length => Math.Sqrt(X * X + Y * Y + Z * Z);
 
+        public double LengthSquared => Length * Length;
+
+        public Vector3D Normalized => Length > 0 ? this / Length : new Vector3D(0, 0, 0);
+
         public override string ToString() => $"({X}, {Y}, {Z})";
 
         internal static Vector3D ParseFromPropertyString(string str)
@@ -75,8 +79,19 @@ namespace OpenCAD.Geometry
         }
 
         public static Vector3D operator +(Vector3D a, Vector3D b) => new Vector3D(a.X + b.X, a.Y + b.Y, a.Z + b.Z);
+        
         public static Vector3D operator -(Vector3D a, Vector3D b) => new Vector3D(a.X - b.X, a.Y - b.Y, a.Z - b.Z);
+        
         public static Vector3D operator -(Vector3D a) => new Vector3D(-a.X, -a.Y, -a.Z);
+
+        public static Vector3D operator *(Vector3D v, double scalar) => new Vector3D(v.X * scalar, v.Y * scalar, v.Z * scalar);
+
+        public static Vector3D operator /(Vector3D v, double scalar)
+        {
+            if (Math.Abs(scalar) < double.Epsilon)
+                throw new DivideByZeroException("Cannot divide by zero.");
+            return new Vector3D(v.X / scalar, v.Y / scalar, v.Z / scalar);
+        }
 
         /// <summary>
         /// Transform this vector/point by a double-precision 4x4 matrix.
@@ -97,6 +112,31 @@ namespace OpenCAD.Geometry
             }
 
             return new Vector3D(x, y, z);
+        }
+
+        public Vector3D? Rotate(double angle, Vector3D axis)
+        {
+            // Rodrigues' rotation formula
+            double cosTheta = Math.Cos(angle);
+            double sinTheta = Math.Sin(angle);
+            Vector3D u = new Vector3D(axis);
+            double length = u.Length;
+            if (length < double.Epsilon)
+                return null; // Invalid axis
+            // Normalize axis
+            u.X /= length;
+            u.Y /= length;
+            u.Z /= length;
+            double dot = X * u.X + Y * u.Y + Z * u.Z;
+            double rx = X * cosTheta + (u.Y * Z - u.Z * Y) * sinTheta + u.X * dot * (1 - cosTheta);
+            double ry = Y * cosTheta + (u.Z * X - u.X * Z) * sinTheta + u.Y * dot * (1 - cosTheta);
+            double rz = Z * cosTheta + (u.X * Y - u.Y * X) * sinTheta + u.Z * dot * (1 - cosTheta);
+            return new Vector3D(rx, ry, rz);
+        }
+
+        internal static double Dot(Vector3D pointVec, Vector3D lineVec)
+        {
+            return pointVec.X * lineVec.X + pointVec.Y * lineVec.Y + pointVec.Z * lineVec.Z;
         }
     }
 }

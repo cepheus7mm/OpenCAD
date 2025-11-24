@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Input;
 using OpenCAD;
 using OpenCAD.Geometry;
+using OpenCAD.Interfaces;
 using OpenCAD.Settings;
 using UI.Controls.MainWindow;
 
@@ -780,62 +781,40 @@ namespace UI.Controls.Viewport
         /// </summary>
         public OpenCADObject? HitTest(Point screenPos, Func<Point, Vector3?> screenToWorld)
         {
-            // Create pickbox boundary (5 pixels in each direction)
-            double pickboxSize = _viewportSettings?.Crosshair?.PickboxSize ?? 5.0;
-            var pickboxPoints = new[]
-            {
-                new Point(screenPos.X - pickboxSize, screenPos.Y - pickboxSize),
-                new Point(screenPos.X + pickboxSize, screenPos.Y - pickboxSize),
-                new Point(screenPos.X + pickboxSize, screenPos.Y + pickboxSize),
-                new Point(screenPos.X - pickboxSize, screenPos.Y + pickboxSize),
-                new Point(screenPos.X, screenPos.Y) // Center point
-            };
-
             // Collect all drawable objects
             var drawableObjects = new List<OpenCADObject>();
             CollectDrawableObjects(ObjectToDisplay, drawableObjects);
+            var worldPos = screenToWorld(screenPos);
+            if (worldPos is null || drawableObjects.Count < 1)
+                return null;
+
+            // Create pickbox boundary (5 pixels in each direction)
+            double pickboxSize = _viewportSettings?.Crosshair?.PickboxSize ?? 5.0;
+
+            var c1 = screenToWorld(new Point(screenPos.X - pickboxSize, screenPos.Y - pickboxSize));
+            var c2 = screenToWorld(new Point(screenPos.X + pickboxSize, screenPos.Y + pickboxSize));
+
+            if (c1 is null || c2 is null)
+                return null;    
 
             // Test each object against the pickbox
             foreach (var obj in drawableObjects)
             {
-                if (obj is Line line)
+                if (obj is IDrawable drawable)
                 {
-                    // Check if the line intersects the pickbox
-                    foreach (var pickPoint in pickboxPoints)
+                    var pt = drawable.GetClosestPointTo(new Point3D(worldPos.Value.X, worldPos.Value.Y, 0));
+                    if (pt is not null)
                     {
-                        var worldPos = screenToWorld(pickPoint);
-                        if (worldPos.HasValue && IsPointNearLine(worldPos.Value, line, pickboxSize / 100.0))
+                        if (pt.X >= c1.Value.X && pt.X <= c2.Value.X &&
+                            pt.Y <= c1.Value.Y && pt.Y >= c2.Value.Y)
                         {
                             return obj;
                         }
                     }
                 }
-                // Add more geometry types here as needed
             }
 
             return null;
-        }
-
-        /// <summary>
-        /// Check if a point is near a line within a tolerance
-        /// </summary>
-        private bool IsPointNearLine(Vector3 point, Line line, double tolerance)
-        {
-            var p = new Vector3((float)point.X, (float)point.Y, (float)point.Z);
-            var a = new Vector3((float)line.StartPoint.X, (float)line.StartPoint.Y, (float)line.StartPoint.Z);
-            var b = new Vector3((float)line.EndPoint.X, (float)line.EndPoint.Y, (float)line.EndPoint.Z);
-
-            var ab = b - a;
-            var ap = p - a;
-
-            // Project point onto line
-            var t = Vector3.Dot(ap, ab) / Vector3.Dot(ab, ab);
-            t = Math.Clamp(t, 0, 1); // Clamp to line segment
-
-            var closest = a + t * ab;
-            var distance = Vector3.Distance(p, closest);
-
-            return distance <= tolerance;
         }
 
         /// <summary>

@@ -62,10 +62,10 @@ namespace OpenCAD.Settings // CHANGED
         [JsonIgnore, XmlIgnore]
         public double MajorSpacing
         {
-            get => GetPropertyValue<double>(PropertyType.Double, nameof(MajorSpacing));
+            get => GetPropertyValue<double>(PropertyType.DoubleLength, nameof(MajorSpacing));
             set
             {
-                SetPropertyValue(PropertyType.Double, nameof(MajorSpacing), OpenCADStrings.MajorSpacing, value);
+                SetPropertyValue(PropertyType.DoubleLength, nameof(MajorSpacing), OpenCADStrings.MajorSpacing, value);
                 OnPropertyChanged();
             }
         }
@@ -77,10 +77,10 @@ namespace OpenCAD.Settings // CHANGED
         [JsonIgnore, XmlIgnore]
         public double MinorSpacing
         {
-            get => GetPropertyValue<double>(PropertyType.Double, nameof(MinorSpacing));
+            get => GetPropertyValue<double>(PropertyType.DoubleLength, nameof(MinorSpacing));
             set
             {
-                SetPropertyValue(PropertyType.Double, nameof(MinorSpacing), OpenCADStrings.MinorSpacing, value);
+                SetPropertyValue(PropertyType.DoubleLength, nameof(MinorSpacing), OpenCADStrings.MinorSpacing, value);
                 OnPropertyChanged();
             }
         }

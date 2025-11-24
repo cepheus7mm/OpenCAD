@@ -30,10 +30,10 @@ namespace OpenCAD.Settings
         [JsonIgnore, XmlIgnore]
         public double SnapSpacing
         {
-            get => GetPropertyValue<double>(PropertyType.Double, nameof(SnapSpacing));
+            get => GetPropertyValue<double>(PropertyType.DoubleLength, nameof(SnapSpacing));
             set
             {
-                SetPropertyValue(PropertyType.Double, nameof(SnapSpacing), OpenCADStrings.SnapSpacing, value);
+                SetPropertyValue(PropertyType.DoubleLength, nameof(SnapSpacing), OpenCADStrings.SnapSpacing, value);
                 OnPropertyChanged();
             }
         }

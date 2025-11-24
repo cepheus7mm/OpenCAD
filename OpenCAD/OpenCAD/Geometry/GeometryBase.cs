@@ -7,6 +7,8 @@ namespace OpenCAD.Geometry
 {
     public abstract class GeometryBase : OpenCADObject, IDrawable
     {
+        protected Vector3D _normal = new(0, 0, 1);
+
         /// <summary>
         /// Parameterless constructor required for deserialization.
         /// </summary>
@@ -80,6 +82,9 @@ namespace OpenCAD.Geometry
         }
 
         [JsonIgnore]
+        public double LinetypeScale => Document.GetViewportSettings().LinetypeScale;
+
+        [JsonIgnore]
         public LineWeight LineWeight
         {
             get
@@ -111,6 +116,16 @@ namespace OpenCAD.Geometry
 
         public abstract double Angle { get; }
 
+        public abstract Vector3D? GetFirstDerivate(Point3D point);
+
+        public abstract Vector3D? GetSecondDerivate(Point3D point);
+
+        public abstract double GetParameterAtPoint(Point3D point);
+
+        public abstract Point3D GetPointAtParameter(double parameter);
+
+        public abstract Point3D GetClosestPointTo(Point3D point, bool extend = false);
+
         public bool ToStringLength(out string length)
         {
             if (Document is null || double.IsNaN(Length) || double.IsInfinity(Length))
@@ -134,9 +149,6 @@ namespace OpenCAD.Geometry
         }
 
         #region Editing 
-
-        public abstract bool Move(Vector3D translation);
-
 
         /// <summary>
         /// Apply a 4x4 homogeneous transform to this geometry.

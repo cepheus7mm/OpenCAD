@@ -76,6 +76,15 @@ namespace UI.Commands
             _allowLastPoint = allowLastPoint;
             _keywords = keywords;
 
+            // Build display prompt including keywords if provided
+            string displayPrompt = prompt ?? string.Empty;
+            if (keywords != null && keywords.Length > 0)
+            {
+                // Show keywords in parentheses, joined by '/'
+                var kw = string.Join("/", keywords);
+                displayPrompt = $"{displayPrompt} [{kw}]";
+            }
+
             // Display prompt
             if (allowLastPoint)
             {
@@ -85,7 +94,7 @@ namespace UI.Commands
                     _context.OutputMessage(
                         string.Format(
                             OpenCADStrings.PromptWithLastPointFormat,
-                            prompt,
+                            displayPrompt,
                             lastPoint.X,
                             lastPoint.Y,
                             lastPoint.Z));
@@ -95,7 +104,7 @@ namespace UI.Commands
                     _context.OutputMessage(
                         string.Format(
                             OpenCADStrings.PromptWithViewportFormat,
-                            prompt));
+                            displayPrompt));
                 }
             }
             else
@@ -103,7 +112,7 @@ namespace UI.Commands
                 _context.OutputMessage(
                     string.Format(
                         OpenCADStrings.PromptWithViewportFormat,
-                        prompt));
+                        displayPrompt));
             }
 
             // If viewport is available, enable mouse picking

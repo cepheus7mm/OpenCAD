@@ -44,7 +44,7 @@ namespace UI.Commands.Editing
 
         protected override Matrix4D GetTransformation()
         {
-            if (!Matrix4D.TryCreateTranslation(_basePoint!, _targetPoint!, out Matrix4D translation))
+            if (!Matrix4D.TryCreateTranslation(BasePoint!, TargetPoint!, out Matrix4D translation))
             {
                 return Matrix4D.Identity;
             }

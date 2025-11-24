@@ -34,11 +34,6 @@ namespace UI.Commands.Undo
                     try { geom.Transform(_matrix); }
                     catch (NotImplementedException)
                     {
-                        // Fallback: if Transform not implemented, try Move using translation part only
-                        var tx = _matrix.M41;
-                        var ty = _matrix.M42;
-                        var tz = _matrix.M43;
-                        geom.Move(new Vector3D(tx, ty, tz));
                     }
                 }
             }
@@ -53,10 +48,6 @@ namespace UI.Commands.Undo
                     try { geom.Transform(_inverse); }
                     catch (NotImplementedException)
                     {
-                        var tx = _inverse.M41;
-                        var ty = _inverse.M42;
-                        var tz = _inverse.M43;
-                        geom.Move(new Vector3D(tx, ty, tz));
                     }
                 }
             }

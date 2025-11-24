@@ -1,4 +1,5 @@
-﻿using System;
+﻿using OpenCAD.Interfaces;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Drawing;
@@ -56,11 +57,7 @@ namespace OpenCAD
             set => _id = value;
         }
 
-        public bool IsDrawable
-        {
-            get => _isDrawable;
-            set => _isDrawable = value;
-        }
+        public bool IsDrawable => this is IDrawable;
 
         private readonly object _propertyLock = new();
 
@@ -117,14 +114,16 @@ namespace OpenCAD
             _parent = null;
         }
 
-        public void Add(OpenCADObject obj)
+        public virtual bool Add(OpenCADObject obj)
         {
             if (children.TryAdd(obj.ID, obj))
             {
                 obj._parent = this;
                 obj._document = _document;
-            }
-        }
+                return true;
+			}
+            return false;
+		}
 
         public bool Remove(OpenCADObject obj)
         {
