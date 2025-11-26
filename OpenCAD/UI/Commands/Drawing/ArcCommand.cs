@@ -43,18 +43,9 @@ namespace UI.Commands.Drawing
 
         public override bool IsMultiStep => true;
 
-        public override void Initialize(ICommandContext context)
+        public override async Task Initialize(ICommandContext context)
         {
-            base.Initialize(context);
-            var viewport = context.GetActiveViewport();
-            if (viewport == null)
-            {
-                context.OutputMessage("No active viewport.");
-                return;
-            }
-
-            // we rely on base._pointInputHelper initialized by CommandBase.Initialize
-            System.Diagnostics.Debug.WriteLine("ArcCommand initialized");
+            await base.Initialize(context);
         }
 
         public override async Task Execute()
@@ -133,13 +124,21 @@ namespace UI.Commands.Drawing
         private async Task<Point3D> GetInitialInput()
         {
             var keyWords = new string[] { "CSE", "SCE", "SER", "Last" };
-            var result = await GetPoint(string.Format(OpenCADStrings.ArcPointPrompt, "center"), keyWords, KeyWordInput);
-            if (result is Point3D point)
-                return  point;
-            else
+            var result = await GetPoint(string.Format(OpenCADStrings.ArcPointPrompt, "center"), keyWords);
+
+            if (result == null || result.ResultType == InputHelpers.InputResult.InputResultType.Cancel)
+                throw new OperationCanceledException();
+
+            if (result.Keyword is string keyWord)
             {
+                KeyWordInput(keyWord);
                 return await GetArcPoint();
             }
+
+            else if (result.Point is Point3D point)
+                return  point;
+
+            return null;
         }
 
         private void KeyWordInput (string? keyWord)
@@ -183,10 +182,10 @@ namespace UI.Commands.Drawing
             if (_step == ArcInputStep.Radius)
             {
                 // For SER mode, calculate center from radius
-                var radius = await GetDistance(OpenCADStrings.ArcRadiusPrompt);
-                if (double.IsNaN(radius))
+                var result = await GetDistance(OpenCADStrings.ArcRadiusPrompt);
+                if (double.IsNaN(result.DoubleValue))
                     return null;
-                return GetCenterFromStartEndRadius(radius);
+                return GetCenterFromStartEndRadius(result.DoubleValue);
             }
 
             // For EndPoint mode we want live arc preview and also allow angle input.
@@ -243,13 +242,14 @@ namespace UI.Commands.Drawing
             try
             {
                 // Allow the user to either type an angle or pick a point (angle computed from center to picked point)
-                var angle = await GetAngle(OpenCADStrings.ArcEndAnglePrompt);
-                if (double.IsNaN(angle))
+                var result = await GetAngle(OpenCADStrings.ArcEndAnglePrompt);
+
+                if (result == null || result.DoubleValue == double.NaN)
                 {
                     // user cancelled or invalid -> treat as cancel
                     return null;
                 }
-
+                var angle = result.DoubleValue;
                 // compute endpoint from center, radius and angle
                 double radius = CalculateDistance(_center, _start);
                 double x = _center.X + radius * Math.Cos(angle);
@@ -345,16 +345,19 @@ namespace UI.Commands.Drawing
                 BasePoint = basePoint;
             }
             var prompt = string.Format(OpenCADStrings.ArcPointPrompt, step);
-            var point = await GetPoint(prompt, null, null);
-            return point;
+            var result = await GetPoint(prompt);
+            if (result != null && result.Point is Point3D point)
+                return point;
+
+            return null;
         }
 
         public override bool ProcessInput(string input)
         {
             // Route keyboard input to shared helper in base (created during Initialize)
-            if (_pointInputHelper != null)
+            if (_inputHelper != null)
             {
-                return _pointInputHelper.ProcessKeyboardInput(input);
+                return _inputHelper.ProcessKeyboardInput(input);
             }
             
             return false;
@@ -432,7 +435,6 @@ namespace UI.Commands.Drawing
         {
             base.Cancel();
             _cancellationTokenSource?.Cancel();
-            _pointInputHelper?.Cancel();
             CurrentPrompt = string.Empty;
         }
     }

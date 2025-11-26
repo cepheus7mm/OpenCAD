@@ -12,9 +12,9 @@ namespace UI.Commands.Editing
     [InputCommand("copy", "Copy selected objects", "cp")]
     public class CopyCommand : EditCommandBase
     {
-        public override void Initialize(ICommandContext context)
+        public override async Task Initialize(ICommandContext context)
         {
-            base.Initialize(context);
+            await base.Initialize(context);
             _commandName = OpenCADStrings.CopyCommandName;
         }
 
@@ -34,9 +34,9 @@ namespace UI.Commands.Editing
             }
 
             // During point picking phase, pass to PointInputHelper
-            if (_pointInputHelper != null)
+            if (_inputHelper != null)
             {
-                return _pointInputHelper.ProcessKeyboardInput(input);
+                return _inputHelper.ProcessKeyboardInput(input);
             }
 
             return false;

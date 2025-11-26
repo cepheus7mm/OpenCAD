@@ -17,6 +17,7 @@ namespace UI.Commands
         private readonly Func<ViewportControl?> _getActiveViewport;
         private readonly Func<UndoRedoManager?> _getUndoRedoManager;
         private readonly Func<OpenCADDocument?> _getDocument;
+        private readonly Action<string> _setCommandPrompt; // <-- new
 
         public CommandContext(
             Action<string> outputMessage,
@@ -25,7 +26,8 @@ namespace UI.Commands
             Action<OpenCADObject> raiseGeometryCreated,
             Func<ViewportControl?>? getActiveViewport = null,
             Func<UndoRedoManager?>? getUndoRedoManager = null,
-            Func<OpenCADDocument?>? getDocument = null)
+            Func<OpenCADDocument?>? getDocument = null,
+            Action<string>? setCommandPrompt = null) // optional delegate
         {
             _outputMessage = outputMessage;
             _getLastPoint = getLastPoint;
@@ -34,6 +36,7 @@ namespace UI.Commands
             _getActiveViewport = getActiveViewport ?? (() => null);
             _getUndoRedoManager = getUndoRedoManager ?? (() => null);
             _getDocument = getDocument ?? (() => null);
+            _setCommandPrompt = setCommandPrompt ?? (_ => { });
         }
 
         public void OutputMessage(string message) => _outputMessage(message);
@@ -43,5 +46,11 @@ namespace UI.Commands
         public ViewportControl? GetActiveViewport() => _getActiveViewport();
         public UndoRedoManager? GetUndoRedoManager() => _getUndoRedoManager();
         public OpenCADDocument? GetDocument() => _getDocument();
+
+        /// <summary>
+        /// Set the command pane prompt (delegates to the UI layer).
+        /// InputHelpers/commands can call this to update the prompt line without writing into history.
+        /// </summary>
+        public void SetCommandPrompt(string prompt) => _setCommandPrompt(prompt);
     }
 }

@@ -13,9 +13,9 @@ namespace UI.Commands.Editing
     public class MoveCommand : EditCommandBase
     {
 
-        public override void Initialize(ICommandContext context)
+        public override async Task Initialize(ICommandContext context)
         {
-            base.Initialize(context);
+            await base.Initialize(context);
             _commandName = OpenCADStrings.MoveCommandName;
         }
 
@@ -33,9 +33,9 @@ namespace UI.Commands.Editing
             }
 
             // During point picking phase, pass to PointInputHelper
-            if (_pointInputHelper != null)
+            if (_inputHelper != null)
             {
-                return _pointInputHelper.ProcessKeyboardInput(input);
+                return _inputHelper.ProcessKeyboardInput(input);
             }
 
             return false;

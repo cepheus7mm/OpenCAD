@@ -13,9 +13,9 @@ namespace UI.Commands.Editing
     [InputCommand("scale", "Scale selected objects", "sc")]
     public class ScaleCommand : EditCommandBase
     {
-        public override void Initialize(ICommandContext context)
+        public override async Task Initialize(ICommandContext context)
         {
-            base.Initialize(context);
+            await base.Initialize(context);
             _commandName = OpenCADStrings.ScaleCommandName;
         }
 
@@ -29,8 +29,8 @@ namespace UI.Commands.Editing
             if (SelectedObjects == null)
                 return base.ProcessInput(input);
 
-            if (_pointInputHelper != null)
-                return _pointInputHelper.ProcessKeyboardInput(input);
+            if (_inputHelper != null)
+                return _inputHelper.ProcessKeyboardInput(input);
 
             return false;
         }

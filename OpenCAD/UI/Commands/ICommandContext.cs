@@ -31,6 +31,12 @@ namespace UI.Commands
         void RaiseGeometryCreated(OpenCADObject geometry);
 
         /// <summary>
+        /// Set the current command prompt text (displayed on the command input line).
+        /// The string should be the complete prompt text the input helpers expect to show.
+        /// </summary>
+        void SetCommandPrompt(string prompt);
+
+        /// <summary>
         /// Get the current active viewport
         /// </summary>
         ViewportControl? GetActiveViewport();

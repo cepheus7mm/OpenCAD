@@ -36,7 +36,7 @@ namespace UI.Commands
         /// <summary>
         /// Initialize the command with context
         /// </summary>
-        void Initialize(ICommandContext context);
+        Task Initialize(ICommandContext context);
         
         /// <summary>
         /// Execute the command

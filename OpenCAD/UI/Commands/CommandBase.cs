@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using OpenCAD;
 using OpenCAD.Geometry;
+using UI.Commands.InputHelpers;
 using UI.Commands.Undo;
 using UI.Controls.Viewport;
 
@@ -22,7 +23,7 @@ namespace UI.Commands
         private string _currentPrompt = string.Empty;
 
         // Shared PointInputHelper instance so ProcessInput can route keyboard input correctly.
-        protected PointInputHelper? _pointInputHelper;
+        protected IInputHelper? _inputHelper;
 
         public virtual bool IsMultiStep => false;
         
@@ -48,18 +49,26 @@ namespace UI.Commands
         public event EventHandler? PromptChanged;
         public event EventHandler? CommandCompletedEvent;
 
-        public virtual void Initialize(ICommandContext context)
+        public virtual async Task Initialize(ICommandContext context)
         {
             Context = context;
 
             // Create a helper tied to the active viewport/viewmodel so ProcessInput
             // can forward keyboard input to the same helper used by GetPoint/GetDistance/GetAngle.
-            var viewport = context.GetActiveViewport();
-            var viewModel = viewport?.DataContext as ViewportViewModel;
-            if (viewModel != null)
+            await Task.Run( () => 
             {
-                _pointInputHelper = new PointInputHelper(context, viewModel);
-            }
+                var viewport = context.GetActiveViewport();
+                if (viewport == null)
+                {
+                    context.OutputMessage("No active viewport.");
+                    return;
+                }
+                var viewModel = viewport?.DataContext as ViewportViewModel;
+                if (viewModel != null)
+                {
+                    _inputHelper = new GetPointInput(context, viewModel);
+                }
+            }); // ensure async context
         }
 
         public abstract Task Execute();
@@ -67,8 +76,8 @@ namespace UI.Commands
         public virtual bool ProcessInput(string input)
         {
             // Route keyboard input to shared point helper if present
-            if (_pointInputHelper != null)
-                return _pointInputHelper.ProcessKeyboardInput(input);
+            if (_inputHelper != null)
+                return _inputHelper.ProcessKeyboardInput(input);
 
             return true; // Single-step commands complete immediately
         }
@@ -80,9 +89,6 @@ namespace UI.Commands
 
             // Ensure preview stopped if any command cancels
             StopPreview(false);
-
-            // Cancel any pending point input
-            _pointInputHelper?.Cancel();
         }
 
         /// <summary>
@@ -122,62 +128,37 @@ namespace UI.Commands
         /// Uses PointInputHelper.GetPointOrKeywordAsync under the hood and respects this command's
         /// cancellation token source (_cancellationTokenSource).
         /// </summary>
-        protected async Task<Point3D?> GetPoint(string prompt, string[]? keyWords = null, Action<string>? keywordHandler = null, bool allowLastPoint = false)
+        protected async Task<InputResult> GetPoint(string prompt, string[]? keyWords = null, bool allowLastPoint = false)
         {
             var viewport = Context?.GetActiveViewport();
             var viewModel = viewport?.DataContext as ViewportViewModel;
+            var badResult = new InputResult() { ResultType = InputResult.InputResultType.None, Point = null };
             if (viewModel == null || Context == null)
-                return null;
+                return badResult;
 
             // Ensure we have a cancellation token source for this command
             _cancellationTokenSource ??= new CancellationTokenSource();
 
             // Use shared helper if available, otherwise create a temporary one
-            var helper = _pointInputHelper ?? new PointInputHelper(Context, viewModel);
-            bool helperOwned = helper != _pointInputHelper;
+            var helper = _inputHelper ?? new GetPointInput(Context, viewModel);
+            bool helperOwned = helper != _inputHelper;
 
             CurrentPrompt = prompt;
             try
             {
-                var result = await helper.GetPointOrKeywordAsync(
+                return await ((GetPointInput)helper).GetPointOrKeywordAsync(
                     prompt,
                     allowLastPoint: allowLastPoint,
                     basePoint: BasePoint,
                     keywords: keyWords,
                     cancellationToken: _cancellationTokenSource.Token);
-
-                if (result == null || result.IsCancelled)
-                    return null;
-
-                if (result.IsPoint)
-                    return result.Point;
-
-                if (result.IsKeyword && keywordHandler != null && result.Keyword != null)
-                {
-                    // let caller handle keyword input synchronously
-                    try
-                    {
-                        keywordHandler(result.Keyword);
-                    }
-                    catch
-                    {
-                        // swallow exceptions from keyword handler to avoid breaking input flow
-                    }
-                }
-
-                // keyword entered (handled or not) -> treat as non-point result
-                return null;
             }
             catch (OperationCanceledException)
             {
-                return null;
+                return badResult;
             }
             finally
             {
-                if (helperOwned)
-                {
-                    try { helper.Cancel(); } catch { }
-                }
                 CurrentPrompt = string.Empty;
             }
         }
@@ -187,112 +168,33 @@ namespace UI.Commands
         /// Supports numeric input, unit-aware parsing via document settings, or a two-point entry.
         /// Returns double.NaN on cancel/invalid input.
         /// </summary>
-        protected async Task<double> GetDistance(string prompt, string[]? keyWords = null, Action<string>? keywordHandler = null, bool allowLastPoint = false)
+        protected async Task<InputResult> GetDistance(string prompt, string[]? keyWords = null, bool allowLastPoint = false)
         {
             var viewport = Context?.GetActiveViewport();
             var viewModel = viewport?.DataContext as ViewportViewModel;
+            var badResult = new InputResult() { ResultType = InputResult.InputResultType.None, DoubleValue = double.NaN };
             if (viewModel == null || Context == null)
-                return double.NaN;
+                return badResult;
 
             _cancellationTokenSource ??= new CancellationTokenSource();
 
-            var helper = _pointInputHelper ?? new PointInputHelper(Context, viewModel);
-            bool helperOwned = helper != _pointInputHelper;
+            _inputHelper = new GetDistanceInput(Context, viewModel, this);
 
-            CurrentPrompt = prompt;
             try
             {
-                var first = await helper.GetPointOrKeywordAsync(
+                return await ((GetDistanceInput)_inputHelper).GetDistance(
                     prompt,
                     allowLastPoint: allowLastPoint,
                     basePoint: BasePoint,
-                    keywords: keyWords,
+                    keyWords: keyWords,
                     cancellationToken: _cancellationTokenSource.Token);
-
-                if (first == null || first.IsCancelled)
-                    return double.NaN;
-
-                if (first.IsKeyword && first.Keyword != null)
-                {
-                    if (keywordHandler != null)
-                    {
-                        try { keywordHandler(first.Keyword); }
-                        catch { }
-                        return double.NaN;
-                    }
-
-                    if (double.TryParse(first.Keyword, out var parsed))
-                        return parsed;
-
-                    var doc = Context.GetDocument();
-                    if (doc != null)
-                    {
-                        try
-                        {
-                            return doc.StringToValue(first.Keyword, OpenCADDocument.UnitFormatType.Linear);
-                        }
-                        catch
-                        {
-                            return double.NaN;
-                        }
-                    }
-
-                    return double.NaN;
-                }
-
-                if (first.IsPoint && first.Point != null)
-                {
-                    // two-point distance: set base, prompt for second pick
-                    BasePoint = first.Point;
-                    StartPreview();
-
-                    try
-                    {
-                        var secondPrompt = OpenCADStrings.SecondPointPrompt ?? "Specify second point:";
-                        CurrentPrompt = secondPrompt;
-
-                        var second = await helper.GetPointOrKeywordAsync(
-                            secondPrompt,
-                            allowLastPoint: allowLastPoint,
-                            basePoint: BasePoint,
-                            keywords: keyWords,
-                            cancellationToken: _cancellationTokenSource.Token);
-
-                        if (second == null || second.IsCancelled)
-                            return double.NaN;
-
-                        if (second.IsPoint && second.Point != null)
-                        {
-                            return BasePoint.DistanceTo(second.Point);
-                        }
-
-                        if (second.IsKeyword && second.Keyword != null && keywordHandler != null)
-                        {
-                            try { keywordHandler(second.Keyword); } catch { }
-                        }
-
-                        return double.NaN;
-                    }
-                    finally
-                    {
-                        StopPreview(false);
-                        BasePoint = null;
-                        TargetPoint = null;
-                    }
-                }
-
-                return double.NaN;
             }
             catch (OperationCanceledException)
             {
-                return double.NaN;
+                return badResult;
             }
             finally
             {
-                if (helperOwned)
-                {
-                    try { helper.Cancel(); } catch { }
-                }
                 CurrentPrompt = string.Empty;
             }
         }
@@ -302,80 +204,38 @@ namespace UI.Commands
         /// Supports numeric/keyword input (unit-aware) or a single point pick (angle from BasePoint to picked point).
         /// Caller should set BasePoint before calling if using point picks.
         /// </summary>
-        protected async Task<double> GetAngle(string prompt, string[]? keyWords = null, Action<string>? keywordHandler = null, bool allowLastPoint = false)
+        /// <summary>
+        /// Get a distance value from the user.
+        /// Supports numeric input, unit-aware parsing via document settings, or a two-point entry.
+        /// Returns double.NaN on cancel/invalid input.
+        /// </summary>
+        protected async Task<InputResult> GetAngle(string prompt, string[]? keyWords = null, bool allowLastPoint = false)
         {
             var viewport = Context?.GetActiveViewport();
             var viewModel = viewport?.DataContext as ViewportViewModel;
+            var badResult = new InputResult() { ResultType = InputResult.InputResultType.None, DoubleValue = double.NaN };
             if (viewModel == null || Context == null)
-                return double.NaN;
+                return badResult;
 
             _cancellationTokenSource ??= new CancellationTokenSource();
 
-            var helper = _pointInputHelper ?? new PointInputHelper(Context, viewModel);
-            bool helperOwned = helper != _pointInputHelper;
+            _inputHelper = new GetAngleInput(Context, viewModel, this);
 
-            CurrentPrompt = prompt;
             try
             {
-                var result = await helper.GetPointOrKeywordAsync(
+                return await ((GetAngleInput)_inputHelper).GetAngle(
                     prompt,
                     allowLastPoint: allowLastPoint,
                     basePoint: BasePoint,
-                    keywords: keyWords,
+                    keyWords: keyWords,
                     cancellationToken: _cancellationTokenSource.Token);
-
-                if (result == null || result.IsCancelled)
-                    return double.NaN;
-
-                if (result.IsKeyword && result.Keyword != null)
-                {
-                    if (keywordHandler != null)
-                    {
-                        try { keywordHandler(result.Keyword); } catch { }
-                        return double.NaN;
-                    }
-
-                    if (double.TryParse(result.Keyword, out var parsed))
-                        return parsed;
-
-                    var doc = Context.GetDocument();
-                    if (doc != null)
-                    {
-                        try
-                        {
-                            // StringToValue used for linear values; angles use StringToAngle
-                            return doc.StringToValue(result.Keyword, OpenCADDocument.UnitFormatType.Angular);
-                        }
-                        catch
-                        {
-                            return double.NaN;
-                        }
-                    }
-
-                    return double.NaN;
-                }
-
-                if (result.IsPoint && result.Point != null)
-                {
-                    if (BasePoint == null)
-                        return double.NaN;
-
-                    // Compute angle from BasePoint to picked point
-                    return BasePoint.AngleTo(result.Point);
-                }
-
-                return double.NaN;
             }
             catch (OperationCanceledException)
             {
-                return double.NaN;
+                return badResult;
             }
             finally
             {
-                if (helperOwned)
-                {
-                    try { helper.Cancel(); } catch { }
-                }
                 CurrentPrompt = string.Empty;
             }
         }
@@ -386,8 +246,8 @@ namespace UI.Commands
         protected List<OpenCADObject>? SelectedObjects;
 
         // Base/target points used by preview; derived classes should set BasePoint before StartPreview.
-        protected Point3D? BasePoint { get; set; }
-        protected Point3D? TargetPoint { get; set; }
+        protected Point3D BasePoint { get; set; } = Point3D.Origin;
+        protected Point3D TargetPoint { get; set; } = Point3D.Origin;
 
         // Preview fields
         private readonly List<OpenCADObject> _previewObjects = new();
@@ -406,7 +266,7 @@ namespace UI.Commands
         /// Subscribes to ViewportViewModel.PreviewPoint changes and shows translated clones.
         /// Captures providers (viewport/document/undo manager) to avoid them becoming null after awaits.
         /// </summary>
-        protected void StartPreview()
+        public void StartPreview()
         {
             var viewport = Context?.GetActiveViewport();
             if (viewport == null) return;
@@ -449,7 +309,7 @@ namespace UI.Commands
         /// Clears cached providers.
         /// If completeCommand is true, CommandCompleted() is called at the end (preserves previous behavior).
         /// </summary>
-        protected void StopPreview(bool completeCommand = true)
+        public void StopPreview(bool completeCommand = true)
         {
             try
             {

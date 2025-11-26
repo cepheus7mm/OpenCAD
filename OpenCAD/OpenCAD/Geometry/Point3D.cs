@@ -39,6 +39,8 @@ namespace OpenCAD.Geometry
         [JsonIgnore]
         public double Length => Math.Sqrt(X * X + Y * Y + Z * Z);
 
+        public static Point3D Origin => new Point3D(0, 0, 0);
+
         /// <summary>
         /// Distance between two points
         /// </summary>

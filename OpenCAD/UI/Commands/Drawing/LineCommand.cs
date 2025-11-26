@@ -12,38 +12,18 @@ namespace UI.Commands.Drawing
     [InputCommand("line", "Create a line (prompts for start and end points or click in viewport)", "l")]
     public class LineCommand : CommandBase
     {
-        private PointInputHelper? _pointInputHelper;
-        private CancellationTokenSource? _cancellationTokenSource;
         private Point3D? _firstStartPoint; // Store the very first start point for closing
 
         public override bool IsMultiStep => true;
 
-        public override void Initialize(ICommandContext context)
+        public override async Task Initialize(ICommandContext context)
         {
-            base.Initialize(context);
-            var viewport = context.GetActiveViewport();
-            if (viewport == null)
-            {
-                context.OutputMessage("No active viewport.");
-                return;
-            }
-
-            // Get the ViewModel from the viewport
-            var viewModel = viewport.DataContext as ViewportViewModel;
-            if (viewModel == null)
-            {
-                context.OutputMessage("Viewport view model not available.");
-                return;
-            }
-
-            // Create helper with ViewModel instead of ViewportControl
-            _pointInputHelper = new PointInputHelper(context, viewModel);
-            System.Diagnostics.Debug.WriteLine(OpenCADStrings.LineCommandInitialized);
+            await base.Initialize(context);
         }
 
         public override async Task Execute()
         {
-            if (_pointInputHelper == null)
+            if (_inputHelper == null)
                 return;
 
             _cancellationTokenSource = new CancellationTokenSource();
@@ -51,21 +31,21 @@ namespace UI.Commands.Drawing
             try
             {
                 // Get initial start point (allow using last point)
-                CurrentPrompt = OpenCADStrings.LineStartPointPrompt;
-                var startPoint = await _pointInputHelper.GetPointAsync(
+                var result = await GetPoint(
                     "Specify start point",
-                    allowLastPoint: true,
-                    basePoint: null,
-                    _cancellationTokenSource.Token);
+                    allowLastPoint: true);
 
-                if (startPoint == null)
+                if (result != null && result.Point is Point3D startPoint)
+                {
+                    // Store the very first start point for closing
+                    _firstStartPoint = startPoint;
+                }
+                else
                 {
                     Cancel();
                     return;
                 }
 
-                // Store the very first start point for closing
-                _firstStartPoint = startPoint;
 
                 Context?.OutputMessage(
                     string.Format(
@@ -78,21 +58,31 @@ namespace UI.Commands.Drawing
                 while (!_cancellationTokenSource.Token.IsCancellationRequested)
                 {
                     // Get end point with rubberband line from start point
-                    CurrentPrompt = OpenCADStrings.LineEndPointPrompt;
-                    var result = await _pointInputHelper.GetPointOrKeywordAsync(
-                        "Specify next point or [Close/Undo] or press ESC to finish",
+                    BasePoint = startPoint;
+                    result = await GetPoint(
+                        "Specify next point or press ESC to finish",
                         allowLastPoint: false,
-                        basePoint: startPoint,
-                        keywords: new[] { "C", "Close", "U", "Undo" },
-                        _cancellationTokenSource.Token);
+                        keyWords: new[] { "C", "Close", "U", "Undo" });
 
-                    if (result.IsCancelled)
+                    var endPoint = null as Point3D;
+                    if (result != null && result.Point is Point3D)
+                    {
+                        endPoint = result.Point;
+                    }
+                    else
+                    {
+                        Cancel();
+                        return;
+                    }
+
+
+                    if (result.ResultType == InputHelpers.InputResult.InputResultType.Cancel)
                     {
                         // User cancelled - exit the loop
                         break;
                     }
 
-                    if (result.IsKeyword)
+                    if (result.ResultType == InputHelpers.InputResult.InputResultType.Keyword)
                     {
                         var keyword = result.Keyword?.ToUpperInvariant();
                         
@@ -112,13 +102,6 @@ namespace UI.Commands.Drawing
                             Context?.OutputMessage("Undo not yet implemented in line command.");
                             continue;
                         }
-                    }
-
-                    var endPoint = result.Point;
-                    if (endPoint == null)
-                    {
-                        // Shouldn't happen, but handle gracefully
-                        break;
                     }
 
                     // Create the line segment
@@ -145,9 +128,9 @@ namespace UI.Commands.Drawing
         public override bool ProcessInput(string input)
         {
             // Pass keyboard input to the PointInputHelper to complete the async task
-            if (_pointInputHelper != null)
+            if (_inputHelper != null)
             {
-                return _pointInputHelper.ProcessKeyboardInput(input);
+                return _inputHelper.ProcessKeyboardInput(input);
             }
             
             return false;
@@ -210,7 +193,6 @@ namespace UI.Commands.Drawing
         {
             base.Cancel();
             _cancellationTokenSource?.Cancel();
-            _pointInputHelper?.Cancel();
             _firstStartPoint = null;
             CurrentPrompt = string.Empty;
         }

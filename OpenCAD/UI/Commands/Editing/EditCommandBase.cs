@@ -42,16 +42,9 @@ namespace UI.Commands.Editing
 
         public override bool RequiresSelection => true;
 
-        /// <summary>
-        /// The message to display when entering selection mode.
-        /// Derived classes should set this in their constructor or before Execute.
-        /// </summary>
-        //protected virtual string SelectObjectsMessage => "Click objects to select them, then press ENTER to continue (or ESC to cancel).";
-
-        public override void Initialize(ICommandContext context)
+        public override async Task Initialize(ICommandContext context)
         {
-            base.Initialize(context);
-            // Point input is now obtained via CommandBase.GetPoint, so no local PointInputHelper is required here.
+            await base.Initialize(context);
         }
 
         public override async Task Execute()
@@ -179,9 +172,13 @@ namespace UI.Commands.Editing
             try
             {
                 // Prompt for base point using shared GetPoint on CommandBase
-                BasePoint = await GetPoint(BasePointPrompt, null, null);
+                var result = await GetPoint(BasePointPrompt, null);
 
-                if (BasePoint == null)
+                if (result != null && result.Point is Point3D basePoint)
+                {
+                    BasePoint = basePoint;
+                }
+                else
                 {
                     Cancel();
                     return;
@@ -195,9 +192,13 @@ namespace UI.Commands.Editing
                     do
                     {
                         // Prompt for target point using shared GetPoint on CommandBase
-                        TargetPoint = await GetPoint(TargetPointPrompt, null, null);
+                        result = await GetPoint(TargetPointPrompt);
+                        if (result != null && result.Point is Point3D targetPoint)
+                        {
+                            TargetPoint = targetPoint;
+                        }
 
-                        if (TargetPoint == null)
+                        else
                         {
                             Cancel();
                             return;

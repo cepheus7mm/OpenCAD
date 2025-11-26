@@ -137,7 +137,8 @@ namespace UI.Controls.MainWindow
                 raiseGeometryCreated: geometry => GeometryCreated?.Invoke(this, new GeometryCreatedEventArgs(geometry)),
                 getActiveViewport: () => _getActiveViewport?.Invoke(),
                 getUndoRedoManager: () => _undoRedoManager,
-                getDocument: () => _document
+                getDocument: () => _document,
+                setCommandPrompt: SetCommandPrompt // <-- wired up so helpers can update prompt line
             );
 
             // Initialize and discover commands
@@ -230,13 +231,13 @@ namespace UI.Controls.MainWindow
         public void ExecuteCommandProgrammatically(string commandName)
         {
             //System.Diagnostics.Debug.WriteLine($"=== ExecuteCommandProgrammatically: '{commandName}' ===");
-            
+
             string resolvedCommand = ResolveCommandAlias(commandName);
             //System.Diagnostics.Debug.WriteLine($"  Resolved to: '{resolvedCommand}'");
-            
+
             // Output to history to show the command was executed
             AppendToHistory($"> {resolvedCommand}");
-            
+
             try
             {
                 ProcessNewCommand(resolvedCommand);
@@ -350,7 +351,7 @@ namespace UI.Controls.MainWindow
             return input;
         }
 
-        private void ProcessNewCommand(string input)
+        private async Task ProcessNewCommand(string input)
         {
             string[] parts = input.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length == 0) return;
@@ -371,8 +372,12 @@ namespace UI.Controls.MainWindow
                 return;
             }
 
-            command.Initialize(_commandContext);
-            command.Execute();
+            _activeCommand = command;
+            _activeCommand.PromptChanged += OnCommandPromptChanged;
+            _activeCommand.CommandCompletedEvent += OnCommandCompleted;
+
+            await command.Initialize(_commandContext);
+            await command.Execute();
 
             if (command.IsMultiStep)
             {
@@ -414,7 +419,7 @@ namespace UI.Controls.MainWindow
             UpdatePrompt();
             OnPropertyChanged(nameof(HasActiveCommand));
             ActiveCommandChanged?.Invoke(this, EventArgs.Empty);
-            
+
             // Request focus back to command input after command completes
             FocusRequested?.Invoke(this, EventArgs.Empty);
         }
@@ -437,8 +442,8 @@ namespace UI.Controls.MainWindow
 
         private void UpdatePrompt()
         {
-            PromptText = _activeCommand != null 
-                ? $"{_activeCommand.CurrentPrompt} >" 
+            PromptText = _activeCommand != null
+                ? $"{_activeCommand.CurrentPrompt} >"
                 : "Command >";
         }
 
@@ -485,6 +490,22 @@ namespace UI.Controls.MainWindow
             }
 
             ScrollToEndRequested?.Invoke(this, EventArgs.Empty);
+        }
+
+        #endregion
+
+        #region Private Methods - Prompt API for helpers
+
+        /// <summary>
+        /// Called by CommandContext (helpers/commands) to set the prompt line.
+        /// This method sets the prompt text shown on the input line. It intentionally
+        /// does not write anything to history — history handling will be reworked later.
+        /// </summary>
+        /// <param name="prompt">Complete prompt text (helpers should pass the full display prompt)</param>
+        private void SetCommandPrompt(string prompt)
+        {
+            // Ensure a trailing caret is shown consistently
+            PromptText = string.IsNullOrEmpty(prompt) ? "Command >" : $"{prompt} >";
         }
 
         #endregion
