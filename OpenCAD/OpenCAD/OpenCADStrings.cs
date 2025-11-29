@@ -186,6 +186,16 @@
         public const string EndPoint = "End Point";
 
         /// <summary>
+        /// Property name for radius
+        /// </summary>
+        public const string Radius = "Radius";
+
+        /// <summary>
+        /// Property name for second point
+        /// </summary>
+        public const string SecondPoint = "Second Point";
+
+        /// <summary>
         /// Property name for name
         /// </summary>
         public const string Name = "Name";

@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using OpenCAD;
 using OpenCAD.Geometry;
+using UI.Commands.Editing;
 using UI.Commands.InputHelpers;
 using UI.Commands.Undo;
 using UI.Controls.Viewport;
@@ -52,23 +53,6 @@ namespace UI.Commands
         public virtual async Task Initialize(ICommandContext context)
         {
             Context = context;
-
-            // Create a helper tied to the active viewport/viewmodel so ProcessInput
-            // can forward keyboard input to the same helper used by GetPoint/GetDistance/GetAngle.
-            await Task.Run( () => 
-            {
-                var viewport = context.GetActiveViewport();
-                if (viewport == null)
-                {
-                    context.OutputMessage("No active viewport.");
-                    return;
-                }
-                var viewModel = viewport?.DataContext as ViewportViewModel;
-                if (viewModel != null)
-                {
-                    _inputHelper = new GetPointInput(context, viewModel);
-                }
-            }); // ensure async context
         }
 
         public abstract Task Execute();
@@ -130,8 +114,7 @@ namespace UI.Commands
         /// </summary>
         protected async Task<InputResult> GetPoint(string prompt, string[]? keyWords = null, bool allowLastPoint = false)
         {
-            var viewport = Context?.GetActiveViewport();
-            var viewModel = viewport?.DataContext as ViewportViewModel;
+            var viewModel = Context?.GetActiveViewportViewModel();
             var badResult = new InputResult() { ResultType = InputResult.InputResultType.None, Point = null };
             if (viewModel == null || Context == null)
                 return badResult;
@@ -140,13 +123,12 @@ namespace UI.Commands
             _cancellationTokenSource ??= new CancellationTokenSource();
 
             // Use shared helper if available, otherwise create a temporary one
-            var helper = _inputHelper ?? new GetPointInput(Context, viewModel);
-            bool helperOwned = helper != _inputHelper;
+            _inputHelper = new GetPointInput(Context, viewModel);
 
             CurrentPrompt = prompt;
             try
             {
-                return await ((GetPointInput)helper).GetPointOrKeywordAsync(
+                return await ((GetPointInput)_inputHelper).GetPointOrKeywordAsync(
                     prompt,
                     allowLastPoint: allowLastPoint,
                     basePoint: BasePoint,
@@ -170,8 +152,7 @@ namespace UI.Commands
         /// </summary>
         protected async Task<InputResult> GetDistance(string prompt, string[]? keyWords = null, bool allowLastPoint = false)
         {
-            var viewport = Context?.GetActiveViewport();
-            var viewModel = viewport?.DataContext as ViewportViewModel;
+            var viewModel = Context?.GetActiveViewportViewModel();
             var badResult = new InputResult() { ResultType = InputResult.InputResultType.None, DoubleValue = double.NaN };
             if (viewModel == null || Context == null)
                 return badResult;
@@ -204,22 +185,16 @@ namespace UI.Commands
         /// Supports numeric/keyword input (unit-aware) or a single point pick (angle from BasePoint to picked point).
         /// Caller should set BasePoint before calling if using point picks.
         /// </summary>
-        /// <summary>
-        /// Get a distance value from the user.
-        /// Supports numeric input, unit-aware parsing via document settings, or a two-point entry.
-        /// Returns double.NaN on cancel/invalid input.
-        /// </summary>
         protected async Task<InputResult> GetAngle(string prompt, string[]? keyWords = null, bool allowLastPoint = false)
         {
-            var viewport = Context?.GetActiveViewport();
-            var viewModel = viewport?.DataContext as ViewportViewModel;
+            var viewModel = Context?.GetActiveViewportViewModel();
             var badResult = new InputResult() { ResultType = InputResult.InputResultType.None, DoubleValue = double.NaN };
             if (viewModel == null || Context == null)
                 return badResult;
 
             _cancellationTokenSource ??= new CancellationTokenSource();
 
-            _inputHelper = new GetAngleInput(Context, viewModel, this);
+            _inputHelper = new GetAngleInput(Context, viewModel);
 
             try
             {
@@ -252,7 +227,6 @@ namespace UI.Commands
         // Preview fields
         private readonly List<OpenCADObject> _previewObjects = new();
         protected PropertyChangedEventHandler? _previewHandler;
-        private ViewportControl? _previewViewport;
 
         // Cached providers captured when preview starts (so awaits won't lose them)
         protected ViewportControl? CachedViewport { get; private set; }
@@ -268,40 +242,41 @@ namespace UI.Commands
         /// </summary>
         public void StartPreview()
         {
-            var viewport = Context?.GetActiveViewport();
-            if (viewport == null) return;
+            var viewModel = Context?.GetActiveViewportViewModel();
+            if (viewModel == null || Context == null) return;
 
-            var viewModel = viewport.DataContext as ViewportViewModel;
-            if (viewModel == null) return;
-
-            // Cache providers immediately so awaiting user input cannot lose them
-            CachedViewport = viewport;
-            CachedDocument = Context?.GetDocument();
-            CachedUndoManager = Context?.GetUndoRedoManager();
-            CachedViewModel = viewModel;
-
-            // Remember viewport used for preview so we can remove clones later
-            _previewViewport = viewport;
-
-            // Attach handler to respond to PreviewPoint changes
-            _previewHandler = (sender, e) =>
+            // Capture providers and subscribe on UI thread
+            Context.PostToUI(() =>
             {
-                if (e.PropertyName == nameof(ViewportViewModel.PreviewPoint))
-                {
-                    var previewPoint = viewModel.PreviewPoint;
-                    if (previewPoint != null && BasePoint != null)
-                    {
-                        TargetPoint = previewPoint;
-                        UpdatePreviewObjects(viewport);
-                    }
-                    else
-                    {
-                        ClearPreviewObjects(viewport);
-                    }
-                }
-            };
+                var viewport = Context.GetActiveViewport();
+                if (viewport == null) return;
 
-            viewModel.PropertyChanged += _previewHandler;
+                // Cache providers immediately so awaiting user input cannot lose them
+                CachedViewport = viewport;
+                CachedDocument = Context.GetDocument();
+                CachedUndoManager = Context.GetUndoRedoManager();
+                CachedViewModel = viewModel;
+
+                // Attach handler to respond to PreviewPoint changes
+                _previewHandler = (sender, e) =>
+                {
+                    if (e.PropertyName == nameof(ViewportViewModel.PreviewPoint))
+                    {
+                        var previewPoint = CachedViewModel?.PreviewPoint;
+                        if (previewPoint != null && BasePoint != null)
+                        {
+                            TargetPoint = previewPoint;
+                            UpdatePreviewObjects(CachedViewport!);
+                        }
+                        else
+                        {
+                            ClearPreviewObjects(CachedViewport!);
+                        }
+                    }
+                };
+
+                CachedViewModel.PropertyChanged += _previewHandler;
+            });
         }
 
         /// <summary>
@@ -313,13 +288,11 @@ namespace UI.Commands
         {
             try
             {
-                if (_previewViewport != null)
+                var viewModel = Context?.GetActiveViewportViewModel();
+                // Unsubscribe on UI thread using cached view model (safer than re-reading DataContext)
+                if (viewModel != null && _previewHandler != null)
                 {
-                    var vm = _previewViewport.DataContext as ViewportViewModel;
-                    if (vm != null && _previewHandler != null)
-                    {
-                        vm.PropertyChanged -= _previewHandler;
-                    }
+                    Context?.PostToUI(() => viewModel.PropertyChanged -= _previewHandler);
                 }
             }
             catch
@@ -327,11 +300,10 @@ namespace UI.Commands
                 // ignore cleanup errors
             }
 
-            if (_previewViewport != null)
-                ClearPreviewObjects(_previewViewport);
+            if (CachedViewport != null)
+                ClearPreviewObjects(CachedViewport);
 
             _previewHandler = null;
-            _previewViewport = null;
 
             // Clear cached provider references
             CachedViewport = null;
@@ -353,26 +325,31 @@ namespace UI.Commands
         /// </summary>
         private void UpdatePreviewObjects(ViewportControl viewport)
         {
-            // Clear any existing preview clones first
-            ClearPreviewObjects(viewport);
+            if (viewport == null) return;
 
-            var document = viewport.Document;
-            if (document == null || SelectedObjects == null)
-                return;
-
-            Matrix4D transformation = GetPreviewTransformation();
-
-            foreach (var obj in SelectedObjects)
+            // Run the heavy UI work on the UI thread to avoid cross-thread access
+            Context?.PostToUI(() =>
             {
-                var clone = CreateTranslatedClone(obj, transformation, document);
-                if (clone != null)
-                {
-                    _previewObjects.Add(clone);
-                    viewport.AddObject(clone);
-                }
-            }
+                ClearPreviewObjects(viewport);
 
-            viewport.Refresh();
+                var document = CachedDocument ?? viewport.Document;
+                if (document == null || SelectedObjects == null)
+                    return;
+
+                Matrix4D transformation = GetPreviewTransformation();
+
+                foreach (var obj in SelectedObjects)
+                {
+                    var clone = CreateTranslatedClone(obj, transformation, document);
+                    if (clone != null)
+                    {
+                        _previewObjects.Add(clone);
+                        viewport.AddObject(clone);
+                    }
+                }
+
+                viewport.Refresh();
+            });
         }
 
         /// <summary>
@@ -383,19 +360,23 @@ namespace UI.Commands
             if (_previewObjects.Count == 0)
                 return;
 
-            foreach (var p in _previewObjects.ToList())
+            // Ensure removal happens on UI thread
+            Context?.PostToUI(() =>
             {
-                try
+                foreach (var p in _previewObjects.ToList())
                 {
-                    viewport.RemoveObject(p);
+                    try
+                    {
+                        viewport?.RemoveObject(p);
+                    }
+                    catch
+                    {
+                        // Swallow errors during preview removal
+                    }
                 }
-                catch
-                {
-                    // Swallow errors during preview removal
-                }
-            }
-            _previewObjects.Clear();
-            viewport.Refresh();
+                _previewObjects.Clear();
+                viewport?.Refresh();
+            });
         }
 
         /// <summary>
@@ -407,8 +388,8 @@ namespace UI.Commands
         {
             try
             {
-                if (_previewViewport != null)
-                    ClearPreviewObjects(_previewViewport);
+                if (CachedViewport != null)
+                    ClearPreviewObjects(CachedViewport);
             }
             catch
             {
@@ -440,13 +421,15 @@ namespace UI.Commands
         /// </summary>
         protected virtual Matrix4D GetPreviewTransformation()
         {
-            if (BasePoint == null || TargetPoint == null)
-                return Matrix4D.CreateRotationZ(0); // Identity-like fallback
+            if (this is EditCommandBase editCommand)
+            {
+                if (editCommand.TryGetTransformation(out Matrix4D transformation))
+                {
+                    return transformation;
+                }
+            }
 
-            if (Matrix4D.TryCreateTranslation(BasePoint, TargetPoint, out var t))
-                return t;
-
-            return Matrix4D.CreateRotationZ(0); // Identity fallback
+            return Matrix4D.Identity; // Identity fallback
         }
 
         /// <summary>
@@ -455,13 +438,14 @@ namespace UI.Commands
         protected void CommandCompleted()
         {
             // Ensure point picking fully disabled
-            var viewport = Context?.GetActiveViewport();
-            var viewModel = viewport?.DataContext as ViewportViewModel;
+            var viewModel = Context?.GetActiveViewportViewModel();
             if (viewModel != null && viewModel.IsPointPickingMode)
             {
-                viewModel.DisablePointPickingMode();
+                // Disable on UI thread
+                Context?.PostToUI(() => viewModel.DisablePointPickingMode());
             }
             RaiseCommandCompleted();
+            System.Diagnostics.Debug.WriteLine("CommandBase: Raised Command Completed");
         }
 
         #endregion

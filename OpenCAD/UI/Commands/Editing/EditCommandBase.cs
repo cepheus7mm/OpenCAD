@@ -16,6 +16,13 @@ namespace UI.Commands.Editing
     /// </summary>
     public abstract class EditCommandBase : CommandBase
     {
+        protected enum InputMode
+        {
+            ObjectSelection,
+            PointInput
+        }
+        protected InputMode _currentInputMode = InputMode.ObjectSelection;
+
         private bool _needsSelection = false;
         private int _initialSelectionCount = 0;
         protected string _commandName = string.Empty;
@@ -49,15 +56,7 @@ namespace UI.Commands.Editing
 
         public override async Task Execute()
         {
-            var viewport = Context?.GetActiveViewport();
-            if (viewport == null)
-            {
-                Context?.OutputMessage(OpenCADStrings.NoActiveViewport);
-                Cancel();
-                return;
-            }
-
-            var viewModel = viewport.DataContext as ViewportViewModel;
+            var viewModel = Context?.GetActiveViewportViewModel();
             if (viewModel == null)
             {
                 Context?.OutputMessage(OpenCADStrings.UnableToAccessViewport);
@@ -78,23 +77,25 @@ namespace UI.Commands.Editing
                 // No selection - prompt user
                 _needsSelection = true;
                 _initialSelectionCount = 0;
-                CurrentPrompt = SelectObjectsPrompt;
+                //CurrentPrompt = SelectObjectsPrompt;
                 Context?.OutputMessage(SelectObjectsMessage);
-                viewModel.SelectionChanged += OnSelectionChanged;
+
+                // Ensure subscription happens on UI thread
+                Context?.PostToUI(() => viewModel.SelectionChanged += OnSelectionChanged);
             }
         }
 
         private void OnSelectionChanged(object? sender, EventArgs e)
         {
-            var viewport = Context?.GetActiveViewport();
-            var viewModel = viewport?.DataContext as ViewportViewModel;
-            if (viewModel == null) return;
+            var viewModel = Context?.GetActiveViewportViewModel();
+            if (viewModel == null) 
+                return;
+
 
             int count = viewModel.SelectedObjects.Count;
             if (count != _initialSelectionCount)
             {
-                var message = $"Selected {count} object(s). Press ENTER to continue, or continue selecting objects.";
-                Context?.OutputMessage(message);
+                Context?.OutputMessage($"Selected {count} object(s). Press ENTER to continue, or continue selecting objects.");
                 _initialSelectionCount = count;
             }
         }
@@ -107,21 +108,23 @@ namespace UI.Commands.Editing
             // User pressed ENTER to confirm selection
             if (string.IsNullOrWhiteSpace(input))
             {
-                var viewport = Context?.GetActiveViewport();
-                var viewModel = viewport?.DataContext as ViewportViewModel;
-                if (viewModel == null || viewModel.SelectedObjects.Count == 0)
+
+                var viewmodel = Context?.GetActiveViewportViewModel();
+                if (viewmodel == null || viewmodel.SelectedObjects.Count == 0)
                 {
                     Context?.OutputMessage(NoObjectsMessage);
                     Cancel();
                     return false;
                 }
 
-                viewModel.SelectionChanged -= OnSelectionChanged;
-                SelectedObjects = new List<OpenCADObject>(viewModel.SelectedObjects);
+                _currentInputMode = InputMode.PointInput;
+
+                // Unsubscribe on UI thread and capture selected objects
+                Context?.PostToUI(() => viewmodel.SelectionChanged -= OnSelectionChanged);
+                SelectedObjects = new List<OpenCADObject>(viewmodel.SelectedObjects);
                 _needsSelection = false;
 
-                OnObjectsSelected();
-                // Derived class will call RaiseCommandCompleted when done
+                Task.Run(async () => { await OnObjectsSelected(); });
                 return true;
             }
 
@@ -135,16 +138,15 @@ namespace UI.Commands.Editing
             // Ensure preview stopped and preview objects removed
             StopPreview();
 
-            var viewport = Context?.GetActiveViewport();
-            if (viewport != null)
+            Context?.PostToUI(() =>
             {
-                var viewModel = viewport.DataContext as ViewportViewModel;
-                if (viewModel != null)
+                var viewmodel = Context.GetActiveViewportViewModel();
+                if (viewmodel != null)
                 {
-                    viewModel.SelectionChanged -= OnSelectionChanged;
-                    viewModel.ClearSelection();
+                    viewmodel.SelectionChanged -= OnSelectionChanged;
+                    viewmodel.ClearSelection();
                 }
-            }
+            });
 
             CurrentPrompt = string.Empty;
             SelectedObjects = null;
@@ -172,6 +174,7 @@ namespace UI.Commands.Editing
             try
             {
                 // Prompt for base point using shared GetPoint on CommandBase
+                BasePoint = null;
                 var result = await GetPoint(BasePointPrompt, null);
 
                 if (result != null && result.Point is Point3D basePoint)
@@ -223,6 +226,18 @@ namespace UI.Commands.Editing
         }
 
         protected abstract Matrix4D GetTransformation();
+
+        public bool TryGetTransformation(out Matrix4D transformation)
+        {
+            if (BasePoint == null || TargetPoint == null)
+            {
+                transformation = Matrix4D.Identity;
+                return false;
+            }
+
+            transformation = GetTransformation();
+            return true;
+        }
 
         protected virtual void TransformSelectedObjects()
         {

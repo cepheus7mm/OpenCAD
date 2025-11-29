@@ -27,7 +27,7 @@ namespace UI.Commands.Editing
         public override bool ProcessInput(string input)
         {
             // During selection phase, let EditCommandBase handle it
-            if (SelectedObjects == null)
+            if (_currentInputMode == InputMode.ObjectSelection)
             {
                 return base.ProcessInput(input);
             }

@@ -50,5 +50,17 @@ namespace UI.Commands
         /// Get the current document
         /// </summary>
         OpenCADDocument? GetDocument();
+
+        /// <summary>
+        /// Convenience: return the ViewportViewModel for the active viewport.
+        /// Implementations should marshal to UI thread as required.
+        /// </summary>
+        ViewportViewModel? GetActiveViewportViewModel();
+
+        /// <summary>
+        /// Post an action to the UI thread without blocking the caller.
+        /// Useful for UI operations such as AddObject/RemoveObject/Refresh.
+        /// </summary>
+        void PostToUI(System.Action action);
     }
 }

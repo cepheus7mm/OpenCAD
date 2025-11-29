@@ -14,6 +14,11 @@ namespace UI.Commands.Editing
             _commandName = OpenCADStrings.EraseCommandName;
         }
 
+        protected override Matrix4D GetTransformation()
+        {
+            throw new NotImplementedException();
+        }
+
         protected override async Task OnObjectsSelected()
         {
             if (SelectedObjects == null || SelectedObjects.Count == 0)
@@ -23,45 +28,45 @@ namespace UI.Commands.Editing
             }
 
             var document = Context?.GetDocument();
-            var viewport = Context?.GetActiveViewport();
             var undoManager = Context?.GetUndoRedoManager();
 
-            if (document == null || viewport == null)
+            // Capture the viewport reference on UI thread when needed by UI calls
+            Context?.PostToUI(() =>
             {
-                Context?.OutputMessage(UnableToActOnObjectsMissingContext);
-                Cancel();
-                return;
-            }
+                var viewport = Context.GetActiveViewport();
 
-            if (undoManager != null)
-            {
-                var action = new RemoveGeometryAction(
-                    SelectedObjects,
-                    document,
-                    viewport,
-                    string.Format(OpenCADStrings.UndoEraseObjectsFormat, SelectedObjects.Count)
-                );
-                undoManager.ExecuteAction(action);
-                Context?.OutputMessage(string.Format(OpenCADStrings.ObjectsErasedFormat, SelectedObjects.Count));
-            }
-            else
-            {
-                foreach (var obj in SelectedObjects)
+                if (document == null || viewport == null)
                 {
-                    document.Remove(obj);
-                    viewport.RemoveObject(obj);
+                    Context?.OutputMessage(UnableToActOnObjectsMissingContext);
+                    Cancel();
+                    return;
                 }
-                Context?.OutputMessage(string.Format(OpenCADStrings.ObjectsErasedNoUndoFormat, SelectedObjects.Count));
-            }
 
-            var viewModel = viewport.DataContext as ViewportViewModel;
-            viewModel?.ClearSelection();
-            viewport.Refresh();
-        }
+                if (undoManager != null)
+                {
+                    var action = new RemoveGeometryAction(
+                        SelectedObjects,
+                        document,
+                        viewport,
+                        string.Format(OpenCADStrings.UndoEraseObjectsFormat, SelectedObjects.Count)
+                    );
+                    undoManager.ExecuteAction(action);
+                    Context?.OutputMessage(string.Format(OpenCADStrings.ObjectsErasedFormat, SelectedObjects.Count));
+                }
+                else
+                {
+                    foreach (var obj in SelectedObjects)
+                    {
+                        document.Remove(obj);
+                        viewport.RemoveObject(obj);
+                    }
+                    Context?.OutputMessage(string.Format(OpenCADStrings.ObjectsErasedNoUndoFormat, SelectedObjects.Count));
+                }
 
-        protected override Matrix4D GetTransformation()
-        {
-            throw new NotImplementedException();
+                var viewModel = viewport.DataContext as ViewportViewModel;
+                viewModel?.ClearSelection();
+                viewport.Refresh();
+            });
         }
     }
 }

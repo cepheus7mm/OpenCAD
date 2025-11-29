@@ -1,6 +1,7 @@
 ﻿using OpenCAD.Geometry;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -12,6 +13,9 @@ namespace UI.Commands.InputHelpers
     {
         protected readonly ICommandContext _context;
         protected readonly ViewportViewModel? _viewModel;
+
+
+        public bool AllowArbitraryInput { get; set; } = false;
 
         public Point3D? BasePoint { get; set; }
 
@@ -48,18 +52,18 @@ namespace UI.Commands.InputHelpers
             // Reset flag each call
             LastInputHandled = false;
 
-            if (Keywords == null || string.IsNullOrWhiteSpace(input))
+            if ((Keywords == null && !AllowArbitraryInput) || string.IsNullOrWhiteSpace(input))
                 return false;
 
             var inputUpper = input.Trim().ToUpperInvariant();
-            var matchedKeyword = Keywords.FirstOrDefault(k =>
+            var matchedKeyword = Keywords?.FirstOrDefault(k =>
                 k.ToUpperInvariant() == inputUpper ||
                 k.ToUpperInvariant().StartsWith(inputUpper));
 
-            if (matchedKeyword != null)
+            if (matchedKeyword != null || AllowArbitraryInput)
             {
                 // Let derived classes handle the matched keyword result (e.g. complete a TCS)
-                HandleMatchedKeyword(matchedKeyword);
+                HandleMatchedKeyword((!string.IsNullOrEmpty(matchedKeyword) ? matchedKeyword : input) ?? string.Empty);
 
                 // Notify optional external handler
                 KeyWordHandler?.Invoke(matchedKeyword);

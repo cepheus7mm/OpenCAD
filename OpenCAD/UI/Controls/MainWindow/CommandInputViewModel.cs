@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
+using System.Windows;
 using System.Windows.Input;
 using OpenCAD;
 using OpenCAD.Geometry;
@@ -228,7 +230,7 @@ namespace UI.Controls.MainWindow
         /// <summary>
         /// Execute a command programmatically without user typing it
         /// </summary>
-        public void ExecuteCommandProgrammatically(string commandName)
+        public async Task ExecuteCommandProgrammatically(string commandName)
         {
             //System.Diagnostics.Debug.WriteLine($"=== ExecuteCommandProgrammatically: '{commandName}' ===");
 
@@ -240,7 +242,7 @@ namespace UI.Controls.MainWindow
 
             try
             {
-                ProcessNewCommand(resolvedCommand);
+                await Task.Run(async () => { await ProcessNewCommand(resolvedCommand); });
             }
             catch (Exception ex)
             {
@@ -253,7 +255,7 @@ namespace UI.Controls.MainWindow
 
         #region Private Methods - Command Execution
 
-        private void ExecuteCommand()
+        private async Task ExecuteCommand()
         {
             string input = CommandText.Trim();
 
@@ -286,17 +288,17 @@ namespace UI.Controls.MainWindow
             }
 
             _lastCommand = input;
+            CommandText = string.Empty;
 
             try
             {
-                ProcessNewCommand(input);
+                await Task.Run(async () => { await ProcessNewCommand(input); });
             }
             catch (Exception ex)
             {
                 AppendToHistory($"Error: {ex.Message}");
             }
 
-            CommandText = string.Empty;
             FocusRequested?.Invoke(this, EventArgs.Empty);
         }
 
@@ -319,10 +321,10 @@ namespace UI.Controls.MainWindow
             try
             {
                 bool isComplete = _activeCommand!.ProcessInput(input);
-                if (isComplete)
-                {
-                    CompleteActiveCommand();
-                }
+                //if (isComplete)
+                //{
+                //    CompleteActiveCommand();
+                //}
             }
             catch (Exception ex)
             {
@@ -378,16 +380,6 @@ namespace UI.Controls.MainWindow
 
             await command.Initialize(_commandContext);
             await command.Execute();
-
-            if (command.IsMultiStep)
-            {
-                _activeCommand = command;
-                _activeCommand.PromptChanged += OnCommandPromptChanged;
-                _activeCommand.CommandCompletedEvent += OnCommandCompleted;
-                UpdatePrompt();
-                OnPropertyChanged(nameof(HasActiveCommand));
-                ActiveCommandChanged?.Invoke(this, EventArgs.Empty);
-            }
         }
 
         private IInputCommand? CreateCommandInstance(Type commandType)
@@ -414,14 +406,34 @@ namespace UI.Controls.MainWindow
 
         private void CompleteActiveCommand()
         {
+            // Marshal to UI thread because completion can be signalled from background threads
+            var disp = Application.Current?.Dispatcher;
+            if (disp != null && !disp.CheckAccess())
+            {
+                // Post to UI thread and return -- avoid blocking the caller
+                disp.BeginInvoke(new Action(CompleteActiveCommandCore), System.Windows.Threading.DispatcherPriority.Normal);
+                return;
+            }
+
+            // We're on UI thread already
+            CompleteActiveCommandCore();
+        }
+
+        // Extracted core logic so it can be invoked directly on UI thread
+        private void CompleteActiveCommandCore()
+        {
+            System.Diagnostics.Debug.WriteLine("CommandInputViewModel: CompleteActiveCommandCoreEntered");
             UnsubscribeFromActiveCommand();
             _activeCommand = null;
+            _getActiveViewport?.Invoke()?.Refresh();
             UpdatePrompt();
             OnPropertyChanged(nameof(HasActiveCommand));
             ActiveCommandChanged?.Invoke(this, EventArgs.Empty);
 
             // Request focus back to command input after command completes
             FocusRequested?.Invoke(this, EventArgs.Empty);
+
+            System.Diagnostics.Debug.WriteLine("CommandInputViewModel: Focus requested after command completion");
         }
 
         private void CancelCurrentCommand()
@@ -430,6 +442,7 @@ namespace UI.Controls.MainWindow
             CompleteActiveCommand();
             CommandText = string.Empty;
         }
+
 
         private void UnsubscribeFromActiveCommand()
         {
@@ -505,6 +518,7 @@ namespace UI.Controls.MainWindow
         private void SetCommandPrompt(string prompt)
         {
             // Ensure a trailing caret is shown consistently
+            AppendToHistory(PromptText);
             PromptText = string.IsNullOrEmpty(prompt) ? "Command >" : $"{prompt} >";
         }
 

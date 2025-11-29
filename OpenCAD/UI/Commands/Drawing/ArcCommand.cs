@@ -21,18 +21,21 @@ namespace UI.Commands.Drawing
             CenterPoint,
             StartPoint,
             EndPoint,
-            Radius
+            Radius,
+            SecondPoint
         }
 
         private enum ArcInputMode
         {
             CSE, // Center, Start, End
             SCE, // Start, Center, End
-            SER  // Start, End, Center
+            SER,  // Start, End, Center
+            PT3,  // 3 Points
+            Last
         }
 
         private ArcInputStep _step;
-        private ArcInputMode _arcInputMode = ArcInputMode.CSE;
+        private ArcInputMode _arcInputMode = ArcInputMode.SCE;
         private Point3D _center;
         private Point3D _start;
         private Point3D _end;
@@ -40,6 +43,7 @@ namespace UI.Commands.Drawing
         // preview arc instance (removed/added during preview)
         private Arc? _previewArc;
         private PropertyChangedEventHandler? _arcPreviewHandler;
+        private Point3D _second;
 
         public override bool IsMultiStep => true;
 
@@ -54,8 +58,8 @@ namespace UI.Commands.Drawing
 
             try
             {
-                _step = ArcInputStep.CenterPoint;
-                var result = await GetInitialInput(); 
+                _step = ArcInputStep.StartPoint;
+                var result = await GetInitialInput();
                 if (result == null)
                 {
                     Cancel();
@@ -63,13 +67,30 @@ namespace UI.Commands.Drawing
                 }
                 SetArcPoint(result);
 
-                result = await GetSecondInput();
-                if (result == null)
+                // Special handling for Last mode:
+                // initial (start) was taken from last drawable's end point.
+                // now request radius (GetDistance) and compute center from last drawable's second derivative.
+                if (_arcInputMode == ArcInputMode.Last)
                 {
-                    Cancel();
-                    return;
+                    _step = ArcInputStep.CenterPoint;
+                    var centerResult = await CalculateCenterFromRadius();
+                    if (!centerResult)
+                    {
+                        Cancel();
+                        return;
+                    }
                 }
-                SetArcPoint(result);
+                else
+                {
+                    // Normal flow for non-Last modes
+                    result = await GetSecondInput();
+                    if (result == null)
+                    {
+                        Cancel();
+                        return;
+                    }
+                    SetArcPoint(result);
+                }
 
                 result = await GetLastInput();
                 if (result == null)
@@ -77,8 +98,19 @@ namespace UI.Commands.Drawing
                     Cancel();
                     return;
                 }
-
                 SetArcPoint(result);
+
+                // If PT3, compute center from three points now so CreateArc has a valid center
+                if (_arcInputMode == ArcInputMode.PT3)
+                {
+                    if (!TryGetCircleThroughThreePoints(_start, _second, _end, out var c, out var r))
+                    {
+                        Context?.OutputMessage(OpenCADStrings.InvalidPointInput);
+                        Cancel();
+                        return;
+                    }
+                    _center = c;
+                }
 
                 // Create the arc
                 CreateArc();
@@ -93,6 +125,49 @@ namespace UI.Commands.Drawing
             }
         }
 
+        private async Task<bool> CalculateCenterFromRadius()
+        {
+            var distResult = await GetDistance(OpenCADStrings.ArcRadiusPrompt);
+            if (double.IsNaN(distResult.DoubleValue))
+            {
+                return false;
+            }
+
+            double radius = distResult.DoubleValue;
+
+            var doc = Context?.GetDocument();
+            var lastDrawable = doc?.GetLastGeometricChild();
+            if (lastDrawable == null)
+            {
+                Context?.OutputMessage(OpenCADStrings.InvalidPointInput);
+                return false;
+            }
+
+            // determine end point of last drawable
+            Point3D lastEnd;
+            if (lastDrawable is Line lastLine)
+                lastEnd = lastLine.EndPoint;
+            else if (lastDrawable is Arc lastArc)
+                lastEnd = lastArc.EndPoint;
+            else
+            {
+                Context?.OutputMessage(OpenCADStrings.InvalidPointInput);
+                return false;
+            }
+
+            var secondDeriv = lastDrawable.GetSecondDerivate(lastEnd);
+            if (secondDeriv == null || secondDeriv.Length < 1e-12)
+            {
+                Context?.OutputMessage(OpenCADStrings.InvalidPointInput);
+                return false;
+            }
+
+            // center = start + normalized(secondDeriv) * radius
+            var perpUnit = secondDeriv.Normalized;
+            SetArcPoint(_start + perpUnit * radius);
+            return true;
+        }
+
         private async Task<Point3D> GetSecondInput()
         {
             // Determine next step based on input mode
@@ -101,6 +176,8 @@ namespace UI.Commands.Drawing
                 ArcInputMode.CSE => ArcInputStep.StartPoint,
                 ArcInputMode.SCE => ArcInputStep.CenterPoint,
                 ArcInputMode.SER => ArcInputStep.EndPoint,
+                ArcInputMode.PT3 => ArcInputStep.SecondPoint,
+                ArcInputMode.Last => ArcInputStep.Radius,
                 _ => throw new NotImplementedException()
             };
 
@@ -117,14 +194,23 @@ namespace UI.Commands.Drawing
                 ArcInputStep.StartPoint => _start = result,
                 ArcInputStep.EndPoint => _end = result,
                 ArcInputStep.Radius => _center = result,
+                ArcInputStep.SecondPoint => _second = result,
                 _ => throw new NotImplementedException()
             };
         }
 
         private async Task<Point3D> GetInitialInput()
         {
-            var keyWords = new string[] { "CSE", "SCE", "SER", "Last" };
-            var result = await GetPoint(string.Format(OpenCADStrings.ArcPointPrompt, "center"), keyWords);
+            BasePoint = null;
+            var step = _step switch
+            {
+                ArcInputStep.CenterPoint => OpenCADStrings.Center,
+                ArcInputStep.StartPoint => OpenCADStrings.StartPoint,
+                ArcInputStep.EndPoint => OpenCADStrings.EndPoint,
+                _ => throw new NotImplementedException(),
+            };
+            var keyWords = new string[] { "CSE", "SCE", "SER", "3PT", "Last" };
+            var result = await GetPoint(string.Format(OpenCADStrings.ArcPointPrompt, step), keyWords);
 
             if (result == null || result.ResultType == InputHelpers.InputResult.InputResultType.Cancel)
                 throw new OperationCanceledException();
@@ -132,16 +218,38 @@ namespace UI.Commands.Drawing
             if (result.Keyword is string keyWord)
             {
                 KeyWordInput(keyWord);
+
+                // If user requested Last, immediately obtain start point from last drawable's end point.
+                if (_arcInputMode == ArcInputMode.Last)
+                {
+                    var doc = Context?.GetDocument();
+                    var lastDrawable = doc?.GetLastGeometricChild();
+                    if (lastDrawable == null)
+                    {
+                        Context?.OutputMessage(OpenCADStrings.InvalidPointInput);
+                        throw new OperationCanceledException();
+                    }
+
+                    if (lastDrawable is Line lastLine)
+                        return lastLine.EndPoint;
+                    if (lastDrawable is Arc lastArc)
+                        return lastArc.EndPoint;
+
+                    // unsupported drawable type for Last
+                    Context?.OutputMessage(OpenCADStrings.InvalidPointInput);
+                    throw new OperationCanceledException();
+                }
+
                 return await GetArcPoint();
             }
 
             else if (result.Point is Point3D point)
-                return  point;
+                return point;
 
             return null;
         }
 
-        private void KeyWordInput (string? keyWord)
+        private void KeyWordInput(string? keyWord)
         {
             if (string.IsNullOrWhiteSpace(keyWord))
                 return;
@@ -161,7 +269,14 @@ namespace UI.Commands.Drawing
                     _arcInputMode = ArcInputMode.SER;
                     _step = ArcInputStep.StartPoint;
                     break;
+                case "3PT":
+                    _arcInputMode = ArcInputMode.PT3;
+                    _step = ArcInputStep.StartPoint;
+                    break;
+                case "LAST":
                 case "Last":
+                    _arcInputMode = ArcInputMode.Last;
+                    _step = ArcInputStep.StartPoint;
                     break;
                 default:
                     return;
@@ -176,6 +291,8 @@ namespace UI.Commands.Drawing
                 ArcInputMode.CSE => ArcInputStep.EndPoint,
                 ArcInputMode.SCE => ArcInputStep.EndPoint,
                 ArcInputMode.SER => ArcInputStep.Radius,
+                ArcInputMode.PT3 => ArcInputStep.EndPoint,
+                ArcInputMode.Last => ArcInputStep.EndPoint,
                 _ => throw new NotImplementedException()
             };
 
@@ -212,16 +329,73 @@ namespace UI.Commands.Drawing
 
                     if (previewPoint != null && CachedViewport != null && Context != null)
                     {
-                        double radius = CalculateDistance(_center, _start);
-                        double startAngle = CalculateAngle(_center, _start);
-                        double endAngle = CalculateAngle(_center, previewPoint);
-                        var doc = Context.GetDocument();
-                        if (doc != null)
+                        // Two possible preview computations:
+                        // - non-PT3: center & start already known -> radius from start, angles from center
+                        // - PT3: start, second are known and previewPoint is the end -> compute circle through three points
+                        Point3D previewCenter = default;
+                        double radius = 0.0;
+                        double startAngle = 0.0;
+                        double endAngle = 0.0;
+                        bool haveCircle = false;
+
+                        if (_arcInputMode == ArcInputMode.PT3)
                         {
-                            var arc = new Arc(_center, radius, startAngle, endAngle, doc);
-                            CachedViewport.AddObject(arc);
-                            _previewArc = arc;
-                            CachedViewport.Refresh();
+                            // compute circle from three points: _start, _second, previewPoint
+                            if (TryGetCircleThroughThreePoints(_start, _second, previewPoint, out var c, out var r))
+                            {
+                                previewCenter = c;
+                                radius = r;
+                                startAngle = CalculateAngle(previewCenter, _start);
+                                endAngle = CalculateAngle(previewCenter, previewPoint);
+
+                                // Ensure the CCW arc from startAngle to endAngle includes _second.
+                                // If it doesn't, swap start/end so the arc contains the second point.
+                                double aStart = NormalizeAngle(startAngle);
+                                double aEnd = NormalizeAngle(endAngle);
+                                double aSecond = NormalizeAngle(CalculateAngle(previewCenter, _second));
+                                if (!IsAngleBetweenCCW(aStart, aSecond, aEnd))
+                                {
+                                    // swap so that arc chosen CCW passes through second
+                                    double tmp = aStart;
+                                    aStart = aEnd;
+                                    aEnd = tmp;
+                                    startAngle = aStart;
+                                    endAngle = aEnd;
+                                }
+
+                                haveCircle = true;
+                            }
+                            else
+                            {
+                                // cannot form circle (colinear) -> skip preview arc
+                                haveCircle = false;
+                            }
+                        }
+                        else
+                        {
+                            // existing behavior (covers Last as well since center is precomputed)
+                            previewCenter = _center;
+                            radius = CalculateDistance(_center, _start);
+                            startAngle = CalculateAngle(_center, _start);
+                            endAngle = CalculateAngle(_center, previewPoint);
+                            haveCircle = true;
+                        }
+
+                        if (haveCircle)
+                        {
+                            var doc = Context.GetDocument();
+                            if (doc != null)
+                            {
+                                var arc = new Arc(previewCenter, radius, startAngle, endAngle, doc);
+                                CachedViewport.AddObject(arc);
+                                _previewArc = arc;
+                                CachedViewport.Refresh();
+                            }
+                        }
+                        else
+                        {
+                            if (CachedViewport != null)
+                                CachedViewport.Refresh();
                         }
                     }
                     else
@@ -236,24 +410,32 @@ namespace UI.Commands.Drawing
                 }
             };
 
-            if (CachedViewModel != null && _arcPreviewHandler != null)
-                CachedViewModel.PropertyChanged += _arcPreviewHandler;
+            // Attach the arc preview handler on the UI thread after StartPreview has captured cached providers
+            if (Context != null && _arcPreviewHandler != null)
+            {
+                Context.PostToUI(() =>
+                {
+                    if (CachedViewModel != null)
+                        CachedViewModel.PropertyChanged += _arcPreviewHandler;
+                });
+            }
 
             try
             {
                 // Allow the user to either type an angle or pick a point (angle computed from center to picked point)
                 var result = await GetAngle(OpenCADStrings.ArcEndAnglePrompt);
 
-                if (result == null || result.DoubleValue == double.NaN)
+                if (result == null || double.IsNaN(result.DoubleValue))
                 {
                     // user cancelled or invalid -> treat as cancel
                     return null;
                 }
                 var angle = result.DoubleValue;
+
                 // compute endpoint from center, radius and angle
-                double radius = CalculateDistance(_center, _start);
-                double x = _center.X + radius * Math.Cos(angle);
-                double y = _center.Y + radius * Math.Sin(angle);
+                double radiusVal = CalculateDistance(_center, _start);
+                double x = _center.X + radiusVal * Math.Cos(angle);
+                double y = _center.Y + radiusVal * Math.Sin(angle);
                 var endPoint = new Point3D(x, y, _center.Z);
 
                 return endPoint;
@@ -263,17 +445,34 @@ namespace UI.Commands.Drawing
                 // cleanup preview handler and preview arc
                 try
                 {
-                    if (CachedViewModel != null && _arcPreviewHandler != null)
-                        CachedViewModel.PropertyChanged -= _arcPreviewHandler;
+                    if (Context != null && _arcPreviewHandler != null)
+                    {
+                        Context.PostToUI(() =>
+                        {
+                            if (CachedViewModel != null)
+                                CachedViewModel.PropertyChanged -= _arcPreviewHandler;
+                        });
+                    }
                 }
                 catch { }
 
                 try
                 {
-                    if (_previewArc != null && CachedViewport != null)
+                    if (_previewArc != null && Context != null)
                     {
-                        CachedViewport.RemoveObject(_previewArc);
-                        _previewArc = null;
+                        // Remove preview arc on UI thread via Context to avoid cross-thread access
+                        Context.PostToUI(() =>
+                        {
+                            try
+                            {
+                                if (_previewArc != null && CachedViewport != null)
+                                {
+                                    CachedViewport.RemoveObject(_previewArc);
+                                    _previewArc = null;
+                                }
+                            }
+                            catch { }
+                        });
                     }
                 }
                 catch { }
@@ -331,6 +530,70 @@ namespace UI.Commands.Drawing
             return midpoint + offset;
         }
 
+        /// <summary>
+        /// Try to compute circle center and radius passing through three non-colinear points (XY plane).
+        /// Returns false if points are colinear or computation unstable.
+        /// </summary>
+        private bool TryGetCircleThroughThreePoints(Point3D p1, Point3D p2, Point3D p3, out Point3D center, out double radius)
+        {
+            center = Point3D.Origin;
+            radius = double.NaN;
+
+            double x1 = p1.X, y1 = p1.Y;
+            double x2 = p2.X, y2 = p2.Y;
+            double x3 = p3.X, y3 = p3.Y;
+
+            double a = x1 - x2;
+            double b = y1 - y2;
+            double c = x1 - x3;
+            double d = y1 - y3;
+
+            double e = ((x1 * x1 - x2 * x2) + (y1 * y1 - y2 * y2)) / 2.0;
+            double f = ((x1 * x1 - x3 * x3) + (y1 * y1 - y3 * y3)) / 2.0;
+
+            double det = a * d - b * c;
+            if (Math.Abs(det) < 1e-12)
+                return false; // colinear or nearly so
+
+            double cx = (d * e - b * f) / det;
+            double cy = (-c * e + a * f) / det;
+
+            center = new Point3D(cx, cy, (p1.Z + p2.Z + p3.Z) / 3.0);
+            radius = Math.Sqrt((cx - x1) * (cx - x1) + (cy - y1) * (cy - y1));
+            if (double.IsNaN(radius) || double.IsInfinity(radius) || radius < 1e-12)
+                return false;
+
+            return true;
+        }
+
+        /// <summary>
+        /// Normalize angle to [0, 2*PI)
+        /// </summary>
+        private static double NormalizeAngle(double angle)
+        {
+            double twoPi = Math.PI * 2.0;
+            double a = angle % twoPi;
+            if (a < 0) a += twoPi;
+            return a;
+        }
+
+        /// <summary>
+        /// Returns true if moving CCW from start to end (inclusive) the test angle is encountered.
+        /// Angles must be normalized to [0,2PI) or the function will normalize them.
+        /// </summary>
+        private static bool IsAngleBetweenCCW(double start, double test, double end)
+        {
+            start = NormalizeAngle(start);
+            test = NormalizeAngle(test);
+            end = NormalizeAngle(end);
+
+            if (start <= end)
+                return test >= start && test <= end;
+
+            // wrapped case: e.g., start=300deg, end=60deg -> true if test >= start || test <= end
+            return test >= start || test <= end;
+        }
+
         private async Task<Point3D?> GetArcPoint(Point3D? basePoint = null)
         {
             var step = _step switch
@@ -338,6 +601,8 @@ namespace UI.Commands.Drawing
                 ArcInputStep.CenterPoint => OpenCADStrings.Center,
                 ArcInputStep.StartPoint => OpenCADStrings.StartPoint,
                 ArcInputStep.EndPoint => OpenCADStrings.EndPoint,
+                ArcInputStep.Radius => OpenCADStrings.Radius,
+                ArcInputStep.SecondPoint => OpenCADStrings.SecondPoint,
                 _ => throw new NotImplementedException(),
             };
             if (basePoint != null)
@@ -359,7 +624,7 @@ namespace UI.Commands.Drawing
             {
                 return _inputHelper.ProcessKeyboardInput(input);
             }
-            
+
             return false;
         }
 
@@ -404,26 +669,30 @@ namespace UI.Commands.Drawing
 
             // Use undo/redo system if available
             var undoManager = Context?.GetUndoRedoManager();
-            var viewport = Context?.GetActiveViewport();
-            
-            if (undoManager != null && document != null)
+
+            if (undoManager != null)
             {
-                var action = new Undo.AddGeometryAction(
-                    arc, 
-                    document, 
-                    viewport, 
-                    $"Create Arc at ({_center.X:F3}, {_center.Y:F3}, {_center.Z:F3}), " +
-                    $"Radius: {radius:F3}, " +
-                    $"Angles: {startAngle * 180 / Math.PI:F1}° to {endAngle * 180 / Math.PI:F1}°"
-                );
-                undoManager.ExecuteAction(action);
+                // Execute undo action creation/execution on UI thread so any viewport access is safe
+                Context?.PostToUI(() =>
+                {
+                    var viewport = Context.GetActiveViewport();
+                    var action = new Undo.AddGeometryAction(
+                        arc,
+                        document,
+                        viewport,
+                        $"Create Arc at ({_center.X:F3}, {_center.Y:F3}, {_center.Z:F3}), " +
+                        $"Radius: {radius:F3}, " +
+                        $"Angles: {startAngle * 180 / Math.PI:F1}° to {endAngle * 180 / Math.PI:F1}°"
+                    );
+                    undoManager.ExecuteAction(action);
+                });
             }
             else
             {
-                // Fallback to direct creation
+                // Fallback to direct creation (CommandContext.RaiseGeometryCreated posts to UI)
                 Context?.RaiseGeometryCreated(arc);
             }
-            
+
             Context?.OutputMessage(
                 $"Arc created: Center=({_center.X:F3}, {_center.Y:F3}, {_center.Z:F3}), " +
                 $"Radius={radius:F3}, " +

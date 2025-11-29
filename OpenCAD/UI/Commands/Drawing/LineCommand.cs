@@ -23,14 +23,15 @@ namespace UI.Commands.Drawing
 
         public override async Task Execute()
         {
-            if (_inputHelper == null)
-                return;
+            //if (_inputHelper == null)
+                //return;
 
             _cancellationTokenSource = new CancellationTokenSource();
 
             try
             {
                 // Get initial start point (allow using last point)
+                BasePoint = _firstStartPoint;
                 var result = await GetPoint(
                     "Specify start point",
                     allowLastPoint: true);
@@ -69,12 +70,6 @@ namespace UI.Commands.Drawing
                     {
                         endPoint = result.Point;
                     }
-                    else
-                    {
-                        Cancel();
-                        return;
-                    }
-
 
                     if (result.ResultType == InputHelpers.InputResult.InputResultType.Cancel)
                     {
@@ -111,9 +106,6 @@ namespace UI.Commands.Drawing
                     startPoint = endPoint;
                 }
 
-                // Command completed successfully
-                Context?.OutputMessage("Line command completed.");
-                RaiseCommandCompleted();
             }
             catch (OperationCanceledException)
             {
@@ -121,7 +113,9 @@ namespace UI.Commands.Drawing
             }
             finally
             {
-                _firstStartPoint = null;
+                // Command completed successfully
+                Context?.OutputMessage("Line command completed.");
+                RaiseCommandCompleted();
             }
         }
 
@@ -138,9 +132,8 @@ namespace UI.Commands.Drawing
 
         private void CreateLine(Point3D start, Point3D end)
         {
-            Line line = null;
-            
-            // Get the document to apply current properties
+            Line line;
+
             var document = Context?.GetDocument();
             if (document != null)
             {
@@ -151,42 +144,37 @@ namespace UI.Commands.Drawing
                 throw new InvalidOperationException("No active document to create line in.");
             }
 
-            // Use undo/redo system if available
             var undoManager = Context?.GetUndoRedoManager();
-            var viewport = Context?.GetActiveViewport();
-            
-            if (undoManager != null && document != null)
+
+            // If undo available, the action may need a UI-thread viewport reference; capture + execute on UI thread
+            if (undoManager != null)
             {
-                var action = new Undo.AddGeometryAction(
-                    line, 
-                    document, 
-                    viewport, 
-                    string.Format(
-                        OpenCADStrings.UndoCreateLine,
-                        start.X,
-                        start.Y,
-                        start.Z,
-                        end.X,
-                        end.Y,
-                        end.Z)
-                );
-                undoManager.ExecuteAction(action);
+                Context?.PostToUI(() =>
+                {
+                    var viewport = Context.GetActiveViewport();
+                    var action = new Undo.AddGeometryAction(
+                        line,
+                        document,
+                        viewport,
+                        string.Format(
+                            OpenCADStrings.UndoCreateLine,
+                            start.X, start.Y, start.Z,
+                            end.X, end.Y, end.Z)
+                    );
+                    undoManager.ExecuteAction(action);
+                });
             }
             else
             {
-                // Fallback to direct creation
+                // CommandContext.RaiseGeometryCreated already posts to UI (our implementation does), so safe to call directly
                 Context?.RaiseGeometryCreated(line);
             }
-            
+
             Context?.OutputMessage(
                 string.Format(
                     OpenCADStrings.LineCreated,
-                    start.X,
-                    start.Y,
-                    start.Z,
-                    end.X,
-                    end.Y,
-                    end.Z));
+                    start.X, start.Y, start.Z,
+                    end.X, end.Y, end.Z));
         }
 
         public override void Cancel()

@@ -1,3 +1,6 @@
+using System;
+using System.Windows;
+using System.Windows.Threading;
 using OpenCAD;
 using UI.Controls.Viewport;
 
@@ -24,14 +27,68 @@ namespace UI.Commands.Undo
 
         public void Execute()
         {
+            // Document change is non-UI and can be applied on caller thread
             _document.Add(_geometry);
-            _viewport?.AddObject(_geometry);
+
+            // Viewport is a WPF control - update it on UI thread (best-effort, non-blocking)
+            if (_viewport != null)
+            {
+                PostToUI(() =>
+                {
+                    try
+                    {
+                        _viewport.AddObject(_geometry);
+                        _viewport.Refresh();
+                    }
+                    catch
+                    {
+                        // swallow UI errors - document already updated
+                    }
+                });
+            }
         }
 
         public void Undo()
         {
+            // Remove from document (non-UI)
             _document.Remove(_geometry);
-            _viewport?.RemoveObject(_geometry);
+
+            // Ensure UI removal happens on UI thread
+            if (_viewport != null)
+            {
+                PostToUI(() =>
+                {
+                    try
+                    {
+                        _viewport.RemoveObject(_geometry);
+                        _viewport.Refresh();
+                    }
+                    catch
+                    {
+                        // swallow UI errors
+                    }
+                });
+            }
+        }
+
+        // Best-effort UI dispatcher helper (mirrors CommandContext PostToUI semantics)
+        private static void PostToUI(Action action)
+        {
+            try
+            {
+                var disp = Application.Current?.Dispatcher;
+                if (disp != null && !disp.CheckAccess())
+                {
+                    disp.BeginInvoke(action, DispatcherPriority.Normal);
+                    return;
+                }
+
+                action();
+            }
+            catch
+            {
+                try { action(); } catch { /* swallow */ }
+            }
         }
     }
 }

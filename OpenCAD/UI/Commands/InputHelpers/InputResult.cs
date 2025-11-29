@@ -16,6 +16,7 @@ namespace UI.Commands.InputHelpers
             Point,
             Double,
             Keyword,
+            Arbitrary,
             Cancel
         }
 

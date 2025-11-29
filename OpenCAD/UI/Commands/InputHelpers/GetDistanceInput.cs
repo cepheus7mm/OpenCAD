@@ -13,6 +13,7 @@ namespace UI.Commands.InputHelpers
     public class GetDistanceInput : InputHelperBase
     {
         private CommandBase _command;
+        private GetPointInput? _pointInputHelper;
 
         public GetDistanceInput(
             ICommandContext context,
@@ -30,13 +31,14 @@ namespace UI.Commands.InputHelpers
             string[]? keyWords = null,
             CancellationToken cancellationToken = default)
         {
-            var helper = new GetPointInput(_context, _viewModel);
+            AllowArbitraryInput = true;
+            _pointInputHelper = new GetPointInput(_context, _viewModel) { AllowArbitraryInput = true };
 
             var result = new InputResult() { ResultType = InputResult.InputResultType.Cancel, DoubleValue = double.NaN };
 
             try
             {
-                var first = await helper.GetPointOrKeywordAsync(
+                var first = await _pointInputHelper.GetPointOrKeywordAsync(
                     prompt,
                     allowLastPoint: allowLastPoint,
                     basePoint: BasePoint,
@@ -91,7 +93,7 @@ namespace UI.Commands.InputHelpers
                     {
                         var secondPrompt = OpenCADStrings.SecondPointPrompt ?? "Specify second point:";
 
-                        var second = await helper.GetPointOrKeywordAsync(
+                        var second = await _pointInputHelper.GetPointOrKeywordAsync(
                             secondPrompt,
                             allowLastPoint: allowLastPoint,
                             basePoint: BasePoint,
@@ -116,13 +118,28 @@ namespace UI.Commands.InputHelpers
                         BasePoint = null;
                     }
                 }
-
+                if (first.ResultType == InputResult.InputResultType.Arbitrary)
+                {
+                    if(double.TryParse(first.Keyword, out double distance))
+                    {
+                        return new InputResult() { ResultType = InputResult.InputResultType.Double, DoubleValue = distance };
+                    }
+                }
             }
             finally
             {
                 result = new InputResult() { ResultType = InputResult.InputResultType.Cancel, DoubleValue = double.NaN };
             }
             return result;
+        }
+
+        protected override void HandleMatchedKeyword(string? keyword)
+        {
+            if (_pointInputHelper == null)
+            {
+                base.HandleMatchedKeyword(keyword);
+            }
+            _pointInputHelper?.KeyWordHandler?.Invoke(keyword);
         }
     }
 }
