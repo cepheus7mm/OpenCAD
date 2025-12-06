@@ -15,7 +15,6 @@ namespace UI.Commands.Drawing
     [InputCommand("arc", "Create an arc (prompts for center, start point, and end point)", "a")]
     public class ArcCommand : CommandBase
     {
-        private CancellationTokenSource? _cancellationTokenSource;
         private enum ArcInputStep
         {
             CenterPoint,
@@ -36,9 +35,9 @@ namespace UI.Commands.Drawing
 
         private ArcInputStep _step;
         private ArcInputMode _arcInputMode = ArcInputMode.SCE;
-        private Point3D _center;
-        private Point3D _start;
-        private Point3D _end;
+        private Point3D _center = Point3D.NotAPoint;
+        private Point3D _start = Point3D.NotAPoint;
+        private Point3D _end = Point3D.NotAPoint;
 
         // preview arc instance (removed/added during preview)
         private Arc? _previewArc;

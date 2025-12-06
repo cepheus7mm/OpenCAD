@@ -89,14 +89,14 @@ namespace GraphicsEngine
                 // Validate that points are not null and contain valid values
                 if (start == null || end == null)
                 {
-                    Debug.WriteLine("[LR] Skipping line with null points");
+                    //Debug.WriteLine("[LR] Skipping line with null points");
                     return;
                 }
 
                 // Check for NaN or infinity in coordinates
                 if (!IsValidPoint(start) || !IsValidPoint(end))
                 {
-                    Debug.WriteLine($"[LR] Skipping line with invalid coordinates: Start=({start.X},{start.Y},{start.Z}), End=({end.X},{end.Y},{end.Z})");
+                    //Debug.WriteLine($"[LR] Skipping line with invalid coordinates: Start=({start.X},{start.Y},{start.Z}), End=({end.X},{end.Y},{end.Z})");
                     return;
                 }
 

@@ -21,6 +21,7 @@ namespace GraphicsEngine
     public class RenderEngine
     {
         private readonly List<IRenderer> _renderers = new();
+        private readonly ITextMetricsProvider? _textMetrics; // add
         private Camera _camera;
         private Matrix4x4 _projectionMatrix;
         private Matrix4x4 _viewMatrix;
@@ -35,6 +36,12 @@ namespace GraphicsEngine
         public RenderEngine()
         {
             _camera = new Camera();
+        }
+
+        // NEW: constructor that accepts text metrics (use from ViewportControl.InitializeOpenGL)
+        public RenderEngine(ITextMetricsProvider? textMetrics) : this()
+        {
+            _textMetrics = textMetrics;
         }
 
         /// <summary>
@@ -113,7 +120,15 @@ namespace GraphicsEngine
             if (_shaderProgram == null)
                 throw new InvalidOperationException("ShaderProgram must be initialized before registering renderers");
 
+            _renderers.Clear();
             _renderers.Add(new LineRenderer(_shaderProgram));
+
+            // Register TextRenderer when metrics are available
+            if (_textMetrics != null)
+            {
+                _renderers.Add(new TextRenderer(_shaderProgram, _textMetrics));
+            }
+
             System.Diagnostics.Debug.WriteLine($"Registered {_renderers.Count} renderer(s)");
         }
 

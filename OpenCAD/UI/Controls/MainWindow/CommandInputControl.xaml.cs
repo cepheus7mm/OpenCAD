@@ -4,6 +4,7 @@ using System.Windows.Input;
 using OpenCAD;
 using UI.Commands.Undo;
 using UI.Controls.Viewport;
+using UI.Commands.InputHelpers; // Add this
 
 namespace UI.Controls.MainWindow
 {
@@ -86,7 +87,22 @@ namespace UI.Controls.MainWindow
 
         private void CommandTextBox_KeyDown(object sender, KeyEventArgs e)
         {
+            // This handles Enter key and calls ProcessInput to complete async tasks
             e.Handled = _viewModel.HandleKeyDown(e.Key);
+        }
+
+        /// <summary>
+        /// Called while user is typing (NOT when they press Enter).
+        /// Notifies the active input helper about text changes for preview purposes.
+        /// Does NOT complete any async tasks - that happens in HandleKeyDown when Enter is pressed.
+        /// </summary>
+        private void CommandTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (sender is TextBox textBox && _viewModel != null)
+            {
+                // Notify the ViewModel about text changes for preview
+                _viewModel.NotifyTextChanged(textBox.Text);
+            }
         }
 
         /// <summary>
@@ -108,7 +124,6 @@ namespace UI.Controls.MainWindow
                 {
                     // Return focus to command input after selection
                     FocusCommandInput();
-                    //System.Diagnostics.Debug.WriteLine("Focus returned to command input after selection");
                 };
             }
         }

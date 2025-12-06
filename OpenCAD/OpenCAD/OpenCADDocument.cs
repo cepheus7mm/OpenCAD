@@ -31,6 +31,9 @@ namespace OpenCAD
         [JsonIgnore, XmlIgnore]
         private ConcurrentDictionary<string, Guid> _layerNameToId = new();
 
+        // Add volatile to ensure visibility across threads
+        private volatile IServiceProvider? _serviceProvider;
+
         public OpenCADDocument()
         {
             // Initialize string properties with names (filename and description)
@@ -51,6 +54,15 @@ namespace OpenCAD
             CurrentLineType = LineType.ByLayer;
             CurrentLineWeight = LineWeight.ByLayer;
             CurrentColor = Color.FromArgb(0,0,0,0); // ByLayer
+
+            // Create a container object to hold all text styles
+            var textStylesContainer = new OpenCADObject(this) { Name = OpenCADStrings.TextStylesContainer };
+            Add(textStylesContainer);
+            TextStylesContainerID = textStylesContainer.ID;
+
+            var defaultTextStyle = new OpenCADTextStyle(OpenCADStrings.DefaultTextStyleName, "Arial", 4.0, this);
+            textStylesContainer.Add(defaultTextStyle);
+            CurrentTextStyle = defaultTextStyle;
 
             // Add other default settings objects as children if needed
             var viewportSettings = new ViewportSettings(this);
@@ -185,6 +197,27 @@ namespace OpenCAD
         {
             get => GetPropertyValue<Guid>(PropertyType.ID, nameof(CurrentLayerID));
             set => SetPropertyValue(PropertyType.ID, nameof(CurrentLayerID), OpenCADStrings.CurrentLayerID, value);
+        }
+
+
+        /// <summary>
+        /// Gets or sets the current active layer for new objects.
+        /// </summary>
+        [JsonIgnore]
+        public OpenCADTextStyle CurrentTextStyle
+        {
+            get => GetChild(TextStylesContainerID)?.GetChild(CurrentTextStyleID) as OpenCADTextStyle ?? new OpenCADTextStyle();
+            set => SetPropertyValue(PropertyType.ID, nameof(CurrentTextStyleID), OpenCADStrings.CurrentTextStyleID, value.ID);
+        }
+
+        /// <summary>
+        /// Gets or sets the current active layer's Id for new objects.
+        /// </summary>
+        [JsonIgnore]
+        public Guid CurrentTextStyleID
+        {
+            get => GetPropertyValue<Guid>(PropertyType.ID, nameof(CurrentTextStyleID));
+            set => SetPropertyValue(PropertyType.ID, nameof(CurrentTextStyleID), OpenCADStrings.CurrentTextStyleID, value);
         }
 
         [JsonIgnore]
@@ -417,6 +450,40 @@ namespace OpenCAD
         { 
             get => GetPropertyValue<Guid>(PropertyType.ID, nameof(LayersContainerID));
             private set => SetPropertyValue(PropertyType.ID, nameof(LayersContainerID), OpenCADStrings.LayersContainerID, value);
+        }
+
+        [JsonIgnore, XmlIgnore]
+        public Guid TextStylesContainerID
+        {
+            get => GetPropertyValue<Guid>(PropertyType.ID, nameof(TextStylesContainerID));
+            private set => SetPropertyValue(PropertyType.ID, nameof(TextStylesContainerID), OpenCADStrings.TextStylesContainerID, value);
+        }
+
+        [JsonIgnore, XmlIgnore]
+        public IServiceProvider? ServiceProvider
+        {
+            get => _serviceProvider;
+            set => _serviceProvider = value;
+        }
+
+        /// <summary>
+        /// Thread-safe service resolution.
+        /// </summary>
+        public T? GetService<T>() where T : class
+        {
+            var provider = _serviceProvider; // Read once
+            if (provider == null)
+                return null;
+
+            try
+            {
+                return provider.GetService(typeof(T)) as T;
+            }
+            catch (ObjectDisposedException)
+            {
+                // Service provider might be disposed during shutdown
+                return null;
+            }
         }
 
         // Call this whenever the document is modified

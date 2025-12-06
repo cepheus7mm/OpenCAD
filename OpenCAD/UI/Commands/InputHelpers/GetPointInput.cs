@@ -399,12 +399,12 @@ namespace UI.Commands.InputHelpers
                 try { _viewModel?.SetPreviewPoint(previewPoint); } catch { }
             });
             
-            System.Diagnostics.Debug.WriteLine(
-                string.Format(
-                    OpenCADStrings.LineCommandPreviewPointUpdated,
-                    previewPoint.X,
-                    previewPoint.Y,
-                    previewPoint.Z));
+            //System.Diagnostics.Debug.WriteLine(
+            //    string.Format(
+            //        OpenCADStrings.LineCommandPreviewPointUpdated,
+            //        previewPoint.X,
+            //        previewPoint.Y,
+            //        previewPoint.Z));
         }
 
         /// <summary>

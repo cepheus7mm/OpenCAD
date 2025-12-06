@@ -2,6 +2,7 @@ using OpenCAD;
 using System.Numerics;
 using OpenTK.Graphics.OpenGL;
 using System.Diagnostics;
+using OpenCAD.TextRendering;
 
 namespace GraphicsEngine
 {
@@ -22,9 +23,13 @@ namespace GraphicsEngine
         private float _orthoCenterX = 0f;
         private float _orthoCenterY = 0f;
 
-        public RenderEngine()
+        // Optional injected font provider (from UI host)
+        private readonly ITextMetricsProvider? _textMetrics;
+
+        public RenderEngine(ITextMetricsProvider? textMetrics = null)
         {
             _camera = new Camera();
+            _textMetrics = textMetrics;
         }
 
         /// <summary>
@@ -105,7 +110,18 @@ namespace GraphicsEngine
 
             _renderers.Add(new LineRenderer(_shaderProgram));
             _renderers.Add(new ArcRenderer(_shaderProgram));
-            //System.Diagnostics.Debug.WriteLine($"Registered {_renderers.Count} renderer(s)");
+
+            // Add text renderer only if a metrics provider was injected
+            if (_textMetrics != null)
+            {
+                _renderers.Add(new TextRenderer(_shaderProgram, _textMetrics));
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine("RenderEngine: no ITextMetricsProvider injected - text rendering disabled.");
+            }
+
+            System.Diagnostics.Debug.WriteLine($"Registered {_renderers.Count} renderer(s)");
         }
 
         /// <summary>

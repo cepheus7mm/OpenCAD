@@ -5,6 +5,7 @@ using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace OpenCAD.Serialization
 {
@@ -96,7 +97,7 @@ namespace OpenCAD.Serialization
             }
         }
 
-        public static OpenCADDocument? LoadFromJson(string filePath)
+        public static OpenCADDocument? LoadFromJson(string filePath, IServiceProvider? serviceProvider = null)
         {
             try
             {
@@ -107,6 +108,11 @@ namespace OpenCAD.Serialization
 
                 var document = JsonSerializer.Deserialize<OpenCADDocument>(json, JsonOptions);
                 //System.Diagnostics.Debug.WriteLine($"Deserialization complete, document: {(document != null ? "valid" : "NULL")}");
+
+                if (serviceProvider != null && document != null)
+                {
+                    document.ServiceProvider = serviceProvider;
+                }
 
                 if (document != null)
                 {

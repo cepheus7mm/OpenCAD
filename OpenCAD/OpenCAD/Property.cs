@@ -17,6 +17,7 @@ namespace OpenCAD
         Integer,
         DoubleLength,
         DoubleAngle,
+        DoubleUnitLess,
         String,
         Color,
         Point,

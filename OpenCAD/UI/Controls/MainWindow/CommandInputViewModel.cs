@@ -251,6 +251,19 @@ namespace UI.Controls.MainWindow
             }
         }
 
+        /// <summary>
+        /// Notifies the active input helper about text changes (for preview).
+        /// Does NOT complete any async tasks - only updates preview state.
+        /// </summary>
+        public void NotifyTextChanged(string currentText)
+        {
+            // Only notify if there's an active command
+            if (_activeCommand is CommandBase commandBase)
+            {
+                commandBase.NotifyInputHelperTextChanged(currentText);
+            }
+        }
+
         #endregion
 
         #region Private Methods - Command Execution

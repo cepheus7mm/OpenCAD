@@ -215,6 +215,72 @@ namespace UI.Commands
             }
         }
 
+        /// <summary>
+        /// Prompt for a string (keyword or arbitrary text). Returns an InputResult with Keyword set
+        /// and ResultType indicating Keyword or Arbitrary. Returns a ResultType of None on cancel/failure.
+        /// </summary>
+        protected async Task<InputResult> GetString(string prompt, string[]? keyWords = null, bool allowArbitrary = true)
+        {
+            var viewModel = Context?.GetActiveViewportViewModel();
+            var badResult = new InputResult() { ResultType = InputResult.InputResultType.None, Keyword = null };
+            if (viewModel == null || Context == null)
+                return badResult;
+
+            _cancellationTokenSource ??= new CancellationTokenSource();
+
+            _inputHelper = new GetStringInput(Context, viewModel);
+
+            CurrentPrompt = prompt;
+            try
+            {
+                var res = await ((GetStringInput)_inputHelper).GetStringAsync(
+                    prompt,
+                    allowArbitrary: allowArbitrary,
+                    keywords: keyWords,
+                    cancellationToken: _cancellationTokenSource.Token);
+
+                if (res == null)
+                    return badResult;
+
+                return res;
+            }
+            catch (OperationCanceledException)
+            {
+                return badResult;
+            }
+            finally
+            {
+                CurrentPrompt = string.Empty;
+            }
+        }
+
+        protected async Task<InputResult?> GetString(
+            string prompt,
+            bool allowArbitrary = true,
+            string[]? keywords = null,
+            Action<string>? previewCallback = null)
+        {
+            var viewModel = Context?.GetActiveViewportViewModel();
+            var badResult = new InputResult() { ResultType = InputResult.InputResultType.None, Keyword = null };
+            if (viewModel == null || Context == null)
+                return badResult;
+
+            _cancellationTokenSource ??= new CancellationTokenSource();
+            _inputHelper = new GetStringInput(Context, viewModel);
+            if (_inputHelper is GetStringInput stringInput)
+            {
+                CurrentPrompt = prompt;
+                return await stringInput.GetStringAsync(
+                    prompt,
+                    allowArbitrary,
+                    keywords,
+                    previewCallback,
+                    _cancellationTokenSource?.Token ?? default);
+            }
+
+            throw new InvalidOperationException("Current input helper is not GetStringInput");
+        }
+
         #region Preview support (shared)
 
         // Objects that should be previewed (derived classes may populate this)
@@ -446,6 +512,18 @@ namespace UI.Commands
             }
             RaiseCommandCompleted();
             System.Diagnostics.Debug.WriteLine("CommandBase: Raised Command Completed");
+        }
+
+        /// <summary>
+        /// Notifies the input helper about text changes (for preview purposes).
+        /// Used by the command input system to support live previews while typing.
+        /// </summary>
+        public void NotifyInputHelperTextChanged(string currentText)
+        {
+            if (_inputHelper is GetStringInput stringInput)
+            {
+                stringInput.OnTextChanged(currentText);
+            }
         }
 
         #endregion

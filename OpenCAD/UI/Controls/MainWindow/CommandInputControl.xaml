@@ -61,7 +61,8 @@
                          Background="Transparent"
                          Foreground="{DynamicResource OutputForegroundBrush}"
                          CaretBrush="{DynamicResource OutputForegroundBrush}"
-                         PreviewKeyDown="CommandTextBox_KeyDown"/>
+                         PreviewKeyDown="CommandTextBox_KeyDown"
+                         TextChanged="CommandTextBox_TextChanged"/>
             </Grid>
         </Grid>
     </Grid>

@@ -10,6 +10,8 @@ using System.Numerics;
 using UI.Controls.MainWindow;
 using System.Windows.Media;
 using OpenCAD.Settings;
+using Microsoft.Extensions.DependencyInjection;
+using OpenCAD.TextRendering; // << add this
 
 namespace UI.Controls.Viewport
 {
@@ -224,16 +226,20 @@ namespace UI.Controls.Viewport
         private void InitializeOpenGL()
         {
             if (_isInitialized)
-            {
-                //System.Diagnostics.Debug.WriteLine("OpenGL already initialized, skipping");
                 return;
-            }
 
             try
             {
                 //System.Diagnostics.Debug.WriteLine("--- Starting OpenGL initialization ---");
 
-                _renderEngine = new RenderEngine();
+                // Resolve ITextMetricsProvider from DI
+                ITextMetricsProvider? textMetrics = null;
+                if (Application.Current is UI.App app)
+                {
+                    textMetrics = app.Services.GetService<ITextMetricsProvider>();
+                }
+
+                _renderEngine = new RenderEngine(textMetrics);
 
                 // Use framebuffer pixel size, not DIPs
                 var dpi = VisualTreeHelper.GetDpi(GlWPFControl);

@@ -43,6 +43,11 @@ namespace OpenCAD.Geometry
 
         public static Point3D NotAPoint => new Point3D(double.NaN, double.NaN, double.NaN);
 
+        public bool IsValid()
+        {
+            return !(double.IsNaN(X) || double.IsNaN(Y) || double.IsNaN(Z));
+        }
+
         /// <summary>
         /// Distance between two points
         /// </summary>

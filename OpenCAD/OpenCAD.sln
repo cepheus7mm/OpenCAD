@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.14.36429.23
+# Visual Studio Version 18
+VisualStudioVersion = 18.0.11222.15 d18.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UI", "UI\UI.csproj", "{64420011-E309-4C76-973D-DD8F5E77FCAB}"
 EndProject
@@ -12,6 +12,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UI.Commands.Tests", "Tests\UI.Commands.Tests\UI.Commands.Tests.csproj", "{894F3409-3D6F-9DE9-F483-DDEAB987C27C}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenCAD.Settings.UnitSettings", "OpenCAD.Settings.UnitSettings\OpenCAD.Settings.UnitSettings.csproj", "{FA796E62-35C2-48A4-9427-B3205FFAC1D9}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenCAD.TextRendering", "OpenCAD.TextRendering\OpenCAD.TextRendering.csproj", "{FD09E4E4-AEB0-C766-11D7-BDB8DC29185E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -39,6 +41,10 @@ Global
 		{FA796E62-35C2-48A4-9427-B3205FFAC1D9}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{FA796E62-35C2-48A4-9427-B3205FFAC1D9}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{FA796E62-35C2-48A4-9427-B3205FFAC1D9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FD09E4E4-AEB0-C766-11D7-BDB8DC29185E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FD09E4E4-AEB0-C766-11D7-BDB8DC29185E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FD09E4E4-AEB0-C766-11D7-BDB8DC29185E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FD09E4E4-AEB0-C766-11D7-BDB8DC29185E}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

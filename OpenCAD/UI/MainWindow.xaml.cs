@@ -327,6 +327,11 @@ namespace UI
                 $"New document created {DateTime.Now:yyyy-MM-dd HH:mm:ss}"
             );
 
+            if (Application.Current is App app)
+            {
+                document.ServiceProvider = app.Services;
+            }
+
             // Create viewport control for the document, passing the document to the constructor
             var viewport = new ViewportControl(document);
             
@@ -399,7 +404,8 @@ namespace UI
                 try
                 {
                     // Load the document
-                    var loadedDocument = DocumentSerializer.LoadFromJson(openFileDialog.FileName);
+                    var app = Application.Current as App;
+                    var loadedDocument = DocumentSerializer.LoadFromJson(openFileDialog.FileName, app.Services);
                     
                     if (loadedDocument != null)
                     {

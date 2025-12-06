@@ -141,6 +141,21 @@
         public const string LayersContainerID = "Layers Container ID";
 
         /// <summary>
+        /// Property name for textStyles container
+        /// </summary>
+        public const string TextStylesContainer = "TextStyles Container";
+
+        /// <summary>
+        /// Property name for textStyles container ID
+        /// </summary>
+        public const string TextStylesContainerID = "TextStyles Container ID";
+
+        /// <summary>
+        /// Property current textstyle ID
+        /// </summary>
+        public const string CurrentTextStyleID = "Current TextStyle ID";
+
+        /// <summary>
         /// Property name for viewport settings container ID
         /// </summary>
         public const string ViewportSettingsContainerID = "Viewport Settings Container ID";
@@ -174,6 +189,31 @@
         /// Property name for layer locked state
         /// </summary>
         public const string LayerIsLocked = "Layer IsLocked";
+
+        public const string DefaultTextStyleName = "TextStyle0";
+        public const string Text = "Text";
+        public const string FontFamily = "Font Family";
+
+        public const string FontSize = "Font Size";
+
+        public const string Bold = "Bold";
+        public const string Italic = "Italic";
+        public const string Underline = "Underline";
+
+        /// <summary>
+        /// Property name for base point
+        /// </summary>
+        public const string BasePoint = "Base Point";
+
+        /// <summary>
+        /// Property name for rotation
+        /// </summary>
+        public const string Rotation = "Rotation";
+
+        /// <summary>
+        /// Property name for rotation
+        /// </summary>
+        public const string TextStyleID = "Text Style ID";
 
         /// <summary>
         /// Property name for start point
@@ -650,8 +690,8 @@
         public const string ViewportNull = "null";
 
         #endregion
-        #region Arc Command Messages
 
+        #region Arc Command Messages
 
         public const string ArcCommandInitialized = "ArcCommand initialized";
 
@@ -672,6 +712,36 @@
         public const string UndoCreateArc = "Create Arc with center ({0:F3}, {1:F3}, {2:F3}), radius {3:F3}, from angle {4:F3} to {5:F3}";
 
         #endregion
+
+        #region Text Command Messages
+
+        /// <summary>
+        /// Prompt for base point of text
+        /// </summary>
+        public const string TextBasePointPrompt = "Specify base point";
+
+        /// <summary>
+        /// Prompt for rotation angle of text
+        /// </summary>
+        public const string TextRotationPrompt = "Specify rotation angle";
+
+        /// <summary>
+        /// Prompt for text string input
+        /// </summary>
+        public const string TextStringPrompt = "Enter text string";
+
+        /// <summary>
+        /// Message displayed when text is created
+        /// </summary>
+        public const string TextCreated = "Text created at ({0:F3}, {1:F3}, {2:F3}): \"{3}\"";
+
+        /// <summary>
+        /// Undo action description for creating text
+        /// </summary>
+        public const string UndoCreateText = "Create Text at ({0:F3}, {1:F3}, {2:F3}): \"{3}\"";
+
+        #endregion
+
         #region Erase Command Messages
 
         /// <summary>
@@ -868,7 +938,6 @@
         /// Prompt for specifying target point
         /// </summary>
         public const string TargetPointPrompt = "Specify target point (enter coordinates or click in viewport):";
-
 
         /// <summary>
         /// Error message for invalid point input

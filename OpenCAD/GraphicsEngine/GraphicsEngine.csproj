@@ -8,15 +8,18 @@
 
   <ItemGroup>
     <Compile Remove="GraphicsEngine.cs" />
+    <Compile Remove="TextRendererPolygon1.cs" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="OpenTK" Version="4.9.4" />
-    <PackageReference Include="OpenTK.GLWpfControl" Version="4.3.3" />
+    <PackageReference Include="OpenTK.GLWpfControl" Version="4.3.4" />
+    <PackageReference Include="Poly2Tri" Version="1.0.1" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\OpenCAD\OpenCAD.csproj" />
+    <ProjectReference Include="..\OpenCAD.TextRendering\OpenCAD.TextRendering.csproj" />
   </ItemGroup>
 
 </Project>
