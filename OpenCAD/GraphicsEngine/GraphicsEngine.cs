@@ -237,8 +237,8 @@ namespace GraphicsEngine
 
                 // DEBUG: dump the matrix shape we expect for a pure ortho (no shear/tilt)
                 var m = _projectionMatrix;
-                Debug.WriteLine($"[RE] Ortho: center=({_orthoCenterX:F4},{_orthoCenterY:F4}) scale={_orthographicScale:F4} aspect={aspectRatio:F4} size=({(_orthographicScale*aspectRatio):F4}x{_orthographicScale:F4})");
-                Debug.WriteLine($"[RE] Ortho M2x2=[[{m.M11:F6},{m.M12:F6}],[{m.M21:F6},{m.M22:F6}]]  T=({m.M41:F6},{m.M42:F6})  M34={m.M34:F6} M44={m.M44:F6}");
+                //Debug.WriteLine($"[RE] Ortho: center=({_orthoCenterX:F4},{_orthoCenterY:F4}) scale={_orthographicScale:F4} aspect={aspectRatio:F4} size=({(_orthographicScale*aspectRatio):F4}x{_orthographicScale:F4})");
+                //Debug.WriteLine($"[RE] Ortho M2x2=[[{m.M11:F6},{m.M12:F6}],[{m.M21:F6},{m.M22:F6}]]  T=({m.M41:F6},{m.M42:F6})  M34={m.M34:F6} M44={m.M44:F6}");
                 if (MathF.Abs(m.M12) > 1e-6f || MathF.Abs(m.M21) > 1e-6f)
                     Debug.WriteLine("[RE][WARN] Ortho off-diagonal != 0 (shear/tilt) in projection.");
             }
@@ -375,7 +375,7 @@ namespace GraphicsEngine
             _orthoCenterX += dxWorld;
             _orthoCenterY -= dyWorld;
 
-            Debug.WriteLine($"[RE] PanOrthoPixels px=({deltaXpx:F3},{deltaYpx:F3}) world=({dxWorld:F3},{dyWorld:F3}) center=({_orthoCenterX:F3},{_orthoCenterY:F3})");
+            //Debug.WriteLine($"[RE] PanOrthoPixels px=({deltaXpx:F3},{deltaYpx:F3}) world=({dxWorld:F3},{dyWorld:F3}) center=({_orthoCenterX:F3},{_orthoCenterY:F3})");
 
             UpdateProjection(_viewportWidth, _viewportHeight);
         }

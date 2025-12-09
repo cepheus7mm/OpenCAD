@@ -45,6 +45,7 @@ namespace UI
             menuBar.DarkThemeRequested += (s, e) => DarkTheme_Click(s!, new RoutedEventArgs());
             menuBar.LayersVisibilityChanged += MenuBar_LayersVisibilityChanged;
             menuBar.SettingsVisibilityChanged += MenuBar_SettingsVisibilityChanged;
+            menuBar.TextStylesVisibilityChanged += MenuBar_TextStylesVisibilityChanged;
             menuBar.SaveAsRequested += (s, e) => SaveAs_Click(s!, new RoutedEventArgs());
             
             // Hook up toolbar events
@@ -77,6 +78,12 @@ namespace UI
         {
             dockingArea.ShowSettingsPanel(isVisible);
             statusBar.UpdateStatus(isVisible ? "Settings panel shown" : "Settings panel hidden");
+        }
+
+        private void MenuBar_TextStylesVisibilityChanged(object? sender, bool isVisible)
+        {
+            dockingArea.ShowTextStylesPanel(isVisible);
+            statusBar.UpdateStatus(isVisible ? "Text Styles panel shown" : "Text Styles panel hidden");
         }
 
         private void AutoSave_Tick(object? sender, EventArgs e)

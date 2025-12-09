@@ -24,7 +24,8 @@
 			<MenuItem Header="_Properties" />
             <MenuItem Header="_Settings" Name="SettingsMenuItem"  Click="Settings_Click"/>
 			<MenuItem Header="_Layers" Name="LayersMenuItem" Click="Layers_Click" IsCheckable="True" IsChecked="True" />
-			<MenuItem Header="_Output" />
+            <MenuItem Header="_Text Styles" Name="TextStylesMenuItem" Click="TextStyles_Click" IsCheckable="True" IsChecked="False" />
+            <MenuItem Header="_Output" />
 			<Separator />
 			<MenuItem Header="_Theme">
 				<MenuItem Header="_Light Theme" Name="LightThemeMenuItem" Click="LightTheme_Click" IsCheckable="True" IsChecked="True" />

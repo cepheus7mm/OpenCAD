@@ -16,6 +16,7 @@ namespace UI.Controls.MainWindow
         public event EventHandler? NewViewportRequested;
         public event EventHandler<bool>? LayersVisibilityChanged;
         public event EventHandler<bool>? SettingsVisibilityChanged;
+        public event EventHandler<bool>? TextStylesVisibilityChanged;
         public event EventHandler? SaveAsRequested;
 
         public MenuBarControl()
@@ -56,6 +57,14 @@ namespace UI.Controls.MainWindow
         {
             // Show the settings panel via DockingAreaControl
             SettingsVisibilityChanged?.Invoke(this, !SettingsMenuItem.IsChecked);
+            if (sender is MenuItem menuItem)
+                menuItem.IsChecked = !SettingsMenuItem.IsChecked;
+        }
+
+        private void TextStyles_Click(object sender, RoutedEventArgs e)
+        {
+            // Show the settings panel via DockingAreaControl
+            TextStylesVisibilityChanged?.Invoke(this, TextStylesMenuItem.IsChecked);
             if (sender is MenuItem menuItem)
                 menuItem.IsChecked = !SettingsMenuItem.IsChecked;
         }

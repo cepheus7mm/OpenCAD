@@ -8,6 +8,7 @@ using System.Text.Json.Serialization;
 using System.Xml.Serialization;
 using OpenCAD.Geometry;
 using OpenCAD.Settings;
+using OpenCAD.Geometry.Helpers;
 
 namespace OpenCAD
 {
@@ -128,6 +129,7 @@ namespace OpenCAD
                     break;
                 case PropertyType.DoubleLength:
                 case PropertyType.DoubleAngle:
+                case PropertyType.DoubleUnitLess:
                     value = (double)_value;
                     break;
                 case PropertyType.String:

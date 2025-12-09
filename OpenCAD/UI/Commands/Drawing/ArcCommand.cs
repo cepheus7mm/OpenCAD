@@ -1,5 +1,6 @@
 using OpenCAD;
 using OpenCAD.Geometry;
+using OpenCAD.Geometry.Helpers;
 using System;
 using System.ComponentModel;
 using System.Threading;
@@ -209,7 +210,7 @@ namespace UI.Commands.Drawing
                 _ => throw new NotImplementedException(),
             };
             var keyWords = new string[] { "CSE", "SCE", "SER", "3PT", "Last" };
-            var result = await GetPoint(string.Format(OpenCADStrings.ArcPointPrompt, step), keyWords);
+            var result = await GetPoint(string.Format(OpenCADStrings.ArcPointPrompt, step), null, keyWords);
 
             if (result == null || result.ResultType == InputHelpers.InputResult.InputResultType.Cancel)
                 throw new OperationCanceledException();

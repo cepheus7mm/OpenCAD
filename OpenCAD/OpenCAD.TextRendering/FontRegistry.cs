@@ -67,21 +67,61 @@ namespace OpenCAD.TextRendering
 
         private string? FindFontFile(string fontFamily, bool bold, bool italic)
         {
-            // TODO: Implement font file search logic
-            // Look for files matching the font family name with appropriate suffixes
-            // e.g., "Arial.ttf", "Arial-Bold.ttf", "Arial-BoldItalic.ttf"
-            
             foreach (var searchPath in _fontSearchPaths)
             {
                 if (!Directory.Exists(searchPath))
                     continue;
 
-                // Simple heuristic - improve this later
-                string pattern = $"{fontFamily}*.ttf";
-                var files = Directory.GetFiles(searchPath, pattern, SearchOption.TopDirectoryOnly);
+                // Get all TTF files in the directory
+                var allFontFiles = Directory.GetFiles(searchPath, "*.ttf", SearchOption.TopDirectoryOnly);
 
-                if (files.Length > 0)
-                    return files[0]; // For now, just return the first match
+                // Normalize the font family name for comparison (remove spaces, lowercase)
+                string normalizedFamily = fontFamily.Replace(" ", "").ToLowerInvariant();
+
+                // Try to find a matching font file
+                foreach (var filePath in allFontFiles)
+                {
+                    string fileName = Path.GetFileNameWithoutExtension(filePath);
+                    string normalizedFileName = fileName.Replace(" ", "").Replace("-", "").Replace("_", "").ToLowerInvariant();
+
+                    // Check if this file matches the font family
+                    if (!normalizedFileName.Contains(normalizedFamily))
+                        continue;
+
+                    // Check for style variants
+                    bool fileIsBold = normalizedFileName.Contains("bold") || normalizedFileName.Contains("bd");
+                    bool fileIsItalic = normalizedFileName.Contains("italic") || normalizedFileName.Contains("oblique") || normalizedFileName.Contains("it");
+
+                    // For regular fonts, prefer files without Bold/Italic suffixes
+                    if (!bold && !italic)
+                    {
+                        // Skip files with bold or italic in the name
+                        if (fileIsBold || fileIsItalic)
+                            continue;
+
+                        // Exact match found for regular variant
+                        return filePath;
+                    }
+
+                    // Match bold and italic requirements
+                    if (bold == fileIsBold && italic == fileIsItalic)
+                    {
+                        return filePath;
+                    }
+                }
+
+                // Fallback: if no exact match, return any file matching the family name
+                foreach (var filePath in allFontFiles)
+                {
+                    string fileName = Path.GetFileNameWithoutExtension(filePath);
+                    string normalizedFileName = fileName.Replace(" ", "").Replace("-", "").Replace("_", "").ToLowerInvariant();
+
+                    if (normalizedFileName.Contains(normalizedFamily))
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[FontRegistry] Using fallback font file: {filePath} for {fontFamily} (Bold: {bold}, Italic: {italic})");
+                        return filePath;
+                    }
+                }
             }
 
             return null;

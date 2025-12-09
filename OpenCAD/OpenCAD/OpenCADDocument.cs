@@ -1,13 +1,12 @@
-﻿using OpenCAD.Geometry;
+﻿using OpenCAD.Containers;
+using OpenCAD.Geometry;
+using OpenCAD.Geometry.Helpers;
 using OpenCAD.Interfaces;
 using OpenCAD.Settings;
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Drawing;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Runtime.Serialization;
 using System.Text.Json.Serialization;
 using System.Xml.Serialization;
@@ -27,10 +26,6 @@ namespace OpenCAD
             Vector3D,
         }
 
-        // Cache for quick layer lookup by name
-        [JsonIgnore, XmlIgnore]
-        private ConcurrentDictionary<string, Guid> _layerNameToId = new();
-
         // Add volatile to ensure visibility across threads
         private volatile IServiceProvider? _serviceProvider;
 
@@ -40,28 +35,27 @@ namespace OpenCAD
             Filename = string.Empty;
             Description = string.Empty;
 
-            // Create a container object to hold all layers
-            var layersContainer = new OpenCADObject(this) { Name = OpenCADStrings.LayersContainer };
+            // Create the specialized layers container
+            var layersContainer = new OpenCADLayers(this);
             Add(layersContainer);
 
             LayersContainerID = layersContainer.ID;
 
             // Create default "0" layer (standard in CAD systems)
             var defaultLayer = new OpenCADLayer(OpenCADStrings.DefaultLayerName, Color.White, LineType.Continuous, LineWeight.Default, this);
-            layersContainer.Add(defaultLayer);
-            _layerNameToId.TryAdd(OpenCADStrings.DefaultLayerName, defaultLayer.ID);
+            layersContainer.AddLayer(defaultLayer);
             CurrentLayer = defaultLayer;
             CurrentLineType = LineType.ByLayer;
             CurrentLineWeight = LineWeight.ByLayer;
             CurrentColor = Color.FromArgb(0,0,0,0); // ByLayer
 
-            // Create a container object to hold all text styles
-            var textStylesContainer = new OpenCADObject(this) { Name = OpenCADStrings.TextStylesContainer };
+            // Create the specialized text styles container
+            var textStylesContainer = new OpenCADTextStyles(this);
             Add(textStylesContainer);
             TextStylesContainerID = textStylesContainer.ID;
 
-            var defaultTextStyle = new OpenCADTextStyle(OpenCADStrings.DefaultTextStyleName, "Arial", 4.0, this);
-            textStylesContainer.Add(defaultTextStyle);
+            var defaultTextStyle = new OpenCADTextStyle(OpenCADStrings.DefaultTextStyleName, "Arial", 1.0, this);
+            textStylesContainer.AddTextStyle(defaultTextStyle);
             CurrentTextStyle = defaultTextStyle;
 
             // Add other default settings objects as children if needed
@@ -114,26 +108,45 @@ namespace OpenCAD
             
             try
             {
-                // Rebuild the layer name-to-ID cache
-                _layerNameToId = new ConcurrentDictionary<string, Guid>();
-                
-                //System.Diagnostics.Debug.WriteLine($"Rebuilding layer cache...");
-                
-                var layers = GetLayers().ToList();
-                //System.Diagnostics.Debug.WriteLine($"Found {layers.Count} layers");
-                
-                foreach (var layer in layers)
-                {
-                    //System.Diagnostics.Debug.WriteLine($"  Layer: {layer.Name} (ID: {layer.ID})");
-                    _layerNameToId.TryAdd(layer.Name, layer.ID);
-                    
-                    // Restore document reference
-                    layer.Document = this;
-                }
-                
                 // Recursively restore document and parent references for all children
                 //System.Diagnostics.Debug.WriteLine("Restoring references...");
                 RestoreReferences(this, this);
+                
+                // Rebuild the layer cache in the layers container
+                var layersContainer = GetLayersContainer();
+                if (layersContainer != null)
+                {
+                    //System.Diagnostics.Debug.WriteLine($"Rebuilding layer cache...");
+                    layersContainer.RebuildCache();
+                    
+                    var layers = layersContainer.GetLayers().ToList();
+                    //System.Diagnostics.Debug.WriteLine($"Found {layers.Count} layers");
+                    
+                    foreach (var layer in layers)
+                    {
+                        //System.Diagnostics.Debug.WriteLine($"  Layer: {layer.Name} (ID: {layer.ID})");
+                        // Restore document reference
+                        layer.Document = this;
+                    }
+                }
+                
+                // Rebuild the text style cache in the text styles container
+                var textStylesContainer = GetTextStylesContainer();
+                if (textStylesContainer != null)
+                {
+                    //System.Diagnostics.Debug.WriteLine($"Rebuilding text style cache...");
+                    textStylesContainer.RebuildCache();
+                    
+                    var textStyles = textStylesContainer.GetTextStyles().ToList();
+                    //System.Diagnostics.Debug.WriteLine($"Found {textStyles.Count} text styles");
+                    
+                    foreach (var textStyle in textStyles)
+                    {
+                        //System.Diagnostics.Debug.WriteLine($"  Text Style: {textStyle.Name} (ID: {textStyle.ID})");
+                        // Restore document reference
+                        textStyle.Document = this;
+                    }
+                }
                 
                 //System.Diagnostics.Debug.WriteLine("=== OpenCADDocument.OnDeserialized COMPLETE ===");
             }
@@ -162,7 +175,7 @@ namespace OpenCAD
         /// <summary>
         /// Gets or sets the filename of the CAD document.
         /// </summary>
-        [JsonIgnore] // or [XmlIgnore]
+        [JsonIgnore]
         public string Filename
         {
             get => GetPropertyValue<string>(PropertyType.String, nameof(Filename));
@@ -185,7 +198,11 @@ namespace OpenCAD
         [JsonIgnore]
         public OpenCADLayer CurrentLayer
         {
-            get => GetChild(LayersContainerID)?.GetChild(CurrentLayerID) as OpenCADLayer ?? new OpenCADLayer();
+            get
+            {
+                var layersContainer = GetLayersContainer();
+                return layersContainer?.GetLayer(CurrentLayerID) ?? new OpenCADLayer();
+            }
             set => SetPropertyValue(PropertyType.ID, nameof(CurrentLayerID), OpenCADStrings.CurrentLayerID, value.ID);
         }
 
@@ -199,19 +216,22 @@ namespace OpenCAD
             set => SetPropertyValue(PropertyType.ID, nameof(CurrentLayerID), OpenCADStrings.CurrentLayerID, value);
         }
 
-
         /// <summary>
-        /// Gets or sets the current active layer for new objects.
+        /// Gets or sets the current active text style for new objects.
         /// </summary>
         [JsonIgnore]
         public OpenCADTextStyle CurrentTextStyle
         {
-            get => GetChild(TextStylesContainerID)?.GetChild(CurrentTextStyleID) as OpenCADTextStyle ?? new OpenCADTextStyle();
+            get
+            {
+                var textStylesContainer = GetTextStylesContainer();
+                return textStylesContainer?.GetTextStyle(CurrentTextStyleID) ?? new OpenCADTextStyle();
+            }
             set => SetPropertyValue(PropertyType.ID, nameof(CurrentTextStyleID), OpenCADStrings.CurrentTextStyleID, value.ID);
         }
 
         /// <summary>
-        /// Gets or sets the current active layer's Id for new objects.
+        /// Gets or sets the current active text style's Id for new objects.
         /// </summary>
         [JsonIgnore]
         public Guid CurrentTextStyleID
@@ -267,6 +287,22 @@ namespace OpenCAD
             private set => SetPropertyValue(PropertyType.ID, nameof(LastGeometricChild), OpenCADStrings.LastGeometricChild, value);
         }
 
+        /// <summary>
+        /// Gets or sets the last text height used in the document.
+        /// This serves as the default for the next TEXT command.
+        /// </summary>
+        [JsonIgnore, XmlIgnore]
+        public double LastTextHeight
+        {
+            get
+            {
+                var value = GetPropertyValue<double>(PropertyType.DoubleLength, nameof(LastTextHeight));
+                // Return the value if it exists and is valid, otherwise return default text style height
+                return value > 0 ? value : CurrentTextStyle?.FontSize ?? 1.0;
+            }
+            set => SetPropertyValue(PropertyType.DoubleLength, nameof(LastTextHeight), OpenCADStrings.LastTextHeight, value);
+        }
+
         public override bool Add(OpenCADObject obj)
         {            
             var added = base.Add(obj);
@@ -287,6 +323,8 @@ namespace OpenCAD
             return null;
         }
 
+        #region Layer Management - Delegates to OpenCADLayers Container
+
         /// <summary>
         /// Adds a new layer to the document.
         /// </summary>
@@ -294,22 +332,8 @@ namespace OpenCAD
         /// <returns>True if the layer was added successfully, false if a layer with the same name already exists.</returns>
         public bool AddLayer(OpenCADLayer layer)
         {
-            if (layer == null)
-                throw new ArgumentNullException(nameof(layer));
-
-            // Check if layer name already exists
-            if (_layerNameToId.ContainsKey(layer.Name))
-                return false;
-
             var layersContainer = GetLayersContainer();
-            if (layersContainer != null)
-            {
-                layersContainer.Add(layer);
-                _layerNameToId.TryAdd(layer.Name, layer.ID);
-                return true;
-            }
-
-            return false;
+            return layersContainer?.AddLayer(layer) ?? false;
         }
 
         /// <summary>
@@ -322,18 +346,8 @@ namespace OpenCAD
         /// <returns>The newly created layer, or null if a layer with the same name already exists.</returns>
         public OpenCADLayer? CreateLayer(string name, Color? color = null, LineType? lineType = null, LineWeight? lineWeight = null)
         {
-            var layer = new OpenCADLayer(
-                name,
-                color ?? Color.White,
-                lineType ?? LineType.Continuous,
-                lineWeight ?? LineWeight.Default,
-                this
-            );
-
-            if (AddLayer(layer))
-                return layer;
-
-            return null;
+            var layersContainer = GetLayersContainer();
+            return layersContainer?.CreateLayer(name, color, lineType, lineWeight);
         }
 
         /// <summary>
@@ -343,32 +357,19 @@ namespace OpenCAD
         /// <returns>The layer with the specified name, or null if not found.</returns>
         public OpenCADLayer? GetLayer(string name)
         {
-            if (_layerNameToId.TryGetValue(name, out var layerId))
-            {
-                var layersContainer = GetLayersContainer();
-                if (layersContainer != null)
-                {
-                    var layer = layersContainer.GetChild(layerId);
-                    return layer as OpenCADLayer;
-                }
-            }
-            return null;
+            var layersContainer = GetLayersContainer();
+            return layersContainer?.GetLayer(name);
         }
 
         /// <summary>
-        /// Gets a layer by name.
+        /// Gets a layer by ID.
         /// </summary>
         /// <param name="layerId">The ID of the layer to retrieve.</param>
         /// <returns>The layer with the specified ID, or null if not found.</returns>
         public OpenCADLayer? GetLayer(Guid layerId)
         {
             var layersContainer = GetLayersContainer();
-            if (layersContainer != null)
-            {
-                var layer = layersContainer.GetChild(layerId);
-                return layer as OpenCADLayer;
-            }
-            return null;
+            return layersContainer?.GetLayer(layerId);
         }
 
         /// <summary>
@@ -379,23 +380,8 @@ namespace OpenCAD
         /// <returns>True if the layer was removed successfully, false otherwise.</returns>
         public bool RemoveLayer(string name)
         {
-            if (name == OpenCADStrings.DefaultLayerName)
-                return false; // Cannot remove default layer
-
-            if (_layerNameToId.TryGetValue(name, out var layerId))
-            {
-                var layersContainer = GetLayersContainer();
-                if (layersContainer != null)
-                {
-                    if (layersContainer.Remove(layerId))
-                    {
-                        _layerNameToId.TryRemove(name, out _);
-                        return true;
-                    }
-                }
-            }
-
-            return false;
+            var layersContainer = GetLayersContainer();
+            return layersContainer?.RemoveLayer(name) ?? false;
         }
 
         /// <summary>
@@ -404,11 +390,7 @@ namespace OpenCAD
         public IEnumerable<OpenCADLayer> GetLayers()
         {
             var layersContainer = GetLayersContainer();
-            if (layersContainer != null)
-            {
-                return layersContainer.GetChildren().OfType<OpenCADLayer>();
-            }
-            return Enumerable.Empty<OpenCADLayer>();
+            return layersContainer?.GetLayers() ?? Enumerable.Empty<OpenCADLayer>();
         }
 
         /// <summary>
@@ -426,6 +408,95 @@ namespace OpenCAD
             }
             return false;
         }
+
+        #endregion
+
+        #region Text Style Management - Delegates to OpenCADTextStyles Container
+
+        /// <summary>
+        /// Adds a new text style to the document.
+        /// </summary>
+        /// <param name="textStyle">The text style to add.</param>
+        /// <returns>True if the text style was added successfully, false if a text style with the same name already exists.</returns>
+        public bool AddTextStyle(OpenCADTextStyle textStyle)
+        {
+            var textStylesContainer = GetTextStylesContainer();
+            return textStylesContainer?.AddTextStyle(textStyle) ?? false;
+        }
+
+        /// <summary>
+        /// Creates and adds a new text style to the document.
+        /// </summary>
+        /// <param name="name">The name of the new text style.</param>
+        /// <param name="fontFamily">The font family for the text style.</param>
+        /// <param name="fontSize">The font size for the text style.</param>
+        /// <returns>The newly created text style, or null if a text style with the same name already exists.</returns>
+        public OpenCADTextStyle? CreateTextStyle(string name, string fontFamily, double fontSize)
+        {
+            var textStylesContainer = GetTextStylesContainer();
+            return textStylesContainer?.CreateTextStyle(name, fontFamily, fontSize);
+        }
+
+        /// <summary>
+        /// Gets a text style by name.
+        /// </summary>
+        /// <param name="name">The name of the text style to retrieve.</param>
+        /// <returns>The text style with the specified name, or null if not found.</returns>
+        public OpenCADTextStyle? GetTextStyle(string name)
+        {
+            var textStylesContainer = GetTextStylesContainer();
+            return textStylesContainer?.GetTextStyle(name);
+        }
+
+        /// <summary>
+        /// Gets a text style by ID.
+        /// </summary>
+        /// <param name="textStyleId">The ID of the text style to retrieve.</param>
+        /// <returns>The text style with the specified ID, or null if not found.</returns>
+        public OpenCADTextStyle? GetTextStyle(Guid textStyleId)
+        {
+            var textStylesContainer = GetTextStylesContainer();
+            return textStylesContainer?.GetTextStyle(textStyleId);
+        }
+
+        /// <summary>
+        /// Removes a text style from the document.
+        /// The default text style cannot be removed.
+        /// </summary>
+        /// <param name="name">The name of the text style to remove.</param>
+        /// <returns>True if the text style was removed successfully, false otherwise.</returns>
+        public bool RemoveTextStyle(string name)
+        {
+            var textStylesContainer = GetTextStylesContainer();
+            return textStylesContainer?.RemoveTextStyle(name) ?? false;
+        }
+
+        /// <summary>
+        /// Gets all text styles in the document.
+        /// </summary>
+        public IEnumerable<OpenCADTextStyle> GetTextStyles()
+        {
+            var textStylesContainer = GetTextStylesContainer();
+            return textStylesContainer?.GetTextStyles() ?? Enumerable.Empty<OpenCADTextStyle>();
+        }
+
+        /// <summary>
+        /// Sets the current text style by name.
+        /// </summary>
+        /// <param name="name">The name of the text style to set as current.</param>
+        /// <returns>True if the text style was found and set as current, false otherwise.</returns>
+        public bool SetCurrentTextStyle(string name)
+        {
+            var textStyle = GetTextStyle(name);
+            if (textStyle != null)
+            {
+                CurrentTextStyle = textStyle;
+                return true;
+            }
+            return false;
+        }
+
+        #endregion
 
         /// <summary>
         /// Applies the document's current properties to a new object.
@@ -509,38 +580,43 @@ namespace OpenCAD
             // Restore parent/document recursively
             RestoreReferences(this, this);
 
-            // Rebuild layer cache
-            _layerNameToId = new ConcurrentDictionary<string, Guid>();
-            foreach (var layer in GetLayers())
+            // Rebuild layer cache in the layers container
+            var layersContainer = GetLayersContainer();
+            if (layersContainer != null)
             {
-                layer.Document = this;
-                if (!string.IsNullOrEmpty(layer.Name))
-                    _layerNameToId.TryAdd(layer.Name, layer.ID);
+                layersContainer.RebuildCache();
+                foreach (var layer in layersContainer.GetLayers())
+                {
+                    layer.Document = this;
+                }
+            }
+
+            // Rebuild text style cache in the text styles container
+            var textStylesContainer = GetTextStylesContainer();
+            if (textStylesContainer != null)
+            {
+                textStylesContainer.RebuildCache();
+                foreach (var textStyle in textStylesContainer.GetTextStyles())
+                {
+                    textStyle.Document = this;
+                }
             }
         }
 
         /// <summary>
-        /// Recursively ensures all children have been deserialized properly.
-        /// This manually triggers the conversion of SerializedProperties to properties.
+        /// Gets the layers container.
         /// </summary>
-        //private void EnsureChildrenDeserialized(OpenCADObject parent)
-        //{
-        //    foreach (var child in parent.GetChildren())
-        //    {
-        //        //System.Diagnostics.Debug.WriteLine($"  Deserializing child: Type={child.GetType().Name}, ID={child.ID}");
-        
-        //        // Force the child to complete its deserialization
-        //        // by manually calling the conversion that OnDeserialized should do
-        //        child.CompleteDeserialization();
-        
-        //        // Recursively process grandchildren
-        //        EnsureChildrenDeserialized(child);
-        //    }
-        //}
-
-        private OpenCADObject? GetLayersContainer()
+        private OpenCADLayers? GetLayersContainer()
         {
-            return GetChild(LayersContainerID);
+            return GetChild(LayersContainerID) as OpenCADLayers;
+        }
+
+        /// <summary>
+        /// Gets the text styles container.
+        /// </summary>
+        private OpenCADTextStyles? GetTextStylesContainer()
+        {
+            return GetChild(TextStylesContainerID) as OpenCADTextStyles;
         }
 
         public ViewportSettings? GetViewportSettings()

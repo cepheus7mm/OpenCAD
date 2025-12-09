@@ -1,4 +1,5 @@
-﻿using OpenCAD.Interfaces;
+﻿using OpenCAD.Geometry.Helpers;
+using OpenCAD.Interfaces;
 using System.Text.Json.Serialization;
 using System.Xml.Serialization;
 
@@ -187,6 +188,62 @@ namespace OpenCAD.Geometry
 
             // Return point on arc
             return Center + new Vector3D(Math.Cos(angle), Math.Sin(angle), 0) * Radius;
+        }
+
+        public override Extents GetExtents()
+        {
+            // Initialize with start and end points
+            var minX = Math.Min(StartPoint.X, EndPoint.X);
+            var maxX = Math.Max(StartPoint.X, EndPoint.X);
+            var minY = Math.Min(StartPoint.Y, EndPoint.Y);
+            var maxY = Math.Max(StartPoint.Y, EndPoint.Y);
+            var minZ = Math.Min(StartPoint.Z, EndPoint.Z);
+            var maxZ = Math.Max(StartPoint.Z, EndPoint.Z);
+
+            // Check if cardinal points fall within the arc's sweep
+            // Cardinal angles: 0° (right), 90° (top), 180° (left), 270° (bottom)
+            double[] cardinalAngles = { 0, Math.PI / 2, Math.PI, 3 * Math.PI / 2 };
+
+            foreach (var angle in cardinalAngles)
+            {
+                if (IsAngleInArc(angle))
+                {
+                    var x = Center.X + Radius * Math.Cos(angle);
+                    var y = Center.Y + Radius * Math.Sin(angle);
+
+                    minX = Math.Min(minX, x);
+                    maxX = Math.Max(maxX, x);
+                    minY = Math.Min(minY, y);
+                    maxY = Math.Max(maxY, y);
+                }
+            }
+
+            return new Extents
+            {
+                Min = new Point3D(minX, minY, minZ),
+                Max = new Point3D(maxX, maxY, maxZ)
+            };
+        }
+
+        /// <summary>
+        /// Checks if a given angle falls within the arc's sweep.
+        /// </summary>
+        private bool IsAngleInArc(double angle)
+        {
+            angle = NormalizeAngle(angle);
+            var start = NormalizeAngle(StartAngle);
+            var end = NormalizeAngle(EndAngle);
+
+            if (start <= end)
+            {
+                // Normal case: no wrap-around
+                return angle >= start && angle <= end;
+            }
+            else
+            {
+                // Wrap-around case: arc crosses 0°
+                return angle >= start || angle <= end;
+            }
         }
 
         public override bool Transform(Matrix4D transformation)

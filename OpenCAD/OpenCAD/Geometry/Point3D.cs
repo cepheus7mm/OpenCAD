@@ -1,3 +1,4 @@
+using OpenCAD.Geometry.Helpers;
 using System;
 using System.Numerics;
 using System.Text.Json.Serialization;
@@ -39,13 +40,24 @@ namespace OpenCAD.Geometry
         [JsonIgnore]
         public double Length => Math.Sqrt(X * X + Y * Y + Z * Z);
 
+        [JsonIgnore]
         public static Point3D Origin => new Point3D(0, 0, 0);
 
+        [JsonIgnore]
         public static Point3D NotAPoint => new Point3D(double.NaN, double.NaN, double.NaN);
+
+        [JsonIgnore]
+        public static Point3D PositiveInfinity => new Point3D(double.PositiveInfinity, double.PositiveInfinity, double.PositiveInfinity);
+
+        [JsonIgnore]
+        public static Point3D NegativeInfinity => new Point3D(double.NegativeInfinity, double.NegativeInfinity, double.NegativeInfinity);
+
+        [JsonIgnore]
+        public bool HasValue => this is not null && IsValid();
 
         public bool IsValid()
         {
-            return !(double.IsNaN(X) || double.IsNaN(Y) || double.IsNaN(Z));
+            return (double.IsRealNumber(X) && double.IsRealNumber(Y) && double.IsRealNumber(Z));
         }
 
         /// <summary>
@@ -89,9 +101,14 @@ namespace OpenCAD.Geometry
         {
             if (obj is Point3D other)
             {
-                return X == other.X && Y == other.Y && Z == other.Z;
+                return (X == other.X && Y == other.Y && Z == other.Z) || (this.IsNotAPoint() && other.IsNotAPoint());
             }
             return false;
+        }
+
+        public bool IsNotAPoint()
+        {
+            return double.IsNaN(X) && double.IsNaN(Y) && double.IsNaN(Z);
         }
 
         public override int GetHashCode()

@@ -25,6 +25,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\GraphicsEngine\GraphicsEngine.csproj" />
+    <ProjectReference Include="..\OpenCAD.TextRendering\OpenCAD.TextRendering.csproj" />
     <ProjectReference Include="..\OpenCAD\OpenCAD.csproj" />
   </ItemGroup>
 

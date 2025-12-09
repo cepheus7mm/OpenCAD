@@ -1,4 +1,5 @@
 using OpenCAD.Geometry;
+using OpenCAD.Geometry.Helpers;
 using System.Drawing;
 
 namespace OpenCAD.Interfaces
@@ -34,6 +35,8 @@ namespace OpenCAD.Interfaces
         /// </summary>
         /// <param name="layer">The layer to use for ByLayer resolution.</param>
         LineWeight LineWeight { get; set; }
+
+        public abstract Extents GetExtents();
 
         public abstract Vector3D? GetFirstDerivate(Point3D point);
 

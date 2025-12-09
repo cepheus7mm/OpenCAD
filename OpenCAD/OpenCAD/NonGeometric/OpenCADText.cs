@@ -1,4 +1,5 @@
 ﻿using OpenCAD.Geometry;
+using OpenCAD.Geometry.Helpers;
 using OpenCAD.Interfaces;
 using OpenCAD.TextRendering;
 using System;
@@ -10,7 +11,7 @@ using System.Xml.Serialization;
 
 namespace OpenCAD.NonGeometric
 {
-    public class OpenCADText : NonGeometricBase
+    public class OpenCADText : GeometryBase
     {
         // Thread-safe cache access
         private readonly object _cacheLock = new object();
@@ -194,6 +195,12 @@ namespace OpenCAD.NonGeometric
             }
         }
 
+        [JsonIgnore, XmlIgnore]
+        public override double Length => GetTextBounds()!.Value.Width;
+
+        [JsonIgnore, XmlIgnore]
+        public override double Angle => Rotation;
+
         /// <summary>
         /// Invalidates the cached bounding box when text properties change.
         /// </summary>
@@ -258,6 +265,61 @@ namespace OpenCAD.NonGeometric
             }
         }
 
+        public override Extents GetExtents()
+        {
+            var bounds = GetTextBounds();
+            
+            // If no bounds available, return a point extents at the base point
+            if (!bounds.HasValue || bounds.Value.Width < double.Epsilon || bounds.Value.Height < double.Epsilon)
+            {
+                return new Extents
+                {
+                    Min = BasePoint,
+                    Max = BasePoint
+                };
+            }
+
+            // Get the four corners of the text bounds in local space
+            Point3D[] corners = new Point3D[]
+            {
+                new Point3D(bounds.Value.MinX, bounds.Value.MinY, 0),
+                new Point3D(bounds.Value.MaxX, bounds.Value.MinY, 0),
+                new Point3D(bounds.Value.MaxX, bounds.Value.MaxY, 0),
+                new Point3D(bounds.Value.MinX, bounds.Value.MaxY, 0)
+            };
+
+            // Transform each corner to world space
+            Point3D[] worldCorners = new Point3D[4];
+            for (int i = 0; i < 4; i++)
+            {
+                worldCorners[i] = TransformToWorld(corners[i]);
+            }
+
+            // Find the axis-aligned bounding box of the transformed corners
+            double minX = worldCorners[0].X;
+            double maxX = worldCorners[0].X;
+            double minY = worldCorners[0].Y;
+            double maxY = worldCorners[0].Y;
+            double minZ = worldCorners[0].Z;
+            double maxZ = worldCorners[0].Z;
+
+            for (int i = 1; i < 4; i++)
+            {
+                minX = Math.Min(minX, worldCorners[i].X);
+                maxX = Math.Max(maxX, worldCorners[i].X);
+                minY = Math.Min(minY, worldCorners[i].Y);
+                maxY = Math.Max(maxY, worldCorners[i].Y);
+                minZ = Math.Min(minZ, worldCorners[i].Z);
+                maxZ = Math.Max(maxZ, worldCorners[i].Z);
+            }
+
+            return new Extents
+            {
+                Min = new Point3D(minX, minY, minZ),
+                Max = new Point3D(maxX, maxY, maxZ)
+            };
+        }
+
         public override Point3D GetClosestPointTo(Point3D point, bool extend = false)
         {
             var bounds = GetTextBounds();
@@ -319,6 +381,83 @@ namespace OpenCAD.NonGeometric
                 basePoint.Y + rotatedY,
                 basePoint.Z
             );
+        }
+
+        public override Vector3D? GetFirstDerivate(Point3D point)
+        {
+            return new Vector3D(1, 1, 1).Rotate(Rotation, _normal);
+        }
+
+        public override Vector3D? GetSecondDerivate(Point3D point)
+        {
+            return new Vector3D(1, 1, 1).Rotate(Rotation + Math.PI / 2, _normal);
+        }
+
+        public override double GetParameterAtPoint(Point3D point)
+        {
+            return 1.0;
+        }
+
+        public override Point3D GetPointAtParameter(double parameter)
+        {
+            return BasePoint;
+        }
+
+        public override bool Transform(Matrix4D transformation)
+        {
+            // Transform the base point
+            var transformedBasePoint = transformation.Transform(BasePoint);
+            BasePoint = transformedBasePoint;
+
+            // Transform the normal vector
+            var transformedNormal = transformation.TransformVector(_normal);
+            _normal = transformedNormal.Length > double.Epsilon ? transformedNormal.Normalized : transformedNormal;
+
+            // Extract rotation from the transformation matrix
+            // Create a unit vector along the current rotation direction
+            var currentDirection = new Vector3D(Math.Cos(Rotation), Math.Sin(Rotation), 0);
+            
+            // Transform the direction vector
+            var transformedDirection = transformation.TransformVector(currentDirection);
+            
+            // Calculate the new rotation angle from the transformed direction
+            if (transformedDirection.Length > double.Epsilon)
+            {
+                var normalizedDirection = transformedDirection.Normalized;
+                double newRotation = Math.Atan2(normalizedDirection.Y, normalizedDirection.X);
+                Rotation = newRotation;
+            }
+
+            // Extract scale from the transformation matrix if needed
+            // Calculate scale factor from the transformed direction vector length
+            double scaleFactor = transformedDirection.Length;
+            if (scaleFactor > double.Epsilon && Math.Abs(scaleFactor - 1.0) > double.Epsilon)
+            {
+                // Apply scale to font size
+                FontSize *= scaleFactor;
+            }
+
+            // Cache is automatically invalidated by property setters
+            return true;
+        }
+
+        /// <summary>
+        /// Creates a deep clone of this text object with a new ID.
+        /// </summary>
+        public new OpenCADText Clone(OpenCADDocument? document = null)
+        {
+            // Use base Clone to handle properties and children
+            var clone = (OpenCADText)base.Clone(document);
+
+            // Reset the cache fields - the clone will recompute bounds as needed
+            clone._cachedBounds = null;
+            clone._cachedText = null;
+            clone._cachedFontSize = 0;
+            clone._cachedFontFamily = null;
+            clone._cachedIsBold = false;
+            clone._cachedIsItalic = false;
+
+            return clone;
         }
     }
 }

@@ -1,6 +1,6 @@
 using System;
 
-namespace OpenCAD.Geometry
+namespace OpenCAD.Geometry.Helpers
 {
     public class Vector3D
     {

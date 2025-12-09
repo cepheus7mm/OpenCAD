@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using UI.Controls.Viewport;
 using UI.Commands.Undo;
+using OpenCAD.Geometry.Helpers;
 
 namespace UI.Commands.Editing
 {

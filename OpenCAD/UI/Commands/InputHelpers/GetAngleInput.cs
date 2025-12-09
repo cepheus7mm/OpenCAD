@@ -10,27 +10,52 @@ namespace UI.Commands.InputHelpers
 {
     public class GetAngleInput : InputHelperBase
     {
+        private GetPointInput? _pointInputHelper;
+
         public GetAngleInput(ICommandContext context, ViewportViewModel? viewModel)
             : base(context, viewModel)
         {
         }
 
         /// <summary>
-        /// Prompt user for an angle. Accepts numeric/keyword input (unit-aware) or a point pick (angle from basePoint to picked point).
-        /// Returns InputResult.Double on success with angle in radians, or Cancel/None as appropriate.
+        /// Override to route all keyboard input to the nested GetPointInput helper.
+        /// </summary>
+        public override bool ProcessKeyboardInput(string input)
+        {
+            // Always route to the nested helper if it exists
+            if (_pointInputHelper != null)
+            {
+                return _pointInputHelper.ProcessKeyboardInput(input);
+            }
+
+            // Fallback to base if no nested helper (shouldn't happen)
+            return base.ProcessKeyboardInput(input);
+        }
+
+        /// <summary>
+        /// Prompt user for an angle. Accepts numeric/keyword input (unit-aware) or a point pick.
+        /// Returns InputResult.Double on success with angle in radians.
         /// </summary>
         public async Task<InputResult> GetAngle(
             string prompt,
+            double? defaultValue = null,  // NEW parameter (angle in radians)
             bool allowLastPoint = false,
             Point3D? basePoint = null,
             string[]? keyWords = null,
             CancellationToken cancellationToken = default)
         {
-            // Use GetPointInput to allow picking a point or entering a keyword/text
-            var helper = new GetPointInput(_context, _viewModel);
+            DefaultValue = defaultValue;  // NEW: Store default
+            
+            // NEW: Append formatted default to prompt if provided
+            if (defaultValue.HasValue)
+            {
+                prompt = $"{prompt} <{FormatDefaultForPrompt(OpenCADDocument.UnitFormatType.Angular)}>";
+            }
 
-            // If caller provided keywords, pass them through
-            var result = await helper.GetPointOrKeywordAsync(
+            // Use GetPointInput to allow picking a point or entering a keyword/text
+            _pointInputHelper = new GetPointInput(_context, _viewModel) { AllowArbitraryInput = true };
+
+            var result = await _pointInputHelper.GetPointOrKeywordAsync(
                 prompt,
                 allowLastPoint: allowLastPoint,
                 basePoint: basePoint,
@@ -43,7 +68,19 @@ namespace UI.Commands.InputHelpers
             if (result.ResultType == InputResult.InputResultType.Cancel)
                 return new InputResult { ResultType = InputResult.InputResultType.Cancel, DoubleValue = double.NaN };
 
-            if (result.ResultType == InputResult.InputResultType.Keyword && result.Keyword != null)
+            // NEW: Check for empty input with default value
+            if (result.ResultType == InputResult.InputResultType.Keyword 
+                && string.IsNullOrWhiteSpace(result.Keyword) 
+                && defaultValue.HasValue)
+            {
+                return new InputResult 
+                { 
+                    ResultType = InputResult.InputResultType.Double, 
+                    DoubleValue = defaultValue.Value  // Already in radians
+                };
+            }
+
+            if (result.ResultType == InputResult.InputResultType.Arbitrary && result.Keyword != null)
             {
                 // Try interpret keyword as numeric angle first
                 if (double.TryParse(result.Keyword, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed))
@@ -51,13 +88,12 @@ namespace UI.Commands.InputHelpers
                     return new InputResult { ResultType = InputResult.InputResultType.Double, DoubleValue = parsed };
                 }
 
-                // Try unit-aware parsing via document
-                var doc = _context.GetDocument();
-                if (doc != null)
+                // Existing unit-aware parsing (already correct)
+                if (Document != null)
                 {
                     try
                     {
-                        var val = doc.StringToValue(result.Keyword, OpenCADDocument.UnitFormatType.Angular);
+                        var val = Document.StringToValue(result.Keyword, OpenCADDocument.UnitFormatType.Angular);
                         return new InputResult { ResultType = InputResult.InputResultType.Double, DoubleValue = val };
                     }
                     catch

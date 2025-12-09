@@ -3,6 +3,7 @@ using System.Numerics;
 using OpenTK.Graphics.OpenGL;
 using System.Diagnostics;
 using OpenCAD.TextRendering;
+using OpenCAD.Geometry;
 
 namespace GraphicsEngine
 {
@@ -16,6 +17,7 @@ namespace GraphicsEngine
         private Matrix4x4 _projectionMatrix;
         private Matrix4x4 _viewMatrix;
         private ShaderProgram? _shaderProgram;
+        private PolygonRenderer? _polygonRenderer;  // ADD THIS LINE
         private ProjectionMode _projectionMode = ProjectionMode.Orthographic; // Default to orthographic for CAD
         private int _viewportWidth;
         private int _viewportHeight;
@@ -110,6 +112,9 @@ namespace GraphicsEngine
 
             _renderers.Add(new LineRenderer(_shaderProgram));
             _renderers.Add(new ArcRenderer(_shaderProgram));
+            
+            // Initialize polygon renderer for filled shapes
+            _polygonRenderer = new PolygonRenderer(_shaderProgram);  // ADD THIS LINE
 
             // Add text renderer only if a metrics provider was injected
             if (_textMetrics != null)
@@ -127,57 +132,55 @@ namespace GraphicsEngine
         /// <summary>
         /// Render a collection of OpenCADObjects
         /// </summary>
-        public void Render(IEnumerable<OpenCADObject> objects)
-        {
-            // Clearing is now handled by the caller to allow layered rendering
-            // GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+        //public void Render(IEnumerable<OpenCADObject> objects)
+        //{
+        //    // Clearing is now handled by the caller to allow layered rendering
+        //    // GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 
-            // Force a pure orthographic pipeline: no camera view in ortho
-            _viewMatrix = (_projectionMode == ProjectionMode.Orthographic)
-                ? Matrix4x4.Identity
-                : _camera.GetViewMatrix();
+        //    // Force a pure orthographic pipeline: no camera view in ortho
+        //    _viewMatrix = (_projectionMode == ProjectionMode.Orthographic)
+        //        ? Matrix4x4.Identity
+        //        : _camera.GetViewMatrix();
 
-            if (_projectionMode != ProjectionMode.Orthographic && _viewMatrix.IsIdentity)
-            {
-                //System.Diagnostics.Debug.WriteLine("WARNING: View matrix is IDENTITY in perspective!");
-                //System.Diagnostics.Debug.WriteLine($"Camera - Position: {_camera.Position}, Target: {_camera.Target}, Up: {_camera.Up}");
-            }
+        //    if (_projectionMode != ProjectionMode.Orthographic && _viewMatrix.IsIdentity)
+        //    {
+        //        //System.Diagnostics.Debug.WriteLine("WARNING: View matrix is IDENTITY in perspective!");
+        //        //System.Diagnostics.Debug.WriteLine($"Camera - Position: {_camera.Position}, Target: {_camera.Target}, Up: {_camera.Up}");
+        //    }
 
-            int count = 0;
-            var drawableObjects = objects.Where(o => o.IsDrawable).ToList();
-            foreach (var obj in drawableObjects)
-            {
-                count++;
-                RenderObject(obj);
-            }
+        //    int count = 0;
+        //    var drawableObjects = objects.Where(o => o.IsDrawable).ToList();
+        //    foreach (var obj in drawableObjects)
+        //    {
+        //        count++;
+        //        RenderObject(obj);
+        //    }
 
-            if (count == 0)
-                //System.Diagnostics.Debug.WriteLine("Render called with 0 objects.");
+        //    if (count == 0)
+        //        //System.Diagnostics.Debug.WriteLine("Render called with 0 objects.");
 
-            GLDiag.Check("End of Render");
-        }
+        //    GLDiag.Check("End of Render");
+        //}
 
         /// <summary>
-        /// Render a collection of OpenCADObjects with optional highlighting
+        /// Render a collection of OpenCADObjects with optional highlighting and selection
         /// </summary>
-        public void Render(IEnumerable<OpenCADObject> objects, IEnumerable<OpenCADObject>? highlightedObjects = null, IEnumerable<OpenCADObject>? selectedObjects = null)
+        public void Render(IEnumerable<OpenCADObject> objects, 
+                          IEnumerable<OpenCADObject>? highlightedObjects = null, 
+                          IEnumerable<OpenCADObject>? selectedObjects = null)
         {
-            // Clearing is now handled by the caller to allow layered rendering
-            // GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
-
             // Force a pure orthographic pipeline: no camera view in ortho
             _viewMatrix = (_projectionMode == ProjectionMode.Orthographic)
                 ? Matrix4x4.Identity
                 : _camera.GetViewMatrix();
 
-            if (_projectionMode != ProjectionMode.Orthographic && _viewMatrix.IsIdentity)
-            {
-                //System.Diagnostics.Debug.WriteLine("WARNING: View matrix is IDENTITY in perspective!");
-                //System.Diagnostics.Debug.WriteLine($"Camera - Position: {_camera.Position}, Target: {_camera.Target}, Up: {_camera.Up}");
-            }
-
-            // Create a set for fast lookup of selected objects
-            var selectedSet = selectedObjects != null ? new HashSet<OpenCADObject>(selectedObjects) : new HashSet<OpenCADObject>();
+            // Create sets for fast lookup
+            var highlightedSet = highlightedObjects != null 
+                ? new HashSet<OpenCADObject>(highlightedObjects) 
+                : new HashSet<OpenCADObject>();
+            var selectedSet = selectedObjects != null 
+                ? new HashSet<OpenCADObject>(selectedObjects) 
+                : new HashSet<OpenCADObject>();
 
             int count = 0;
             var drawableObjects = objects.Where(o => o.IsDrawable).ToList();
@@ -185,27 +188,28 @@ namespace GraphicsEngine
             {
                 count++;
                 
-                // Create render context with highlighting information
+                // Create context with highlighting/selection state
                 var context = new RenderContext
                 {
                     ViewMatrix = _viewMatrix,
                     ProjectionMatrix = _projectionMatrix,
-                    IsHighlighted = highlightedObjects?.Contains(obj) ?? false,
+                    IsHighlighted = highlightedSet.Contains(obj),
                     IsSelected = selectedSet.Contains(obj)
                 };
                 
-                RenderObject(obj, context);
+                // Render with context
+                var renderer = _renderers.FirstOrDefault(r => r.CanRender(obj));
+                if (renderer != null)
+                {
+                    renderer.Render(obj, context);
+                }
             }
-
-            if (count == 0)
-                //System.Diagnostics.Debug.WriteLine("Render called with 0 objects.");
 
             GLDiag.Check("End of Render");
         }
 
         public void RenderOverlay(IEnumerable<OpenCADObject> overlayObjects)
         {
-            // Match the main pass: in orthographic, force identity view to avoid mixed conventions
             _viewMatrix = (_projectionMode == ProjectionMode.Orthographic)
                 ? Matrix4x4.Identity
                 : _camera.GetViewMatrix();
@@ -214,20 +218,27 @@ namespace GraphicsEngine
             bool depthWasEnabled = GL.IsEnabled(EnableCap.DepthTest);
             bool blendWasEnabled = GL.IsEnabled(EnableCap.Blend);
 
-            // Overlays should render on top without depth fighting, allow alpha
             GL.Disable(EnableCap.DepthTest);
             GL.Enable(EnableCap.Blend);
             GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
 
-            int count = 0;
             var drawable = overlayObjects.Where(o => o.IsDrawable).ToList();
             foreach (var obj in drawable)
             {
-                count++;
-                RenderObject(obj);
+                var context = new RenderContext
+                {
+                    ViewMatrix = _viewMatrix,
+                    ProjectionMatrix = _projectionMatrix,
+                    IsHighlighted = false,  // Overlays are never highlighted
+                    IsSelected = false       // Overlays are never selected
+                };
+                
+                var renderer = _renderers.FirstOrDefault(r => r.CanRender(obj));
+                if (renderer != null)
+                {
+                    renderer.Render(obj, context);
+                }
             }
-            if (count == 0)
-                //System.Diagnostics.Debug.WriteLine("RenderOverlay called with 0 objects.");
 
             // Restore states
             if (!blendWasEnabled) GL.Disable(EnableCap.Blend);
@@ -236,21 +247,21 @@ namespace GraphicsEngine
             GLDiag.Check("End of RenderOverlay");
         }
 
-        /// <summary>
-        /// Render a single OpenCADObject
-        /// </summary>
-        private void RenderObject(OpenCADObject obj)
-        {
-            var renderer = _renderers.FirstOrDefault(r => r.CanRender(obj));
-            if (renderer != null)
-            {
-                renderer.Render(obj, _viewMatrix, _projectionMatrix);
-            }
-            else
-            {
-                //System.Diagnostics.Debug.WriteLine($"No renderer found for type {obj.GetType().FullName}");
-            }
-        }
+        ///// <summary>
+        ///// Render a single OpenCADObject
+        ///// </summary>
+        //private void RenderObject(OpenCADObject obj)
+        //{
+        //    var renderer = _renderers.FirstOrDefault(r => r.CanRender(obj));
+        //    if (renderer != null)
+        //    {
+        //        renderer.Render(obj, _viewMatrix, _projectionMatrix);
+        //    }
+        //    else
+        //    {
+        //        //System.Diagnostics.Debug.WriteLine($"No renderer found for type {obj.GetType().FullName}");
+        //    }
+        //}
 
         /// <summary>
         /// Render a single OpenCADObject with context
@@ -291,8 +302,8 @@ namespace GraphicsEngine
 
                 // DEBUG: dump the matrix shape we expect for a pure ortho (no shear/tilt)
                 var m = _projectionMatrix;
-                Debug.WriteLine($"[RE] Ortho: center=({_orthoCenterX:F4},{_orthoCenterY:F4}) scale={_orthographicScale:F4} aspect={aspectRatio:F4} size=({(_orthographicScale*aspectRatio):F4}x{_orthographicScale:F4})");
-                Debug.WriteLine($"[RE] Ortho M2x2=[[{m.M11:F6},{m.M12:F6}],[{m.M21:F6},{m.M22:F6}]]  T=({m.M41:F6},{m.M42:F6})  M34={m.M34:F6} M44={m.M44:F6}");
+                //Debug.WriteLine($"[RE] Ortho: center=({_orthoCenterX:F4},{_orthoCenterY:F4}) scale={_orthographicScale:F4} aspect={aspectRatio:F4} size=({(_orthographicScale*aspectRatio):F4}x{_orthographicScale:F4})");
+                //Debug.WriteLine($"[RE] Ortho M2x2=[[{m.M11:F6},{m.M12:F6}],[{m.M21:F6},{m.M22:F6}]]  T=({m.M41:F6},{m.M42:F6})  M34={m.M34:F6} M44={m.M44:F6}");
                 if (MathF.Abs(m.M12) > 1e-6f || MathF.Abs(m.M21) > 1e-6f)
                     Debug.WriteLine("[RE][WARN] Ortho off-diagonal != 0 (shear/tilt) in projection.");
             }
@@ -429,7 +440,7 @@ namespace GraphicsEngine
             _orthoCenterX += dxWorld;
             _orthoCenterY -= dyWorld;
 
-            Debug.WriteLine($"[RE] PanOrthoPixels px=({deltaXpx:F3},{deltaYpx:F3}) world=({dxWorld:F3},{dyWorld:F3}) center=({_orthoCenterX:F3},{_orthoCenterY:F3})");
+            //Debug.WriteLine($"[RE] PanOrthoPixels px=({deltaXpx:F3},{deltaYpx:F3}) world=({dxWorld:F3},{dyWorld:F3}) center=({_orthoCenterX:F3},{_orthoCenterY:F3})");
 
             UpdateProjection(_viewportWidth, _viewportHeight);
         }
@@ -464,6 +475,20 @@ namespace GraphicsEngine
             float worldY = _orthoCenterY + ndcY * halfH;
 
             return new Vector3(worldX, worldY, worldZ);
+        }
+
+        /// <summary>
+        /// Renders a filled polygon with the specified color (for window selection)
+        /// </summary>
+        public void RenderFilledPolygon(Point3D[] vertices, System.Drawing.Color fillColor)
+        {
+            if (_polygonRenderer == null) return;
+            
+            // Convert OpenCAD.Geometry.Point3D array to System.Numerics.Vector3 array
+            var points = vertices.Select(v => new Vector3((float)v.X, (float)v.Y, (float)v.Z)).ToArray();
+            
+            // Render as a filled polygon
+            _polygonRenderer.RenderFilled(points, fillColor, _viewMatrix, _projectionMatrix);
         }
     }
 }

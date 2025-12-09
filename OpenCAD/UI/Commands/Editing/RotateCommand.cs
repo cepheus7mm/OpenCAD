@@ -1,12 +1,12 @@
 using System.ComponentModel;
 using OpenCAD;
-using OpenCAD.Geometry;
 using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using UI.Commands.Undo;
 using UI.Controls.Viewport;
+using OpenCAD.Geometry.Helpers;
 
 namespace UI.Commands.Editing
 {

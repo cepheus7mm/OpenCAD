@@ -9,6 +9,7 @@ namespace GraphicsEngine
     public class PolygonRenderer
     {
         private readonly ShaderProgram _shaderProgram;
+        private readonly FillShaderProgram _fillShader = new FillShaderProgram();
         private int _vao;
         private int _vbo;
 
@@ -48,6 +49,57 @@ namespace GraphicsEngine
             GL.BindVertexArray(0);
 
             GLDiag.Check("PolygonRenderer.RenderTriangles end");
+        }
+
+        /// <summary>
+        /// Renders a filled polygon with transparency support
+        /// </summary>
+        public void RenderFilled(Vector3[] vertices, System.Drawing.Color fillColor, Matrix4x4 viewMatrix, Matrix4x4 projectionMatrix)
+        {
+            if (vertices == null || vertices.Length < 3) return;
+
+            GL.Enable(EnableCap.Blend);
+            GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
+
+            _fillShader.Use();
+
+            // Correct MVP order: projection * view
+            Matrix4x4 mvp = Matrix4x4.Multiply(projectionMatrix, viewMatrix);
+            _fillShader.SetMvp(mvp);
+
+            Vector4 rgba = new Vector4(
+                fillColor.R / 255f,
+                fillColor.G / 255f,
+                fillColor.B / 255f,
+                fillColor.A / 255f);
+            _fillShader.SetColor(rgba);
+            _fillShader.SetIsSelected(false);
+
+            int vao = GL.GenVertexArray();
+            int vbo = GL.GenBuffer();
+
+            GL.BindVertexArray(vao);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, vbo);
+
+            float[] vertexData = new float[vertices.Length * 3];
+            for (int i = 0; i < vertices.Length; i++)
+            {
+                vertexData[i * 3 + 0] = vertices[i].X;
+                vertexData[i * 3 + 1] = vertices[i].Y;
+                vertexData[i * 3 + 2] = vertices[i].Z;
+            }
+
+            GL.BufferData(BufferTarget.ArrayBuffer, vertexData.Length * sizeof(float), vertexData, BufferUsageHint.DynamicDraw);
+            GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, 3 * sizeof(float), 0);
+            GL.EnableVertexAttribArray(0);
+
+            GL.DrawArrays(PrimitiveType.TriangleFan, 0, vertices.Length);
+
+            GL.BindVertexArray(0);
+            GL.DeleteBuffer(vbo);
+            GL.DeleteVertexArray(vao);
+
+            GLDiag.Check("PolygonRenderer.RenderFilled end");
         }
     }
 }

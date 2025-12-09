@@ -1,4 +1,5 @@
-﻿using OpenCAD.Interfaces;
+﻿using OpenCAD.Geometry.Helpers;
+using OpenCAD.Interfaces;
 using System.Drawing;
 using System.Text.Json.Serialization;
 using System.Xml.Serialization;
@@ -115,6 +116,8 @@ namespace OpenCAD.Geometry
         public abstract double Length { get; }
 
         public abstract double Angle { get; }
+
+        public abstract Extents GetExtents();
 
         public abstract Vector3D? GetFirstDerivate(Point3D point);
 

@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using OpenCAD;
 using OpenCAD.Geometry;
+using OpenCAD.Geometry.Helpers;
 using UI.Commands.Editing;
 using UI.Commands.InputHelpers;
 using UI.Commands.Undo;
@@ -112,7 +113,15 @@ namespace UI.Commands
         /// Uses PointInputHelper.GetPointOrKeywordAsync under the hood and respects this command's
         /// cancellation token source (_cancellationTokenSource).
         /// </summary>
-        protected async Task<InputResult> GetPoint(string prompt, string[]? keyWords = null, bool allowLastPoint = false)
+        /// <param name="prompt">The prompt to display to the user</param>
+        /// <param name="defaultValue">Optional default point value (shown in angle brackets, accepted with Enter/Space)</param>
+        /// <param name="keyWords">Optional array of keywords to recognize</param>
+        /// <param name="allowLastPoint">Whether to allow using the last entered point</param>
+        protected async Task<InputResult> GetPoint(
+            string prompt, 
+            Point3D? defaultValue = null, 
+            string[]? keyWords = null, 
+            bool allowLastPoint = false)
         {
             var viewModel = Context?.GetActiveViewportViewModel();
             var badResult = new InputResult() { ResultType = InputResult.InputResultType.None, Point = null };
@@ -130,6 +139,7 @@ namespace UI.Commands
             {
                 return await ((GetPointInput)_inputHelper).GetPointOrKeywordAsync(
                     prompt,
+                    defaultValue: defaultValue,
                     allowLastPoint: allowLastPoint,
                     basePoint: BasePoint,
                     keywords: keyWords,
@@ -150,7 +160,15 @@ namespace UI.Commands
         /// Supports numeric input, unit-aware parsing via document settings, or a two-point entry.
         /// Returns double.NaN on cancel/invalid input.
         /// </summary>
-        protected async Task<InputResult> GetDistance(string prompt, string[]? keyWords = null, bool allowLastPoint = false)
+        /// <param name="prompt">The prompt to display to the user</param>
+        /// <param name="defaultValue">Optional default distance value (shown in angle brackets, accepted with Enter/Space)</param>
+        /// <param name="keyWords">Optional array of keywords to recognize</param>
+        /// <param name="allowLastPoint">Whether to allow using the last entered point</param>
+        protected async Task<InputResult> GetDistance(
+            string prompt, 
+            double? defaultValue = null, 
+            string[]? keyWords = null, 
+            bool allowLastPoint = false)
         {
             var viewModel = Context?.GetActiveViewportViewModel();
             var badResult = new InputResult() { ResultType = InputResult.InputResultType.None, DoubleValue = double.NaN };
@@ -165,6 +183,7 @@ namespace UI.Commands
             {
                 return await ((GetDistanceInput)_inputHelper).GetDistance(
                     prompt,
+                    defaultValue: defaultValue,
                     allowLastPoint: allowLastPoint,
                     basePoint: BasePoint,
                     keyWords: keyWords,
@@ -185,7 +204,15 @@ namespace UI.Commands
         /// Supports numeric/keyword input (unit-aware) or a single point pick (angle from BasePoint to picked point).
         /// Caller should set BasePoint before calling if using point picks.
         /// </summary>
-        protected async Task<InputResult> GetAngle(string prompt, string[]? keyWords = null, bool allowLastPoint = false)
+        /// <param name="prompt">The prompt to display to the user</param>
+        /// <param name="defaultValue">Optional default angle value in radians (shown in angle brackets, accepted with Enter/Space)</param>
+        /// <param name="keyWords">Optional array of keywords to recognize</param>
+        /// <param name="allowLastPoint">Whether to allow using the last entered point</param>
+        protected async Task<InputResult> GetAngle(
+            string prompt, 
+            double? defaultValue = null, 
+            string[]? keyWords = null, 
+            bool allowLastPoint = false)
         {
             var viewModel = Context?.GetActiveViewportViewModel();
             var badResult = new InputResult() { ResultType = InputResult.InputResultType.None, DoubleValue = double.NaN };
@@ -200,6 +227,7 @@ namespace UI.Commands
             {
                 return await ((GetAngleInput)_inputHelper).GetAngle(
                     prompt,
+                    defaultValue: defaultValue,
                     allowLastPoint: allowLastPoint,
                     basePoint: BasePoint,
                     keyWords: keyWords,
@@ -219,7 +247,15 @@ namespace UI.Commands
         /// Prompt for a string (keyword or arbitrary text). Returns an InputResult with Keyword set
         /// and ResultType indicating Keyword or Arbitrary. Returns a ResultType of None on cancel/failure.
         /// </summary>
-        protected async Task<InputResult> GetString(string prompt, string[]? keyWords = null, bool allowArbitrary = true)
+        /// <param name="prompt">The prompt to display to the user</param>
+        /// <param name="defaultValue">Optional default string value (shown in angle brackets, accepted with Enter/Space)</param>
+        /// <param name="keyWords">Optional array of keywords to recognize</param>
+        /// <param name="allowArbitrary">Whether to allow arbitrary text input (not just keywords)</param>
+        protected async Task<InputResult> GetString(
+            string prompt, 
+            string? defaultValue = null, 
+            string[]? keyWords = null, 
+            bool allowArbitrary = true)
         {
             var viewModel = Context?.GetActiveViewportViewModel();
             var badResult = new InputResult() { ResultType = InputResult.InputResultType.None, Keyword = null };
@@ -254,11 +290,15 @@ namespace UI.Commands
             }
         }
 
+        /// <summary>
+        /// Prompt for a string with preview callback support.
+        /// </summary>
         protected async Task<InputResult?> GetString(
             string prompt,
             bool allowArbitrary = true,
             string[]? keywords = null,
-            Action<string>? previewCallback = null)
+            Action<string>? previewCallback = null,
+            string? defaultValue = null)
         {
             var viewModel = Context?.GetActiveViewportViewModel();
             var badResult = new InputResult() { ResultType = InputResult.InputResultType.None, Keyword = null };
@@ -393,10 +433,11 @@ namespace UI.Commands
         {
             if (viewport == null) return;
 
-            // Run the heavy UI work on the UI thread to avoid cross-thread access
+            // Run on UI thread
             Context?.PostToUI(() =>
             {
-                ClearPreviewObjects(viewport);
+                // Clear existing preview objects
+                viewport.ClearPreviewObjects();
 
                 var document = CachedDocument ?? viewport.Document;
                 if (document == null || SelectedObjects == null)
@@ -409,39 +450,20 @@ namespace UI.Commands
                     var clone = CreateTranslatedClone(obj, transformation, document);
                     if (clone != null)
                     {
-                        _previewObjects.Add(clone);
-                        viewport.AddObject(clone);
+                        viewport.AddPreviewObject(clone);
                     }
                 }
-
-                viewport.Refresh();
             });
         }
 
-        /// <summary>
-        /// Remove preview clones previously added to viewport/document.
-        /// </summary>
         protected void ClearPreviewObjects(ViewportControl viewport)
         {
             if (_previewObjects.Count == 0)
                 return;
 
-            // Ensure removal happens on UI thread
             Context?.PostToUI(() =>
             {
-                foreach (var p in _previewObjects.ToList())
-                {
-                    try
-                    {
-                        viewport?.RemoveObject(p);
-                    }
-                    catch
-                    {
-                        // Swallow errors during preview removal
-                    }
-                }
-                _previewObjects.Clear();
-                viewport?.Refresh();
+                viewport?.ClearPreviewObjects();
             });
         }
 
@@ -469,14 +491,29 @@ namespace UI.Commands
         /// </summary>
         protected virtual OpenCADObject? CreateTranslatedClone(OpenCADObject source, Matrix4D translation, OpenCADDocument document)
         {
-            if (source is GeometryBase geom)
+            try
             {
-                var clone = geom.Clone(document) as GeometryBase;
-                clone?.Transform(translation);
-                return clone;
+                if (source is GeometryBase geom)
+                {
+                    var clone = geom.Clone(document) as GeometryBase;
+                    if (clone != null)
+                    {
+                        clone.Transform(translation);
+                        return clone;
+                    }
+                }
+            }
+            catch (NotSupportedException ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Preview clone failed for {source.GetType().Name}: {ex.Message}");
+                return null;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Unexpected error creating preview clone: {ex.Message}");
+                return null;
             }
 
-            // Default: unsupported geometry -> no preview clone
             return null;
         }
 
@@ -525,7 +562,6 @@ namespace UI.Commands
                 stringInput.OnTextChanged(currentText);
             }
         }
-
         #endregion
     }
 }

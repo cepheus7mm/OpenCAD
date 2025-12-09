@@ -1,5 +1,5 @@
 using OpenCAD;
-using OpenCAD.Geometry;
+using OpenCAD.Geometry.Helpers;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;

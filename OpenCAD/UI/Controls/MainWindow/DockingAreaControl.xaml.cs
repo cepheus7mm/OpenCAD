@@ -65,6 +65,11 @@ namespace UI.Controls.MainWindow
         /// </summary>
         public LayersControl LayersPanel => layersControl;
 
+        /// <summary>
+        /// Gets the TextStylesControl for programmatic access
+        /// </summary>
+        public TextStylesControl TextStylesPanel => textStylesControl;
+
         public PropertiesViewModel PropertiesViewModelInstance { get; }
         public SettingsViewModel SettingsViewModelInstance { get; }
 
@@ -536,6 +541,7 @@ private void SetupCommandStateTracking()
 			PropertiesViewModelInstance.UpdateFromViewport(viewport);
 			layersControl.UpdateFromViewport(viewport);
 			SettingsViewModelInstance.UpdateFromViewport(viewport);
+            textStylesControl.UpdateFromViewport(viewport);
         }
 
 		private void OnLoaded(object sender, RoutedEventArgs e)
@@ -623,7 +629,11 @@ private void SetupCommandStateTracking()
 							args.Content = layersControl;
 							//System.Diagnostics.Debug.WriteLine("Restored layers");
 							break;
-						case "solutionExplorer":
+                        case "textstyles":
+                            args.Content = textStylesControl;
+                            //System.Diagnostics.Debug.WriteLine("Restored textstyles");
+                            break;
+                        case "solutionExplorer":
 						case "output":
 						case "errorList":
 							// Keep default content for these
@@ -717,27 +727,6 @@ private void SetupCommandStateTracking()
             else
             {
 				EnsureSettingsPanelVisible();
-                ////System.Diagnostics.Debug.WriteLine("Settings panel LayoutAnchorable not found - searching entire layout tree");
-
-                //// Debug: Print entire layout structure
-                //PrintLayoutStructure(dockingManager.Layout?.RootPanel, 0);
-
-                //// Try to find it by control reference instead
-                //var parent = settingsControl.Parent;
-                ////System.Diagnostics.Debug.WriteLine($"SettingsControl parent type: {parent?.GetType().Name ?? "null"}");
-
-                //if (parent is LayoutAnchorableControl anchorableControl)
-                //{
-                //    //System.Diagnostics.Debug.WriteLine("Found settings through control parent");
-                //    settingsAnchorable = anchorableControl.Model as LayoutAnchorable;
-                //    if (settingsAnchorable != null)
-                //    {
-                //        if (show)
-                //            settingsAnchorable.Show();
-                //        else
-                //            settingsAnchorable.Hide();
-                //    }
-                //}
             }
         }
 
@@ -765,6 +754,59 @@ private void SetupCommandStateTracking()
             }
 
             settingsAnchorable?.Show();
+        }
+
+        /// <summary>
+        /// Shows or hides the settings panel
+        /// </summary>
+        public void ShowTextStylesPanel(bool show)
+        {
+            // Try to get the anchorable by ContentId
+            var settingsAnchorable = FindLayoutAnchorable("textstyles");
+
+            if (settingsAnchorable != null)
+            {
+                if (show)
+                {
+                    settingsAnchorable.Show();
+                    //System.Diagnostics.Debug.WriteLine("Settings panel shown");
+                }
+                else
+                {
+                    settingsAnchorable.Hide();
+                    //System.Diagnostics.Debug.WriteLine("Settings panel hidden");
+                }
+            }
+            else
+            {
+                EnsureTextStylesPanelVisible();
+            }
+        }
+
+        private void EnsureTextStylesPanelVisible()
+        {
+            var textStylesAnchorable = FindLayoutAnchorable("textstyles");
+            if (textStylesAnchorable == null)
+            {
+                // Find the right-side anchorable pane (where properties/layers are)
+                var rootPanel = dockingManager.Layout?.RootPanel;
+                var rightPane = FindRightAnchorablePane(rootPanel);
+
+                if (rightPane != null)
+                {
+                    textStylesAnchorable = new LayoutAnchorable
+                    {
+                        ContentId = "textstyles",
+                        Title = "Text Styles",
+                        CanClose = true,
+                        CanHide = true,
+                        Content = textStylesControl  // ← FIXED: was settingsControl
+                    };
+                    rightPane.Children.Add(textStylesAnchorable);
+                }
+            }
+
+            textStylesAnchorable?.Show();
         }
 
         // Helper to find the right anchorable pane (where properties/layers are)

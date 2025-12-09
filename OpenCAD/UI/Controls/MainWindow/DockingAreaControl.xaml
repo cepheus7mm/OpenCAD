@@ -98,7 +98,10 @@
 					<xcad:LayoutAnchorable ContentId="layers" Title="Layers" CanHide="True" CanClose="False">
 						<local:LayersControl x:Name="layersControl"/>
 					</xcad:LayoutAnchorable>
-				</xcad:LayoutAnchorablePane>
+                    <xcad:LayoutAnchorable ContentId="textstyles" Title="Text Styles" CanHide="True" CanClose="False">
+                        <local:TextStylesControl x:Name="textStylesControl"/>
+                    </xcad:LayoutAnchorable>
+                </xcad:LayoutAnchorablePane>
 			</xcad:LayoutPanel>
 		</xcad:LayoutRoot>
 	</xcad:DockingManager>

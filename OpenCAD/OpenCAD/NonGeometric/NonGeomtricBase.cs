@@ -1,4 +1,5 @@
 ﻿using OpenCAD.Geometry;
+using OpenCAD.Geometry.Helpers;
 using OpenCAD.Interfaces;
 using System;
 using System.Collections.Generic;
@@ -10,7 +11,7 @@ using System.Threading.Tasks;
 
 namespace OpenCAD.NonGeometric
 {
-    public abstract class NonGeometricBase : OpenCADObject, IDrawable
+    public abstract class NonGeometricBase : OpenCADObject
     {
         protected Vector3D _normal = new(0, 0, 1);
 

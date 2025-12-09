@@ -1,4 +1,5 @@
-﻿using OpenCAD.Geometry;
+﻿using OpenCAD;
+using OpenCAD.Geometry;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -13,33 +14,46 @@ namespace UI.Commands.InputHelpers
     {
         protected readonly ICommandContext _context;
         protected readonly ViewportViewModel? _viewModel;
-
+        
+        // Cache document reference
+        protected OpenCADDocument? Document { get; private set; }
+        
+        // Make public so composed helpers can set it
+        public object? DefaultValue { get; set; }
+        protected bool HasDefault => DefaultValue != null;
 
         public bool AllowArbitraryInput { get; set; } = false;
-
         public Point3D? BasePoint { get; set; }
-
-        /// <summary>
-        /// Optional consumer that wants to be notified when a keyword is handled.
-        /// Derived helpers or commands may set this.
-        /// </summary>
         public Action<string?>? KeyWordHandler { get; set; }
-
-        /// <summary>
-        /// Keywords this helper should recognize. Set by derived helper when starting input.
-        /// </summary>
         protected string[]? Keywords { get; set; }
-
-        /// <summary>
-        /// Indicates whether the last ProcessKeyboardInput call was handled by the base (keyword matched).
-        /// Derived classes can check this to avoid duplicate processing.
-        /// </summary>
         protected bool LastInputHandled { get; private set; }
 
         public InputHelperBase(ICommandContext context, ViewportViewModel? viewModel)
         {
             _context = context ?? throw new ArgumentNullException(nameof(context));
             _viewModel = viewModel;
+            
+            // Cache document reference once
+            Document = _context.GetDocument();
+        }
+
+        /// <summary>
+        /// Format the default value for display in prompt using document's unit settings.
+        /// Override in derived classes for type-specific formatting.
+        /// </summary>
+        /// <param name="formatType">The type of formatting to apply (Linear, Angular, etc.)</param>
+        protected virtual string FormatDefaultForPrompt(OpenCADDocument.UnitFormatType formatType)
+        {
+            if (DefaultValue == null || Document == null)
+                return DefaultValue?.ToString() ?? string.Empty;
+            
+            // Base implementation for double values
+            if (DefaultValue is double value)
+            {
+                return Document.ValueToString(value, formatType);
+            }
+            
+            return DefaultValue.ToString() ?? string.Empty;
         }
 
         /// <summary>
@@ -52,6 +66,16 @@ namespace UI.Commands.InputHelpers
             // Reset flag each call
             LastInputHandled = false;
 
+            // NEW: Check for empty input with default value FIRST (before whitespace check)
+            if (string.IsNullOrWhiteSpace(input) && HasDefault)
+            {
+                // Signal that empty input with default was handled
+                HandleMatchedKeyword(string.Empty);
+                LastInputHandled = true;
+                return false;
+            }
+
+            // Now do the original whitespace check for non-default cases
             if ((Keywords == null && !AllowArbitraryInput) || string.IsNullOrWhiteSpace(input))
                 return false;
 
@@ -84,7 +108,11 @@ namespace UI.Commands.InputHelpers
         protected virtual void HandleMatchedKeyword(string keyword)
         {
             // Default: write keyword echo to history so user sees it.
-            _context.OutputMessage($"Keyword: {keyword}");
+            // Don't log empty keywords (used for default value acceptance)
+            if (!string.IsNullOrEmpty(keyword))
+            {
+                _context.OutputMessage($"Keyword: {keyword}");
+            }
         }
     }
 }

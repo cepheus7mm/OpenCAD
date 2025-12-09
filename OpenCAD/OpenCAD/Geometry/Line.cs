@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Text.Json.Serialization;
 using System.Xml.Serialization;
 using System.Numerics;
+using OpenCAD.Geometry.Helpers;
 
 namespace OpenCAD.Geometry
 {
@@ -90,6 +91,23 @@ namespace OpenCAD.Geometry
             return firstDerivate?.Rotate(Math.PI / 2, _normal);
         }
 
+        public override Extents GetExtents()
+        {
+            return new Extents
+            {
+                Min = new Point3D(
+                    Math.Min(StartPoint.X, EndPoint.X),
+                    Math.Min(StartPoint.Y, EndPoint.Y),
+                    Math.Min(StartPoint.Z, EndPoint.Z)
+                ),
+                Max = new Point3D(
+                    Math.Max(StartPoint.X, EndPoint.X),
+                    Math.Max(StartPoint.Y, EndPoint.Y),
+                    Math.Max(StartPoint.Z, EndPoint.Z)
+                )
+            };
+        }
+        
         #region Editing
 
         public override bool Transform(Matrix4D transformation)

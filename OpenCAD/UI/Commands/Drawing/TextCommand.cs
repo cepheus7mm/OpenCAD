@@ -13,11 +13,12 @@ namespace UI.Commands.Drawing
     /// <summary>
     /// Command to create text with live preview while typing
     /// </summary>
-    [InputCommand("text", "Create text (prompts for base point, rotation angle, and text string)", "dt")]
+    [InputCommand("text", "Create text (prompts for base point, text height, rotation angle, and text string)", "dt")]
     public class TextCommand : CommandBase
     {
         private OpenCADText? _previewText;
         private Point3D _basePoint;
+        private double _textHeight;
         private double _rotation;
 
         public override bool IsMultiStep => true;
@@ -54,8 +55,37 @@ namespace UI.Commands.Drawing
                         _basePoint.Y,
                         _basePoint.Z));
 
-                // Get rotation angle
+                // Get text height with default from document's last height
                 BasePoint = _basePoint;
+                var document = Context?.GetDocument();
+                double? defaultHeight = document?.LastTextHeight;
+                
+                var heightResult = await GetDistance(
+                    "Specify height",
+                    defaultValue: defaultHeight,
+                    allowLastPoint: false);
+
+                if (heightResult == null || double.IsNaN(heightResult.DoubleValue) || heightResult.ResultType == InputHelpers.InputResult.InputResultType.Cancel)
+                {
+                    Cancel();
+                    return;
+                }
+
+                _textHeight = heightResult.DoubleValue;
+                
+                // Save the height to document for next time
+                if (document != null)
+                {
+                    document.LastTextHeight = _textHeight;
+                }
+
+                Context?.OutputMessage(
+                    string.Format(
+                        "Text height: {0:F3}",
+                        _textHeight));
+
+                // Get rotation angle
+                BasePoint = _basePoint; // Set base point for angle input (may have been altered by GetDistance)
                 var angleResult = await GetAngle(
                     "Specify rotation angle",
                     allowLastPoint: false);
@@ -109,7 +139,7 @@ namespace UI.Commands.Drawing
                 var textString = textResult.Keyword;
 
                 // Create the final text object
-                CreateText(_basePoint, _rotation, textString);
+                CreateText(_basePoint, _textHeight, _rotation, textString);
 
             }
             catch (OperationCanceledException)
@@ -150,28 +180,20 @@ namespace UI.Commands.Drawing
                 document.ServiceProvider = app.Services;
             }
 
-            // Create preview text object
+            // Create preview text object with the specified height
             _previewText = new OpenCADText(document, text, _basePoint, _rotation);
+            _previewText.FontSize = _textHeight;
 
-            // Add to viewport's temp objects for rendering
-            var viewport = Context?.GetActiveViewportViewModel();
-            if (viewport != null && _previewText != null)
+            // Add to viewport's preview objects for rendering
+            Context?.PostToUI(() =>
             {
-                // Clear any existing preview
-                viewport.ClearTempPoints();
-                
-                // Add preview text to viewport (it will be rendered as part of overlay)
-                Context?.PostToUI(() =>
+                var vpControl = Context.GetActiveViewport();
+                if (vpControl != null && _previewText != null)
                 {
-                    var vpControl = Context.GetActiveViewport();
-                    if (vpControl != null)
-                    {
-                        // Temporarily add to document for rendering
-                        // (will be removed when preview is cleared)
-                        vpControl.AddObject(_previewText);
-                    }
-                });
-            }
+                    // Add as preview object (NOT to document)
+                    vpControl.AddPreviewObject(_previewText);
+                }
+            });
         }
 
         /// <summary>
@@ -210,7 +232,7 @@ namespace UI.Commands.Drawing
                     var vpControl = Context.GetActiveViewport();
                     if (vpControl != null)
                     {
-                        vpControl.RemoveObject(_previewText);
+                        vpControl.RemovePreviewObject(_previewText);
                         vpControl.Refresh();
                     }
                 });
@@ -219,7 +241,7 @@ namespace UI.Commands.Drawing
             }
         }
 
-        private void CreateText(Point3D basePoint, double rotation, string textString)
+        private void CreateText(Point3D basePoint, double height, double rotation, string textString)
         {
             var document = Context?.GetDocument();
             if (document == null)
@@ -232,6 +254,7 @@ namespace UI.Commands.Drawing
             }
 
             var text = new OpenCADText(document, textString, basePoint, rotation);
+            text.FontSize = height;
 
             var undoManager = Context?.GetUndoRedoManager();
 
@@ -245,8 +268,9 @@ namespace UI.Commands.Drawing
                         document,
                         viewport,
                         string.Format(
-                            "Create Text at ({0:F3}, {1:F3}, {2:F3}): \"{3}\"",
+                            "Create Text at ({0:F3}, {1:F3}, {2:F3}), Height: {3:F3}: \"{4}\"",
                             basePoint.X, basePoint.Y, basePoint.Z,
+                            height,
                             textString)
                     );
                     undoManager.ExecuteAction(action);
@@ -259,8 +283,9 @@ namespace UI.Commands.Drawing
 
             Context?.OutputMessage(
                 string.Format(
-                    "Text created at ({0:F3}, {1:F3}, {2:F3}): \"{3}\"",
+                    "Text created at ({0:F3}, {1:F3}, {2:F3}), Height: {3:F3}: \"{4}\"",
                     basePoint.X, basePoint.Y, basePoint.Z,
+                    height,
                     textString));
         }
 

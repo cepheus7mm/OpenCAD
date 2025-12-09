@@ -126,9 +126,14 @@
         public const string CurrentLineWeight = "Current LineWeight";
 
         /// <summary>
-        /// Property name for current line weight
+        /// Property name for Last Geometric Child
         /// </summary>
         public const string LastGeometricChild = "Last Geometric Child";
+
+        /// <summary>
+        /// Property name for Last text height
+        /// </summary>
+        public const string LastTextHeight = "Last text height";
 
         /// <summary>
         /// Property name for layers container ID
@@ -154,6 +159,7 @@
         /// Property current textstyle ID
         /// </summary>
         public const string CurrentTextStyleID = "Current TextStyle ID";
+
 
         /// <summary>
         /// Property name for viewport settings container ID
@@ -191,7 +197,9 @@
         public const string LayerIsLocked = "Layer IsLocked";
 
         public const string DefaultTextStyleName = "TextStyle0";
+
         public const string Text = "Text";
+
         public const string FontFamily = "Font Family";
 
         public const string FontSize = "Font Size";

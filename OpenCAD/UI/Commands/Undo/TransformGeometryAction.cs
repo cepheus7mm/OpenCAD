@@ -1,5 +1,6 @@
 using OpenCAD;
 using OpenCAD.Geometry;
+using OpenCAD.Geometry.Helpers;
 using System.Numerics;
 using UI.Controls.Viewport;
 

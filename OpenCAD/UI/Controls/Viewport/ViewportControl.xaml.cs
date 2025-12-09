@@ -11,7 +11,8 @@ using UI.Controls.MainWindow;
 using System.Windows.Media;
 using OpenCAD.Settings;
 using Microsoft.Extensions.DependencyInjection;
-using OpenCAD.TextRendering; // << add this
+using OpenCAD.TextRendering;
+using OpenCAD.Geometry.Helpers; // << add this
 
 namespace UI.Controls.Viewport
 {
@@ -29,6 +30,9 @@ namespace UI.Controls.Viewport
         // Add a field for viewport settings
         private readonly ViewportSettings _viewportSettings;
         private bool _documentFullyLoaded = false;  // ✅ ADD THIS
+
+        // Add near the top with other fields
+        private readonly List<OpenCADObject> _previewObjects = new List<OpenCADObject>();
 
         // Forward events from ViewModel
         public event EventHandler<PointPickedEventArgs>? PointPicked
@@ -162,6 +166,24 @@ namespace UI.Controls.Viewport
         /// Update snapping state from settings (call when settings change)
         /// </summary>
         public void UpdateSnappingFromSettings() => _viewModel.UpdateSnappingFromSettings();
+
+        internal void AddPreviewObject(OpenCADObject obj)
+        {
+            _previewObjects.Add(obj);
+            Refresh();
+        }
+
+        internal void RemovePreviewObject(OpenCADObject obj)
+        {
+            _previewObjects.Remove(obj);
+            Refresh();
+        }
+
+        internal void ClearPreviewObjects()
+        {
+            _previewObjects.Clear();
+            Refresh();
+        }
 
         #endregion
 
@@ -333,19 +355,43 @@ namespace UI.Controls.Viewport
         {
             if (document == null || _renderEngine == null) return;
 
-            var list = new List<OpenCADObject>();
-            CollectDrawable(document, list);
+            // Use HashSet to prevent duplicates
+            var objectSet = new HashSet<OpenCADObject>();
+            CollectDrawable(document, objectSet);
+
+            // Add preview objects to the set (HashSet will ignore duplicates)
+            foreach (var previewObj in _previewObjects.Where(o => o.IsDrawable))
+            {
+                objectSet.Add(previewObj);
+            }
+
+            // Convert to list for rendering
+            var list = objectSet.ToList();
 
             var highlightedObjects = new List<OpenCADObject>();
+
+            // Add single highlighted object (hover)
             if (_viewModel.HighlightedObject != null)
             {
                 highlightedObjects.Add(_viewModel.HighlightedObject);
             }
+
+            // Add window selection preview objects to highlighted list
+            foreach (var previewObj in _viewModel.WindowSelectionPreviewObjects)
+            {
+                if (!highlightedObjects.Contains(previewObj))
+                {
+                    highlightedObjects.Add(previewObj);
+                }
+            }
+
+            //System.Diagnostics.Debug.WriteLine($"[VC] RenderSceneFlat: {list.Count} unique objects, {_viewModel.SelectedObjects.Count} selected, {highlightedObjects.Count} highlighted");
+
             // Pass highlighting and selection information to the render engine
             _renderEngine.Render(list, highlightedObjects, _viewModel.SelectedObjects);
         }
 
-        private void CollectDrawable(OpenCADObject parent, List<OpenCADObject> list)
+        private void CollectDrawable(OpenCADObject parent, HashSet<OpenCADObject> objectSet)
         {
             var children = parent.GetChildren();
             foreach (var child in children)
@@ -369,12 +415,17 @@ namespace UI.Controls.Viewport
                     
                     if (shouldRender)
                     {
-                        list.Add(child);
+                        // HashSet.Add returns false if the object is already in the set
+                        bool wasAdded = objectSet.Add(child);
+                        if (!wasAdded)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[VC] Duplicate object detected: {child.GetType().Name} (ID={child.ID})");
+                        }
                     }
                 }
 
                 // Recurse to gather all nested drawables
-                CollectDrawable(child, list);
+                CollectDrawable(child, objectSet);
             }
         }
 
@@ -384,20 +435,32 @@ namespace UI.Controls.Viewport
 
             var overlayObjects = new List<OpenCADObject>();
 
-            // Add preview line if available
+            // Add preview line if available (for point picking)
             var previewPoint = _viewModel.PreviewPoint;
             var tempPoints = _viewModel.TempPoints;
-
-            ////System.Diagnostics.Debug.WriteLine($"RenderPreviewGeometry: previewPoint={(previewPoint != null ? "SET" : "null")}, tempPoints.Count={tempPoints.Count}");
 
             if (previewPoint != null && tempPoints.Count > 0)
             {
                 var lastPoint = tempPoints[tempPoints.Count - 1];
                 var previewLine = new Line(_document, lastPoint, previewPoint);
-
-                //System.Diagnostics.Debug.WriteLine($"  Rendering preview line from ({lastPoint.X:F3}, {lastPoint.Y:F3}, {lastPoint.Z:F3}) to ({previewPoint.X:F3}, {previewPoint.Y:F3}, {previewPoint.Z:F3})");
-
                 overlayObjects.Add(previewLine);
+            }
+
+            // Add window selection rectangle if in WindowSelection mode
+            if (_viewModel.CurrentInputMode == ViewportViewModel.InputMode.WindowSelection &&
+                _viewModel.WindowSelectionStartPoint != null &&
+                _viewModel.WindowSelectionCurrentPoint != null)
+            {
+                // Render the filled rectangle first (so it appears behind the border lines)
+                RenderWindowSelectionFill(
+                    _viewModel.WindowSelectionStartPoint,
+                    _viewModel.WindowSelectionCurrentPoint);
+                
+                // Then render the border lines on top
+                var selectionRectLines = CreateWindowSelectionRectangle(
+                    _viewModel.WindowSelectionStartPoint,
+                    _viewModel.WindowSelectionCurrentPoint);
+                overlayObjects.AddRange(selectionRectLines);
             }
 
             // Add crosshair if mouse is in viewport
@@ -412,6 +475,82 @@ namespace UI.Controls.Viewport
             {
                 _renderEngine.RenderOverlay(overlayObjects);
             }
+        }
+
+        /// <summary>
+        /// Creates the visual rectangle for window selection
+        /// </summary>
+        private List<Line> CreateWindowSelectionRectangle(Point3D startPoint, Point3D currentPoint)
+        {
+            var lines = new List<Line>();
+
+            // Calculate rectangle corners
+            double minX = Math.Min(startPoint.X, currentPoint.X);
+            double maxX = Math.Max(startPoint.X, currentPoint.X);
+            double minY = Math.Min(startPoint.Y, currentPoint.Y);
+            double maxY = Math.Max(startPoint.Y, currentPoint.Y);
+
+            var bottomLeft = new Point3D(minX, minY, 0);
+            var bottomRight = new Point3D(maxX, minY, 0);
+            var topRight = new Point3D(maxX, maxY, 0);
+            var topLeft = new Point3D(minX, maxY, 0);
+
+            // Create rectangle lines with distinct styling
+            lines.Add(CreateWindowSelectionLine(bottomLeft, bottomRight));
+            lines.Add(CreateWindowSelectionLine(bottomRight, topRight));
+            lines.Add(CreateWindowSelectionLine(topRight, topLeft));
+            lines.Add(CreateWindowSelectionLine(topLeft, bottomLeft));
+
+            return lines;
+        }
+
+        /// <summary>
+        /// Creates a line for the window selection rectangle with appropriate styling
+        /// </summary>
+        private Line CreateWindowSelectionLine(Point3D start, Point3D end)
+        {
+            var line = new Line(_document, start, end);
+
+            // Style the window selection rectangle (bright blue, dashed)
+            var crosshairSettings = _viewportSettings.Crosshair;
+            if (crosshairSettings != null)
+            {
+                line.Color = crosshairSettings.Color;
+                line.LineType = crosshairSettings.LineType;
+                line.LineWeight = crosshairSettings.LineWeight;
+            }
+
+            return line;
+        }
+
+        /// <summary>
+        /// Renders a filled semi-transparent rectangle for window selection
+        /// </summary>
+        private void RenderWindowSelectionFill(Point3D startPoint, Point3D currentPoint)
+        {
+            if (_renderEngine == null) return;
+
+            // Calculate rectangle corners
+            double minX = Math.Min(startPoint.X, currentPoint.X);
+            double maxX = Math.Max(startPoint.X, currentPoint.X);
+            double minY = Math.Min(startPoint.Y, currentPoint.Y);
+            double maxY = Math.Max(startPoint.Y, currentPoint.Y);
+
+            // Create the four vertices of the rectangle (counter-clockwise order)
+            var vertices = new[]
+            {
+                new Point3D(minX, minY, 0),  // Bottom-left
+                new Point3D(maxX, minY, 0),  // Bottom-right
+                new Point3D(maxX, maxY, 0),  // Top-right
+                new Point3D(minX, maxY, 0)   // Top-left
+            };
+
+            // Create a semi-transparent green color (30% opacity)
+            var fillColor = System.Drawing.Color.FromArgb(76, 0, 255, 0); // 76 = 30% of 255
+
+            // Use the RenderEngine's polygon renderer to draw the filled rectangle
+            // Note: You may need to add this method to RenderEngine if it doesn't exist
+            _renderEngine.RenderFilledPolygon(vertices, fillColor);
         }
 
         private List<Line> CreateCrosshairLines(Point mousePosDip)
@@ -701,28 +840,23 @@ namespace UI.Controls.Viewport
                 ? _renderEngine.OrthographicScale * 0.02f
                 : (_renderEngine.Camera.Position - _renderEngine.Camera.Target).Length() * 0.002f;
 
-            // DEBUG: Log selection mode state
-            bool shouldHitTest = !_viewModel.IsPointPickingMode && 
+            // Only perform hit testing if in selection mode, NOT in point picking or window selection mode, and not dragging
+            bool shouldHitTest = _viewModel.CurrentInputMode == ViewportViewModel.InputMode.Selection && 
                 e.LeftButton != MouseButtonState.Pressed && 
                 e.MiddleButton != MouseButtonState.Pressed && 
                 e.RightButton != MouseButtonState.Pressed;
-    
-            ////System.Diagnostics.Debug.WriteLine($"MouseMove: SelectMode={_viewModel.IsSelectionMode}, PickMode={_viewModel.IsPointPickingMode}, ShouldHitTest={shouldHitTest}");
 
-    // Only perform hit testing if in selection mode, NOT in point picking mode, and not dragging
-    if (shouldHitTest)
-    {
-        var hitObject = _viewModel.HitTest(currentPosDip, ScreenToWorld);
-        //System.Diagnostics.Debug.WriteLine($"  HitTest result: {hitObject?.GetType().Name ?? "null"}");
-        
-        if (_viewModel.HighlightedObject != hitObject)
-        {
-            _viewModel.HighlightedObject = hitObject;
-            //System.Diagnostics.Debug.WriteLine($"  HighlightedObject updated to: {hitObject?.GetType().Name ?? "null"}");
-            Refresh(); // Force a refresh when highlighting changes
-        }
-    }
-    
+            if (shouldHitTest)
+            {
+                var hitObject = _viewModel.HitTest(currentPosDip, ScreenToWorld);
+                
+                if (_viewModel.HighlightedObject != hitObject)
+                {
+                    _viewModel.HighlightedObject = hitObject;
+                    Refresh(); // Force a refresh when highlighting changes
+                }
+            }
+            
             var vector3D = new Vector3D();
             if (worldPos.HasValue)
             {
@@ -774,7 +908,7 @@ namespace UI.Controls.Viewport
 
             _lastMousePosDip = currentPosDip;
 
-            // Always refresh to update crosshair position
+            // Always refresh to update crosshair position and window selection rectangle
             Refresh();
         }
 
@@ -801,8 +935,17 @@ namespace UI.Controls.Viewport
 
         private void OnMouseUp(object sender, MouseButtonEventArgs e)
         {
+            var mousePos = e.GetPosition(GlWPFControl);
+            var worldPos = ScreenToWorld(mousePos);
+
+            // Let the ViewModel handle mouse up (for window selection completion)
+            var result = _viewModel.HandleMouseUp(e.ChangedButton, mousePos, worldPos);
+
             GlWPFControl.ReleaseMouseCapture();
             _lastMousePosDip = null; // stop delta tracking
+
+            if (result.NeedsRefresh)
+                Refresh();
         }
 
         private void OnMouseEnter(object sender, MouseEventArgs e)
@@ -873,7 +1016,7 @@ namespace UI.Controls.Viewport
                     return _renderEngine.ScreenToWorldOrthoPixels(mouseXpx, mouseYpx, worldZ: 0f);
                 }
 
-                // Perspective fallback: invert PV (column-major) -> use transpose for System.Numerics row-vector Transform
+                // Perspective fallback: invert PV (column-major) -> use transpose for System.Numerics.row-vector Transform
                 float ndcX = (mouseXpx / widthPx) * 2.0f - 1.0f;
                 float ndcY = 1.0f - (mouseYpx / heightPx) * 2.0f;
 

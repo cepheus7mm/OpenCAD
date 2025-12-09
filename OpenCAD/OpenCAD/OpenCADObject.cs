@@ -129,6 +129,11 @@ namespace OpenCAD
         {
             if (obj != null && children.TryRemove(obj.ID, out _))
             {
+                var grandChildIds = obj.GetChildren().Select(c => c.ID).ToArray();
+                foreach (var grandChildId in grandChildIds)
+                {
+                    obj.Remove(grandChildId);
+                }
                 obj._parent = null;
                 return true;
             }
@@ -139,6 +144,11 @@ namespace OpenCAD
         {
             if (children.TryRemove(id, out var child))
             {
+                var grandChildIds = child.GetChildren().Select(c => c.ID).ToArray();
+                foreach (var grandChildId in grandChildIds)
+                {
+                    child.Remove(grandChildId);
+                }
                 child._parent = null;
                 return true;
             }

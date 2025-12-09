@@ -1,6 +1,6 @@
 using System;
 
-namespace OpenCAD.Geometry
+namespace OpenCAD.Geometry.Helpers
 {
     /// <summary>
     /// 4x4 matrix using double precision.

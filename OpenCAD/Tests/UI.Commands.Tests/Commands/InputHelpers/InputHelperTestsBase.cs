@@ -16,6 +16,7 @@ namespace UI.Commands.Tests
     {
         protected Mock<ICommandContext> ContextMock = null!;
         protected ViewportViewModel ViewModel = null!;
+        protected OpenCAD.OpenCADDocument? Document = new OpenCAD.OpenCADDocument("test.cad", "test document");
 
         [TestInitialize]
         public void BeforeEach()
@@ -43,6 +44,9 @@ namespace UI.Commands.Tests
             // SetLastPoint should be accepted.
             ContextMock.Setup(c => c.SetLastPoint(It.IsAny<Point3D>()))
                 .Verifiable();
+
+            ContextMock.Setup(c => c.GetDocument())
+                .Returns(Document);
 
             // Provide a concrete ViewModel (no WPF necessary for logic).
             ViewModel = new ViewportViewModel();

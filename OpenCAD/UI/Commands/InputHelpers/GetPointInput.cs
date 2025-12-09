@@ -35,15 +35,17 @@ namespace UI.Commands.InputHelpers
             Point3D? basePoint = null,
             CancellationToken cancellationToken = default)
         {
-            var result = await GetPointOrKeywordAsync(prompt, allowLastPoint, basePoint, null, cancellationToken);
+            var result = await GetPointOrKeywordAsync(prompt, null, allowLastPoint, basePoint, null, cancellationToken);
             return result.Point;
         }
 
         /// <summary>
         /// Get a point or keyword from the user via keyboard input or mouse click
         /// </summary>
+        /// <param name="defaultValue">Optional default value (for use by composed helpers like GetDistanceInput)</param>
         public async Task<InputResult> GetPointOrKeywordAsync(
             string prompt,
+            object? defaultValue = null, // NEW: Accept default value (could be Point3D, double, etc.)
             bool allowLastPoint = false,
             Point3D? basePoint = null,
             string[]? keywords = null,
@@ -51,6 +53,9 @@ namespace UI.Commands.InputHelpers
         {
             _basePoint = basePoint;
             _allowLastPoint = allowLastPoint;
+            
+            // NEW: Store default value in base class
+            DefaultValue = defaultValue;
 
             // Use base.Keywords so base class can handle keyword matching
             this.Keywords = keywords;
@@ -209,6 +214,7 @@ namespace UI.Commands.InputHelpers
                         _pointOrKeywordTaskSource = null;
                         _basePoint = null;
                         _allowLastPoint = false;
+                        DefaultValue = null; // NEW: Clear default value
                         this.Keywords = null;
                         KeyWordHandler = null;
                     }
@@ -224,6 +230,30 @@ namespace UI.Commands.InputHelpers
             // If there's no pending task, return false
             if (_pointOrKeywordTaskSource == null)
                 return false;
+
+            // NEW: Check for empty input with default value (for composed helpers like GetDistanceInput)
+            if (string.IsNullOrWhiteSpace(input) && HasDefault)
+            {
+                // Signal default acceptance with empty keyword
+                // The composed helper (GetDistanceInput) will recognize this and return the default
+                _pointOrKeywordTaskSource.TrySetResult(new InputResult
+                {
+                    ResultType = InputResult.InputResultType.Keyword,
+                    Keyword = string.Empty
+                });
+                return false;
+            }
+
+            if (AllowArbitraryInput && !string.IsNullOrWhiteSpace(input))
+            {
+                // Accept any arbitrary input as a keyword
+                _pointOrKeywordTaskSource.TrySetResult(new InputResult
+                {
+                    ResultType = InputResult.InputResultType.Arbitrary,
+                    Keyword = input
+                });
+                return false;
+            }
 
             // Let base class handle keywords first
             base.ProcessKeyboardInput(input);
@@ -245,13 +275,13 @@ namespace UI.Commands.InputHelpers
                     try { _viewModel.SetPreviewPoint(point); } catch { }
                 });
             }
-            if (point == Point3D.NotAPoint)
+            if ((!point?.IsValid() ?? true) && AllowArbitraryInput)
             {
                 _pointOrKeywordTaskSource.TrySetResult(new InputResult { ResultType = InputResult.InputResultType.Arbitrary, Keyword = input });
             }
 
             // Complete the task with the result
-            if (point != null)
+            if (point != null && point.IsValid())
             {
                 _pointOrKeywordTaskSource.TrySetResult(new InputResult { Point = point, ResultType = InputResult.InputResultType.Point });
             }
@@ -361,6 +391,7 @@ namespace UI.Commands.InputHelpers
                 _pointOrKeywordTaskSource = null;
                 _basePoint = null;
                 _allowLastPoint = false;
+                DefaultValue = null; // NEW: Clear default value
                 this.Keywords = null;
                 KeyWordHandler = null;
             }

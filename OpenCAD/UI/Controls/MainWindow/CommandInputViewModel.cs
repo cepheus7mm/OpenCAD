@@ -140,7 +140,7 @@ namespace UI.Controls.MainWindow
                 getActiveViewport: () => _getActiveViewport?.Invoke(),
                 getUndoRedoManager: () => _undoRedoManager,
                 getDocument: () => _document,
-                setCommandPrompt: SetCommandPrompt // <-- wired up so helpers can update prompt line
+                setCommandPrompt: SetCommandPrompt
             );
 
             // Initialize and discover commands
@@ -158,7 +158,6 @@ namespace UI.Controls.MainWindow
         public void SetActiveViewportProvider(Func<ViewportControl?> getActiveViewport)
         {
             _getActiveViewport = getActiveViewport;
-            //System.Diagnostics.Debug.WriteLine("CommandInputViewModel: Viewport provider set");
         }
 
         /// <summary>
@@ -186,15 +185,22 @@ namespace UI.Controls.MainWindow
                     return true;
 
                 case Key.Space:
-                    // Allow space to be typed normally when:
-                    // 1. There's text in the input field (user is typing coordinates/values)
-                    // 2. There's an active command (space might be needed as separator in point input)
                     string currentInput = CommandText.Trim();
-                    if (!string.IsNullOrEmpty(currentInput) || _activeCommand != null)
+                    
+                    // If there's an active command and input is empty, treat Space like Enter (accept default/process empty)
+                    if (_activeCommand != null && string.IsNullOrEmpty(currentInput))
                     {
-                        return false; // Let space be typed normally
+                        ExecuteCommand();
+                        return true;
                     }
-                    // Only execute (repeat last command) if input is empty AND no active command
+                    
+                    // If input is not empty, allow space to be typed normally (coordinate separator, etc.)
+                    if (!string.IsNullOrEmpty(currentInput))
+                    {
+                        return false; // Let space be typed
+                    }
+                    
+                    // No active command and empty input: repeat last command
                     ExecuteCommand();
                     return true;
 
@@ -232,10 +238,7 @@ namespace UI.Controls.MainWindow
         /// </summary>
         public async Task ExecuteCommandProgrammatically(string commandName)
         {
-            //System.Diagnostics.Debug.WriteLine($"=== ExecuteCommandProgrammatically: '{commandName}' ===");
-
             string resolvedCommand = ResolveCommandAlias(commandName);
-            //System.Diagnostics.Debug.WriteLine($"  Resolved to: '{resolvedCommand}'");
 
             // Output to history to show the command was executed
             AppendToHistory($"> {resolvedCommand}");
@@ -247,7 +250,6 @@ namespace UI.Controls.MainWindow
             catch (Exception ex)
             {
                 AppendToHistory($"Error: {ex.Message}");
-                //System.Diagnostics.Debug.WriteLine($"  ERROR executing command: {ex.Message}");
             }
         }
 
@@ -272,14 +274,15 @@ namespace UI.Controls.MainWindow
         {
             string input = CommandText.Trim();
 
-            // If there's an active multi-step command, process input for it
+            // Priority 1: If there's an active multi-step command, process input for it
+            // This handles both empty input (for defaults) and typed input
             if (_activeCommand != null)
             {
                 ProcessActiveCommandInput(input);
                 return;
             }
 
-            // No active command - check if we should repeat the last command
+            // Priority 2: No active command - check if we should repeat the last command
             if (string.IsNullOrEmpty(input))
             {
                 if (!string.IsNullOrEmpty(_lastCommand))
@@ -317,27 +320,24 @@ namespace UI.Controls.MainWindow
 
         private void ProcessActiveCommandInput(string input)
         {
-            if (string.IsNullOrEmpty(input))
+            // For active commands, we pass the input (which may be empty for default acceptance)
+            // directly to the command's ProcessInput method. The input helper will handle:
+            // - Empty string: Check for and accept default value if available
+            // - Non-empty string: Parse as typed value/keyword/point
+            
+            // Note: We don't append empty input to history (would clutter the display)
+            if (!string.IsNullOrEmpty(input))
+            {
+                AppendToHistory($"> {input}");
+            }
+
+            try
             {
                 bool isComplete = _activeCommand!.ProcessInput(input);
                 if (isComplete)
                 {
                     CompleteActiveCommand();
                 }
-                CommandText = string.Empty;
-                FocusRequested?.Invoke(this, EventArgs.Empty);
-                return;
-            }
-
-            AppendToHistory($"> {input}");
-
-            try
-            {
-                bool isComplete = _activeCommand!.ProcessInput(input);
-                //if (isComplete)
-                //{
-                //    CompleteActiveCommand();
-                //}
             }
             catch (Exception ex)
             {
@@ -438,6 +438,7 @@ namespace UI.Controls.MainWindow
             System.Diagnostics.Debug.WriteLine("CommandInputViewModel: CompleteActiveCommandCoreEntered");
             UnsubscribeFromActiveCommand();
             _activeCommand = null;
+            _getActiveViewport?.Invoke()?.ClearPreviewObjects();
             _getActiveViewport?.Invoke()?.Refresh();
             UpdatePrompt();
             OnPropertyChanged(nameof(HasActiveCommand));
@@ -455,7 +456,6 @@ namespace UI.Controls.MainWindow
             CompleteActiveCommand();
             CommandText = string.Empty;
         }
-
 
         private void UnsubscribeFromActiveCommand()
         {
@@ -546,7 +546,6 @@ namespace UI.Controls.MainWindow
 
         private void OnCommandCompleted(object? sender, EventArgs e)
         {
-            //System.Diagnostics.Debug.WriteLine("CommandInputViewModel: Command completed via event");
             CompleteActiveCommand();
         }
 
