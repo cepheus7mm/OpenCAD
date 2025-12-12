@@ -189,6 +189,16 @@ namespace UI
                 
                 //System.Diagnostics.Debug.WriteLine("Delete not handled - no selection");
             }
+
+            if (e.Key == Key.LeftShift || e.Key == Key.RightShift)
+            {
+                var viewport = dockingArea.GetActiveViewport();
+                if (viewport != null)
+                {
+                    viewport.SetShiftKeyState(e.IsDown);
+                    //System.Diagnostics.Debug.WriteLine("Shift key down - snapping enabled");
+                }
+            }
             
             // Handle Ctrl+Z for Undo
             if (e.Key == Key.Z && Keyboard.Modifiers == ModifierKeys.Control)

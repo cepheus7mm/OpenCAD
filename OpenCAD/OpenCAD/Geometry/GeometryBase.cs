@@ -129,6 +129,15 @@ namespace OpenCAD.Geometry
 
         public abstract Point3D GetClosestPointTo(Point3D point, bool extend = false);
 
+        /// <summary>
+        /// Retrieves a geographic point of the specified type relative to a given 3D reference point.
+        /// </summary>
+        /// <param name="referencePoint">The 3D point from which the geographic point is determined.</param>
+        /// <param name="geoPointType">The type of geographic point to retrieve relative to the reference point.</param>
+        /// <returns>A <see cref="GeoPoint"/> representing the requested geographic point if found; otherwise, <see
+        /// langword="null"/>.</returns>
+        public abstract IEnumerable<GeoPoint> GetGeoPoints(Point3D referencePoint, GeoPointModes geoPointType);
+
         public bool ToStringLength(out string length)
         {
             if (Document is null || double.IsNaN(Length) || double.IsInfinity(Length))
@@ -160,6 +169,35 @@ namespace OpenCAD.Geometry
         /// </summary>
         public abstract bool Transform(Matrix4D transformation);
 
+        #endregion
+
+        #region
+
+        // support methods
+
+        /// <summary>
+        /// Finds the candidate geographic point that is closest to the specified reference point, optionally within a
+        /// given maximum distance.
+        /// </summary>
+        /// <remarks>If multiple candidates are equally close to the reference point, the first one
+        /// encountered is returned. If no candidates are within the specified aperture, the method returns
+        /// null.</remarks>
+        /// <param name="referencePoint">The reference point to which distances are measured. Cannot be null.</param>
+        /// <param name="candidates">A collection of candidate geographic points to search. Must not be empty.</param>
+        /// <param name="aperture">The maximum allowed distance from the reference point, in the same units as the points' coordinates. Only
+        /// candidates within this distance are considered.</param>
+        /// <returns>The candidate geographic point closest to the reference point and within the specified aperture, or null if
+        /// no such candidate exists.</returns>
+        internal GeoPoint? ClosestTo(Point3D referencePoint, IEnumerable<GeoPoint> candidates, double aperture)
+        {
+            if (!candidates.Any() || referencePoint == null)
+                return null;
+
+            return candidates
+                .Where(p => p.DistanceTo(referencePoint) <= aperture)
+                .OrderBy(p => p.DistanceTo(referencePoint))
+                .FirstOrDefault();
+        }
         #endregion
     }
 }

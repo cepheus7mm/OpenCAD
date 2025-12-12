@@ -12,7 +12,7 @@ using System.Windows.Media;
 using OpenCAD.Settings;
 using Microsoft.Extensions.DependencyInjection;
 using OpenCAD.TextRendering;
-using OpenCAD.Geometry.Helpers; // << add this
+using OpenCAD.Geometry.Helpers;
 
 namespace UI.Controls.Viewport
 {
@@ -29,7 +29,7 @@ namespace UI.Controls.Viewport
 
         // Add a field for viewport settings
         private readonly ViewportSettings _viewportSettings;
-        private bool _documentFullyLoaded = false;  // ✅ ADD THIS
+        private bool _documentFullyLoaded = false;
 
         // Add near the top with other fields
         private readonly List<OpenCADObject> _previewObjects = new List<OpenCADObject>();
@@ -62,15 +62,10 @@ namespace UI.Controls.Viewport
             
             _viewModel = new ViewportViewModel(document);
             _viewModel.SetViewportSettings(_viewportSettings); // Pass settings to ViewModel
-            
-            //// Initialize snapping state from settings
-            //_viewModel.UpdateSnappingFromSettings();
-            
+                        
             DataContext = _viewModel;
 
             InitializeComponent();
-
-            //System.Diagnostics.Debug.WriteLine("=== ViewportControl constructor called ===");
 
             if (GlWPFControl == null)
                 throw new InvalidOperationException("GlControl not found. Make sure it is defined in XAML with x:Name=\"GlWPFControl\".");
@@ -83,7 +78,6 @@ namespace UI.Controls.Viewport
             };
 
             GlWPFControl.Start(settings);
-            //System.Diagnostics.Debug.WriteLine("GLWpfControl.Start() called with RenderContinuously = false");
 
             // Subscribe to ViewModel events
             _viewModel.RefreshRequested += (s, e) => Refresh();
@@ -94,6 +88,8 @@ namespace UI.Controls.Viewport
                     // Don't update cursor here - we'll handle it separately
                 }
             };
+
+            _viewModel.GeoPointModesOverrideContextMenuRequested += OnGeoPointModesOverrideContextMenuRequested;
 
             // Subscribe to control events
             GlWPFControl.Render += OnRender;
@@ -113,20 +109,49 @@ namespace UI.Controls.Viewport
             GlWPFControl.KeyDown += OnKeyDown;
             GlWPFControl.Focusable = true; // Make sure the control can receive keyboard focus
 
-            //System.Diagnostics.Debug.WriteLine("=== ViewportControl constructor completed ===");
-
             // ✅ ADD: Verify document is fully loaded
             try
             {
                 var testLayer = document.CurrentLayer;
                 _documentFullyLoaded = true;
-                //System.Diagnostics.Debug.WriteLine($"ViewportControl: Document fully loaded with current layer: {testLayer?.Name ?? "null"}");
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                //System.Diagnostics.Debug.WriteLine($"ViewportControl: Document NOT fully loaded: {ex.Message}");
                 _documentFullyLoaded = false;
             }
+        }
+
+        private void OnGeoPointModesOverrideContextMenuRequested(object? sender, Point mousePos)
+        {
+            // Use Dispatcher to delay menu opening until after mouse event completes
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                var contextMenu = new ContextMenu();
+
+                foreach (GeoPointModes mode in Enum.GetValues(typeof(GeoPointModes)))
+                {
+                    if (mode == GeoPointModes.None)
+                        continue;
+                    var menuItem = new MenuItem
+                    {
+                        Header = mode.ToString(),
+                        IsCheckable = false,
+                    };
+                    menuItem.Click += (s, e) =>
+                    {
+                        _viewportSettings.GeoPointModeOverride = mode;
+                        contextMenu.IsOpen = false;
+                    };
+                    contextMenu.Items.Add(menuItem);
+                }
+
+                contextMenu.PlacementTarget = GlWPFControl;
+                contextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Relative;
+                contextMenu.HorizontalOffset = mousePos.X;
+                contextMenu.VerticalOffset = mousePos.Y;
+
+                contextMenu.IsOpen = true;
+            }));
         }
 
         #region Public API (delegates to ViewModel)
@@ -140,9 +165,6 @@ namespace UI.Controls.Viewport
         public void AddObject(OpenCADObject obj) => _viewModel.AddObject(obj);
         public void RemoveObject(OpenCADObject obj) => _viewModel.RemoveObject(obj);
         public void ClearObjects() => _viewModel.ClearObjects();
-        //public void EnableSnapping(bool enabled, double gridSize = 1.0) => _viewModel.EnableSnapping(enabled, gridSize);
-        //public void EnableSelectionMode() => _viewModel.EnableSelectionMode();
-        //public void DisableSelectionMode() => _viewModel.DisableSelectionMode();
         public void ClearSelection() => _viewModel.ClearSelection();
         
         /// <summary>
@@ -199,47 +221,31 @@ namespace UI.Controls.Viewport
 
         private void ViewportControl_Loaded(object sender, RoutedEventArgs e)
         {
-            //System.Diagnostics.Debug.WriteLine("=== ViewportControl.Loaded event fired ===");
-
             if (!_isInitialized)
             {
-                //System.Diagnostics.Debug.WriteLine("Initializing from Loaded event");
                 InitializeOpenGL();
             }
         }
 
         private void OnGLControlReady()
         {
-            //System.Diagnostics.Debug.WriteLine("=== GLWpfControl.Ready event fired ===");
-
             try
             {
                 string version = GL.GetString(StringName.Version);
-                string vendor = GL.GetString(StringName.Vendor);
-                string renderer = GL.GetString(StringName.Renderer);
-                string glslVersion = GL.GetString(StringName.ShadingLanguageVersion);
-
-                //System.Diagnostics.Debug.WriteLine($"OpenGL Version: {version}");
-                //System.Diagnostics.Debug.WriteLine($"Vendor: {vendor}");
-                //System.Diagnostics.Debug.WriteLine($"Renderer: {renderer}");
-                //System.Diagnostics.Debug.WriteLine($"GLSL Version: {glslVersion}");
-
                 var versionParts = version.Split('.', ' ');
                 if (versionParts.Length >= 2)
                 {
                     int major = int.Parse(versionParts[0]);
                     int minor = int.Parse(versionParts[1]);
-                    //System.Diagnostics.Debug.WriteLine($"Parsed version: {major}.{minor}");
 
                     if (major < 3 || (major == 3 && minor < 3))
                     {
-                        //System.Diagnostics.Debug.WriteLine("WARNING: OpenGL 3.3 or higher is recommended");
+                        // warning
                     }
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                //System.Diagnostics.Debug.WriteLine($"Error getting OpenGL info: {ex.Message}");
             }
 
             InitializeOpenGL();
@@ -252,9 +258,6 @@ namespace UI.Controls.Viewport
 
             try
             {
-                //System.Diagnostics.Debug.WriteLine("--- Starting OpenGL initialization ---");
-
-                // Resolve ITextMetricsProvider from DI
                 ITextMetricsProvider? textMetrics = null;
                 if (Application.Current is UI.App app)
                 {
@@ -263,14 +266,11 @@ namespace UI.Controls.Viewport
 
                 _renderEngine = new RenderEngine(textMetrics);
 
-                // Use framebuffer pixel size, not DIPs
                 var dpi = VisualTreeHelper.GetDpi(GlWPFControl);
                 int pixelWidth = Math.Max(1, (int)Math.Round(GlWPFControl.ActualWidth * dpi.DpiScaleX));
                 int pixelHeight = Math.Max(1, (int)Math.Round(GlWPFControl.ActualHeight * dpi.DpiScaleY));
                 if (pixelWidth <= 0) pixelWidth = 800;
                 if (pixelHeight <= 0) pixelHeight = 600;
-
-                //System.Diagnostics.Debug.WriteLine($"Viewport framebuffer (pixels): {pixelWidth}x{pixelHeight}");
 
                 _renderEngine.Initialize(pixelWidth, pixelHeight);
 
@@ -282,22 +282,13 @@ namespace UI.Controls.Viewport
                 var error = GL.GetError();
                 if (error != ErrorCode.NoError)
                 {
-                    //System.Diagnostics.Debug.WriteLine($"OpenGL Error during initialization: {error}");
                 }
 
                 _isInitialized = true;
-
-                //System.Diagnostics.Debug.WriteLine("--- Forcing initial refresh ---");
                 Refresh();
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                //System.Diagnostics.Debug.WriteLine($"EXCEPTION during OpenGL initialization: {ex.Message}");
-                //System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
-                if (ex.InnerException != null)
-                {
-                    //System.Diagnostics.Debug.WriteLine($"Inner exception: {ex.InnerException.Message}");
-                }
             }
         }
 
@@ -307,22 +298,16 @@ namespace UI.Controls.Viewport
 
         private void OnRender(TimeSpan delta)
         {
-            ////System.Diagnostics.Debug.WriteLine($"*** OnRender called at {DateTime.Now:HH:mm:ss.fff} ***");
-    
             if (!_isInitialized || _renderEngine == null)
                 return;
 
-            // ✅ ADD: Don't render until document is fully loaded
+            // Don't render until document is fully loaded
             if (!_documentFullyLoaded)
             {
-                //System.Diagnostics.Debug.WriteLine("OnRender: Document not fully loaded, skipping render");
-                
-                // Try to check again
                 try
                 {
                     var testLayer = _document.CurrentLayer;
                     _documentFullyLoaded = true;
-                    //System.Diagnostics.Debug.WriteLine("OnRender: Document is now fully loaded!");
                 }
                 catch
                 {
@@ -332,22 +317,16 @@ namespace UI.Controls.Viewport
 
             try
             {
-                // Clear the framebuffer ONCE at the start of the frame
                 GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 
-                // Render grid first (background layer)
                 RenderGrid();
 
-                // Then render scene objects
                 RenderSceneFlat(_document);
 
-                // Finally render overlay (crosshair, preview lines, etc.)
                 RenderPostGeometry();
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                //System.Diagnostics.Debug.WriteLine($"!!! EXCEPTION during render: {ex.Message}");
-                //System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
             }
         }
 
@@ -384,8 +363,6 @@ namespace UI.Controls.Viewport
                     highlightedObjects.Add(previewObj);
                 }
             }
-
-            //System.Diagnostics.Debug.WriteLine($"[VC] RenderSceneFlat: {list.Count} unique objects, {_viewModel.SelectedObjects.Count} selected, {highlightedObjects.Count} highlighted");
 
             // Pass highlighting and selection information to the render engine
             _renderEngine.Render(list, highlightedObjects, _viewModel.SelectedObjects);
@@ -462,6 +439,30 @@ namespace UI.Controls.Viewport
                     _viewModel.WindowSelectionCurrentPoint);
                 overlayObjects.AddRange(selectionRectLines);
             }
+            
+            // Add GeoPoint glyphs if in PointPicking mode with GeoPointModes enabled
+            if (_viewModel.CurrentInputMode == ViewportViewModel.InputMode.PointPicking &&
+                _viewModel.GeoPointModes != GeoPointModes.None &&
+                _currentMousePosDip.HasValue)
+            {
+                var geoPoints = _viewModel.GetGeoPointsAtCurrentMousePosition(_currentMousePosDip.Value, ScreenToWorld);
+                if (geoPoints.Any())
+                {
+                    var worldPos = ScreenToWorld(_currentMousePosDip.Value);
+                    var worldPos1 = ScreenToWorld(new Point(_currentMousePosDip.Value.X + 1, _currentMousePosDip.Value.Y));
+                    if (worldPos.HasValue && worldPos1.HasValue)
+                    {
+                        double screenToWorldScale = Math.Abs(worldPos1.Value.X - worldPos.Value.X);
+                        var geoGlyphs = _viewModel.CreateGeoPointGlyphs(geoPoints, screenToWorldScale);
+                        
+                        // UPDATED: Recursively collect glyph children instead of adding glyph containers
+                        foreach (var glyph in geoGlyphs)
+                        {
+                            CollectGlyphChildren(glyph, overlayObjects);
+                        }
+                    }
+                }
+            }
 
             // Add crosshair if mouse is in viewport
             if (_currentMousePosDip.HasValue)
@@ -474,6 +475,24 @@ namespace UI.Controls.Viewport
             if (overlayObjects.Count > 0)
             {
                 _renderEngine.RenderOverlay(overlayObjects);
+            }
+        }
+
+        /// <summary>
+        /// Recursively collects all drawable children from a glyph container
+        /// </summary>
+        private void CollectGlyphChildren(OpenCADObject glyph, List<OpenCADObject> drawableList)
+        {
+            var children = glyph.GetChildren();
+            foreach (var child in children)
+            {
+                if (child.IsDrawable)
+                {
+                    drawableList.Add(child);
+                }
+                
+                // Recurse for nested children
+                CollectGlyphChildren(child, drawableList);
             }
         }
 
@@ -569,20 +588,17 @@ namespace UI.Controls.Viewport
             Point3D centerPoint;
             if (_viewModel.IsPointPickingMode && _viewModel.SnappingEnabled)
             {
-                // Snap the crosshair position to grid
                 var unsnappedPoint = new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z);
                 centerPoint = _viewModel.SnapToGrid(unsnappedPoint);
             }
             else
             {
-                // No snapping - use raw world coordinates
                 centerPoint = new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z);
             }
 
             // Calculate viewport bounds in world coordinates
             var dpi = VisualTreeHelper.GetDpi(GlWPFControl);
             
-            // Get the four corners of the viewport in world space
             var topLeft = ScreenToWorld(new Point(0, 0));
             var topRight = ScreenToWorld(new Point(GlWPFControl.ActualWidth, 0));
             var bottomLeft = ScreenToWorld(new Point(0, GlWPFControl.ActualHeight));
@@ -603,44 +619,87 @@ namespace UI.Controls.Viewport
 
             // Get pickbox size from settings (in pixels)
             double pickboxSizePixels = _viewportSettings.Crosshair?.PickboxSize ?? 5.0;
-            
+            double apertureboxSizePixels = _viewModel.ApertureSize > 0 ? _viewModel.ApertureSize : (_viewportSettings.Crosshair?.PickboxSize * 3.0 ?? 15.0);
+
             // Calculate two points offset by the pickbox size in screen space
             var screenCenter = mousePosDip;
-            var screenOffset = new Point(screenCenter.X + pickboxSizePixels, screenCenter.Y);
+            var screenOffset = new Point(screenCenter.X + 1, screenCenter.Y);
             
             var worldCenter = ScreenToWorld(screenCenter);
             var worldOffset = ScreenToWorld(screenOffset);
-            
+
             if (worldCenter.HasValue && worldOffset.HasValue)
             {
                 // Calculate the world-space distance that corresponds to pickboxSizePixels
-                double worldPickboxSize = Math.Abs(worldOffset.Value.X - worldCenter.Value.X);
-                double halfBox = worldPickboxSize;
+                double screenToWorldScale = Math.Abs(worldOffset.Value.X - worldCenter.Value.X);
+                var boxSizePixels = _viewModel.IsPointPickingMode && _viewModel.GeoPointModes != GeoPointModes.None ? apertureboxSizePixels : pickboxSizePixels;
+                double halfBox = boxSizePixels * screenToWorldScale;
                 
-                // Bottom edge
-                lines.Add(CreateCrosshairLine(
-                    new Point3D(centerPoint.X - halfBox, centerPoint.Y - halfBox, 0),
-                    new Point3D(centerPoint.X + halfBox, centerPoint.Y - halfBox, 0)
-                ));
-                
-                // Right edge
-                lines.Add(CreateCrosshairLine(
-                    new Point3D(centerPoint.X + halfBox, centerPoint.Y - halfBox, 0),
-                    new Point3D(centerPoint.X + halfBox, centerPoint.Y + halfBox, 0)
-                ));
-                
-                // Top edge
-                lines.Add(CreateCrosshairLine(
-                    new Point3D(centerPoint.X + halfBox, centerPoint.Y + halfBox, 0),
-                    new Point3D(centerPoint.X - halfBox, centerPoint.Y + halfBox, 0)
-                ));
-                
-                // Left edge
-                lines.Add(CreateCrosshairLine(
-                    new Point3D(centerPoint.X - halfBox, centerPoint.Y + halfBox, 0),
-                    new Point3D(centerPoint.X - halfBox, centerPoint.Y - halfBox, 0)
-                ));
+                if (!_viewModel.IsPointPickingMode || _viewModel.GeoPointModes != GeoPointModes.None)
+                {
+                    // Bottom edge
+                    lines.Add(CreateCrosshairLine(
+                        new Point3D(centerPoint.X - halfBox, centerPoint.Y - halfBox, 0),
+                        new Point3D(centerPoint.X + halfBox, centerPoint.Y - halfBox, 0)
+                    ));
+                    
+                    // Right edge
+                    lines.Add(CreateCrosshairLine(
+                        new Point3D(centerPoint.X + halfBox, centerPoint.Y - halfBox, 0),
+                        new Point3D(centerPoint.X + halfBox, centerPoint.Y + halfBox, 0)
+                    ));
+                    
+                    // Top edge
+                    lines.Add(CreateCrosshairLine(
+                        new Point3D(centerPoint.X + halfBox, centerPoint.Y + halfBox, 0),
+                        new Point3D(centerPoint.X - halfBox, centerPoint.Y + halfBox, 0)
+                    ));
+                    
+                    // Left edge
+                    lines.Add(CreateCrosshairLine(
+                        new Point3D(centerPoint.X - halfBox, centerPoint.Y + halfBox, 0),
+                        new Point3D(centerPoint.X - halfBox, centerPoint.Y - halfBox, 0)
+                    ));
+                }
             }
+
+            // --- Aperture rendering (use ViewModel properties directly) ---
+            // Show aperture when ViewModel.GeoPointModes is not None
+            //if (_viewModel.GeoPointModes != GeoPointModes.None && _viewModel.IsPointPickingMode)
+            //{
+            //    // Aperture radius in pixels comes from the ViewModel property (falls back to settings)
+            //    double apertureRadiusPixels = _viewModel.ApertureSize > 0 ? _viewModel.ApertureSize : (_viewportSettings.Crosshair?.PickboxSize * 3.0 ?? 16.0);
+            //    var apertureRadiusWorld = apertureRadiusPixels * screenToWorldScale;
+            //    const int segments = 32;
+            //    var screenPoints = new List<Point>(segments);
+            //    var worldPoints = new List<Point3D?>(segments);
+            //    for (int i = 0; i < segments; ++i)
+            //    {
+            //        double angle = 2.0 * Math.PI * i / segments;
+            //        double sx = centerPoint.X + apertureRadiusWorld * Math.Cos(angle);
+            //        double sy = centerPoint.Y + apertureRadiusWorld * Math.Sin(angle);
+            //        worldPoints.Add(new Point3D(sx, sy, 0));
+            //    }
+
+            //    //foreach (var sp in screenPoints)
+            //    //{
+            //    //    var wp = ScreenToWorld(sp);
+            //    //    if (wp.HasValue)
+            //    //        worldPoints.Add(new Point3D(wp.Value.X, wp.Value.Y, wp.Value.Z));
+            //    //    else
+            //    //        worldPoints.Add(null);
+            //    //}
+
+            //    for (int i = 0; i < segments; ++i)
+            //    {
+            //        var p1 = worldPoints[i];
+            //        var p2 = worldPoints[(i + 1) % segments];
+            //        if (p1 != null && p2 != null)
+            //        {
+            //            lines.Add(CreateCrosshairLine(p1, p2));
+            //        }
+            //    }
+            //}
 
             return lines;
         }
@@ -650,10 +709,8 @@ namespace UI.Controls.Viewport
         /// </summary>
         private Line CreateCrosshairLine(Point3D start, Point3D end)
         {
-            // Crosshair lines have proper document context
             var line = new Line(_document, start, end);
             
-            // Apply user-defined crosshair visual settings
             var crosshairSettings = _viewportSettings.Crosshair;
             if (crosshairSettings != null)
             {
@@ -775,14 +832,11 @@ namespace UI.Controls.Viewport
         }
         public void Refresh()
         {
-            ////System.Diagnostics.Debug.WriteLine("*** Refresh() -> InvalidateVisual() called ***");
             GlWPFControl?.InvalidateVisual();
         }
 
         private void OnSizeChanged(object sender, SizeChangedEventArgs e)
         {
-            //System.Diagnostics.Debug.WriteLine($"OnSizeChanged: {e.NewSize.Width}x{e.NewSize.Height}");
-
             if (!_isInitialized || _renderEngine == null) return;
 
             // Convert DIPs to physical pixels for the GL viewport/projection
@@ -791,7 +845,6 @@ namespace UI.Controls.Viewport
             int pixelHeight = Math.Max(1, (int)Math.Round(e.NewSize.Height * dpi.DpiScaleY));
 
             _renderEngine.UpdateProjection(pixelWidth, pixelHeight);
-            //System.Diagnostics.Debug.WriteLine($"Framebuffer resized to {pixelWidth}x{pixelHeight} (pixels)");
 
             Refresh();
         }
@@ -802,9 +855,6 @@ namespace UI.Controls.Viewport
 
         private void OnMouseDown(object sender, MouseButtonEventArgs e)
         {
-            // DON'T steal focus - let command input keep it
-            // GlWPFControl.Focus();  // REMOVED
-
             var mousePos = e.GetPosition(GlWPFControl);
             _lastMousePosDip = mousePos; // start delta tracking
 
@@ -992,7 +1042,22 @@ namespace UI.Controls.Viewport
                     return;
                 }
             }
+
+            if (e.Key == Key.LeftShift || e.Key == Key.RightShift)
+            {
+                // Update status bar when Shift is pressed
+                _viewModel.IsShiftKeyPressed = true;
+            }
         }
+
+        private void OnKeyUp(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.LeftShift || e.Key == Key.RightShift)
+            {
+                // Update status bar when Shift is released
+                _viewModel.IsShiftKeyPressed = false;
+            }
+        }   
 
         #endregion
 
@@ -1051,9 +1116,51 @@ namespace UI.Controls.Viewport
 
                 return null;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                //System.Diagnostics.Debug.WriteLine($"Error in ScreenToWorld: {ex.Message}");
+                return null;
+            }
+        }
+
+        private Point? WorldToScreen(Point3D worldPoint)
+        {
+            if (_renderEngine == null) return null;
+
+            try
+            {
+                var dpi = VisualTreeHelper.GetDpi(GlWPFControl);
+                float widthPx = Math.Max(1, (float)Math.Round(GlWPFControl.ActualWidth * dpi.DpiScaleX));
+                float heightPx = Math.Max(1, (float)Math.Round(GlWPFControl.ActualHeight * dpi.DpiScaleY));
+
+                // Build PV as in ScreenToWorld (projection * view)
+                var viewMatrix = _renderEngine.Camera.GetViewMatrix();
+                var projectionMatrix = _renderEngine.GetProjectionMatrix();
+
+                Matrix4x4 pv = Matrix4x4.Multiply(projectionMatrix, viewMatrix);
+
+                // Use transpose to match Vector4.Transform row-vector convention (mirrors inverse used in ScreenToWorld)
+                var pvRow = Matrix4x4.Transpose(pv);
+
+                var worldV = new Vector4((float)worldPoint.X, (float)worldPoint.Y, (float)worldPoint.Z, 1f);
+                var clip = Vector4.Transform(worldV, pvRow);
+
+                if (Math.Abs(clip.W) < 1e-6f)
+                    return null;
+
+                var ndc = clip / clip.W;
+
+                // Convert NDC [-1,1] to pixel coords (same convention as ScreenToWorld)
+                float px = (ndc.X + 1.0f) * 0.5f * widthPx;
+                float py = (1.0f - ndc.Y) * 0.5f * heightPx;
+
+                // Convert pixels back to DIPs for consistency with mousePosDip
+                double dipX = px / dpi.DpiScaleX;
+                double dipY = py / dpi.DpiScaleY;
+
+                return new Point(dipX, dipY);
+            }
+            catch
+            {
                 return null;
             }
         }
@@ -1114,6 +1221,11 @@ namespace UI.Controls.Viewport
             }
     
             return false;
+        }
+
+        internal void SetShiftKeyState(bool isShiftPressed)
+        {
+            _viewModel.IsShiftKeyPressed = isShiftPressed;
         }
     }
 }

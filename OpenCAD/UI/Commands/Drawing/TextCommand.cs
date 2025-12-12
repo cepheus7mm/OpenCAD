@@ -1,6 +1,5 @@
 using OpenCAD;
 using OpenCAD.Geometry;
-using OpenCAD.NonGeometric;
 using OpenCAD.TextRendering;
 using System.Threading;
 using System.Threading.Tasks;
@@ -16,7 +15,7 @@ namespace UI.Commands.Drawing
     [InputCommand("text", "Create text (prompts for base point, text height, rotation angle, and text string)", "dt")]
     public class TextCommand : CommandBase
     {
-        private OpenCADText? _previewText;
+        private SText? _previewText;
         private Point3D _basePoint;
         private double _textHeight;
         private double _rotation;
@@ -181,7 +180,7 @@ namespace UI.Commands.Drawing
             }
 
             // Create preview text object with the specified height
-            _previewText = new OpenCADText(document, text, _basePoint, _rotation);
+            _previewText = new SText(document, text, _basePoint, _rotation);
             _previewText.FontSize = _textHeight;
 
             // Add to viewport's preview objects for rendering
@@ -253,7 +252,7 @@ namespace UI.Commands.Drawing
                 document.ServiceProvider = app.Services;
             }
 
-            var text = new OpenCADText(document, textString, basePoint, rotation);
+            var text = new SText(document, textString, basePoint, rotation);
             text.FontSize = height;
 
             var undoManager = Context?.GetUndoRedoManager();

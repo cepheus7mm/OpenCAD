@@ -59,6 +59,8 @@ namespace UI.Controls.Viewport
         private Point3D? _windowSelectionCurrentPoint;
         private readonly List<OpenCADObject> _windowSelectionPreviewObjects = new();
 
+        private readonly List<GeoPoint> _geoPoints = new();
+
         #endregion
 
         #region Properties
@@ -74,35 +76,14 @@ namespace UI.Controls.Viewport
         /// Gets whether point picking mode is enabled
         /// </summary>
         public bool IsPointPickingMode => _inputMode == InputMode.PointPicking;
-        //{
-        //    get => _isPointPickingMode;
-        //    private set
-        //    {
-        //        if (_isPointPickingMode != value)
-        //        {
-        //            _isPointPickingMode = value;
-        //            OnPropertyChanged();
-        //            UpdateCursor();
-        //        }
-        //    }
-        //}
+
 
         /// <summary>
         /// Gets whether selection mode is enabled
         /// </summary>
         public bool IsSelectionMode => _inputMode == InputMode.Selection;
-        //{
-        //    get => _isSelectionMode;
-        //    private set
-        //    {
-        //        if (_isSelectionMode != value)
-        //        {
-        //            _isSelectionMode = value;
-        //            OnPropertyChanged();
-        //            UpdateCursor();
-        //        }
-        //    }
-        //}
+
+        public bool IsWindowSelectionMode => _inputMode == InputMode.WindowSelection;
 
         public InputMode CurrentInputMode
         {
@@ -187,6 +168,38 @@ namespace UI.Controls.Viewport
         /// <summary>
         /// Gets whether snapping is enabled
         /// </summary>
+        public uint ApertureSize
+        {
+            get => _viewportSettings?.ApertureSize ?? 15;
+            private set
+            {
+                if (_viewportSettings?.ApertureSize != value)
+                {
+                    _viewportSettings!.ApertureSize = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets whether snapping is enabled
+        /// </summary>
+        public GeoPointModes GeoPointModes
+        {
+            get => _viewportSettings?.GeoPointModes ?? GeoPointModes.None;
+            private set
+            {
+                if (_viewportSettings?.GeoPointModes != value)
+                {
+                    _viewportSettings!.GeoPointModes = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets whether snapping is enabled
+        /// </summary>
         public bool SnappingEnabled
         {
             get => _viewportSettings?.Snap?.SnapEnabled ?? false;
@@ -219,6 +232,8 @@ namespace UI.Controls.Viewport
         public Point3D? WindowSelectionStartPoint => _windowSelectionStartPoint;
         public Point3D? WindowSelectionCurrentPoint => _windowSelectionCurrentPoint;
         public IReadOnlyList<OpenCADObject> WindowSelectionPreviewObjects => _windowSelectionPreviewObjects.AsReadOnly();
+
+        public bool IsShiftKeyPressed { get; internal set; }
 
         #endregion
 
@@ -258,6 +273,11 @@ namespace UI.Controls.Viewport
         /// Event raised when the selection changes (object selected or deselected)
         /// </summary>
         public event EventHandler? SelectionChanged;
+
+        /// <summary>
+        /// Event raised to request a context menu at the given mouse position
+        /// </summary>
+        public event EventHandler<Point>? GeoPointModesOverrideContextMenuRequested;
 
         #endregion
 
@@ -386,6 +406,7 @@ namespace UI.Controls.Viewport
             //_previewCallback = null;
             //IsSelectionMode = _previousSelectionMode;
             CurrentInputMode = InputMode.Selection;
+            _geoPoints.Clear();
             //System.Diagnostics.Debug.WriteLine("  Point picking mode DISABLED, temp points cleared");
         }
 
@@ -395,6 +416,7 @@ namespace UI.Controls.Viewport
         public void AddTempPoint(Point3D point)
         {
             _tempPoints.Add(point);
+            _document.PreviewPoint = point;
             //System.Diagnostics.Debug.WriteLine($"Temp point added: ({point.X:F3}, {point.Y:F3}, {point.Z:F3}), total count: {_tempPoints.Count}");
             OnPropertyChanged(nameof(TempPoints));
         }
@@ -405,6 +427,7 @@ namespace UI.Controls.Viewport
         public void ClearTempPoints()
         {
             _tempPoints.Clear();
+            _document.PreviewPoint = null;
             OnPropertyChanged(nameof(TempPoints));
         }
 
@@ -448,7 +471,7 @@ namespace UI.Controls.Viewport
             // Raise the cancelled event BEFORE disabling the mode
             // This allows commands to clean up properly
             PointPickingCancelled?.Invoke(this, EventArgs.Empty);
-            
+            _geoPoints.Clear();
             // Now disable the mode
             DisablePointPickingMode();
         }
@@ -606,9 +629,19 @@ namespace UI.Controls.Viewport
                 if (worldPos.HasValue)
                 {
                     var point = new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z);
+
+                    if(_viewportSettings?.GeoPointModes != GeoPointModes.None &&
+                        _geoPoints.Any())
+                    {
+                        var geoPoint = GetClosestGeoPoint(_geoPoints, point);
+                        if(geoPoint != null)
+                        {
+                            point = geoPoint;
+                        }
+                    }
                     
                     // Apply snapping if enabled
-                    if (SnappingEnabled)
+                    else if (SnappingEnabled)
                     {
                         var snappedPoint = SnapToGrid(point);
                         //System.Diagnostics.Debug.WriteLine($"Snapping: ({point.X:F3}, {point.Y:F3}, {point.Z:F3}) -> ({snappedPoint.X:F3}, {snappedPoint.Y:F3}, {snappedPoint.Z:F3})");
@@ -623,6 +656,8 @@ namespace UI.Controls.Viewport
                     // Raise the event
                     PointPicked?.Invoke(this, new PointPickedEventArgs(point));
 
+                    _document.GetViewportSettings().GeoPointModeOverride = GeoPointModes.None;
+
                     return new MouseHandlingResult { Handled = true, NeedsRefresh = true, CaptureMouse = false };
                 }
                 else
@@ -632,7 +667,7 @@ namespace UI.Controls.Viewport
 
                 return new MouseHandlingResult { Handled = true, NeedsRefresh = false, CaptureMouse = false };
             }
-            else if (CurrentInputMode == InputMode.PointPicking && button == MouseButton.Right)
+            else if (CurrentInputMode == InputMode.PointPicking && button == MouseButton.Right && !IsShiftKeyPressed)
             {
                 //System.Diagnostics.Debug.WriteLine("Point picking cancelled by right-click");
                 // Raise a "cancelled" event
@@ -640,45 +675,53 @@ namespace UI.Controls.Viewport
                 return new MouseHandlingResult { Handled = true, NeedsRefresh = false, CaptureMouse = false };
             }
 
+            // Add this block before the final camera control handling
+            else if (CurrentInputMode == InputMode.PointPicking && button == MouseButton.Right && IsShiftKeyPressed)
+            {
+                // Raise the event to request a context menu at the mouse position
+                GeoPointModesOverrideContextMenuRequested?.Invoke(this, mousePos);
+                return new MouseHandlingResult { Handled = true, NeedsRefresh = false, CaptureMouse = false };
+            }
+
             // If in selection mode and left button clicked
             if (CurrentInputMode == InputMode.Selection && button == MouseButton.Left)
             {
                 //System.Diagnostics.Debug.WriteLine($"Selection mode click: HighlightedObject={(HighlightedObject?.GetType().Name ?? "null")}, SelectedObjectsCount={_selectedObjects.Count}");
-    if (HighlightedObject != null)
-    {
-        // Toggle selection of the highlighted object
-        if (_selectedObjects.Contains(HighlightedObject))
-        {
-            DeselectObject(HighlightedObject);
-        }
-        else
-        {
-            SelectObject(HighlightedObject);
-        }
-        return new MouseHandlingResult { Handled = true, NeedsRefresh = true, CaptureMouse = false };
-    }
-    else
-    {
-        // If no object is highlighted, switch to window selection mode
-        //System.Diagnostics.Debug.WriteLine("No highlighted object - switching to WindowSelection mode");
-        _previousSelectionMode = CurrentInputMode;
-        CurrentInputMode = InputMode.WindowSelection;
+                if (HighlightedObject != null)
+                {
+                    // Toggle selection of the highlighted object
+                    if (_selectedObjects.Contains(HighlightedObject))
+                    {
+                        DeselectObject(HighlightedObject);
+                    }
+                    else
+                    {
+                        SelectObject(HighlightedObject);
+                    }
+                    return new MouseHandlingResult { Handled = true, NeedsRefresh = true, CaptureMouse = false };
+                }
+                else
+                {
+                    // If no object is highlighted, switch to window selection mode
+                    //System.Diagnostics.Debug.WriteLine("No highlighted object - switching to WindowSelection mode");
+                    _previousSelectionMode = CurrentInputMode;
+                    CurrentInputMode = InputMode.WindowSelection;
         
-        // Store WORLD coordinates, not screen coordinates
-        if (worldPos.HasValue)
-        {
-            _windowSelectionStartPoint = new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z);
-        }
-        else
-        {
-            _windowSelectionStartPoint = null; // Fallback if no world pos available
-        }
+                    // Store WORLD coordinates, not screen coordinates
+                    if (worldPos.HasValue)
+                    {
+                                    _windowSelectionStartPoint = new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z);
+                    }
+                    else
+                    {
+                        _windowSelectionStartPoint = null; // Fallback if no world pos available
+                    }
         
-        _windowSelectionCurrentPoint = null;
-        _windowSelectionPreviewObjects.Clear();
-        return new MouseHandlingResult { Handled = true, NeedsRefresh = true, CaptureMouse = true };
-    }
-}
+                    _windowSelectionCurrentPoint = null;
+                    _windowSelectionPreviewObjects.Clear();
+                    return new MouseHandlingResult { Handled = true, NeedsRefresh = true, CaptureMouse = true };
+                }
+            }
 
             // Normal mouse handling for camera control
             _lastMousePos = mousePos;
@@ -696,7 +739,7 @@ namespace UI.Controls.Viewport
             double dy = currentPos.Y - _lastMousePos.Y;
 
             // Handle window selection mode
-            if (CurrentInputMode == InputMode.WindowSelection && worldPos is not null)
+            if (IsWindowSelectionMode && worldPos is not null)
             {
                 // Update the current point of the selection window
                 _windowSelectionCurrentPoint = new Point3D(worldPos.X, worldPos.Y, worldPos.Z);
@@ -850,21 +893,27 @@ namespace UI.Controls.Viewport
         /// </summary>
         public OpenCADObject? HitTest(Point screenPos, Func<Point, Vector3?> screenToWorld)
         {
+            return HitTest(screenPos, screenToWorld, (_viewportSettings?.Crosshair?.PickboxSize ?? 5.0)).FirstOrDefault();
+        }
+
+        /// <summary>
+        /// Perform hit testing with pickbox to find objects near the cursor
+        /// </summary>
+        public IEnumerable<OpenCADObject> HitTest(Point screenPos, Func<Point, Vector3?> screenToWorld, double boxSize)
+        {
             // Collect all drawable objects
             var drawableObjects = new List<OpenCADObject>();
             CollectDrawableObjects(ObjectToDisplay, drawableObjects);
+            List<OpenCADObject> hitObjects = new List<OpenCADObject>();
             var worldPos = screenToWorld(screenPos);
             if (worldPos is null || drawableObjects.Count < 1)
-                return null;
+                return hitObjects;
 
-            // Create pickbox boundary (5 pixels in each direction)
-            double pickboxSize = _viewportSettings?.Crosshair?.PickboxSize ?? 5.0;
-
-            var c1 = screenToWorld(new Point(screenPos.X - pickboxSize, screenPos.Y - pickboxSize));
-            var c2 = screenToWorld(new Point(screenPos.X + pickboxSize, screenPos.Y + pickboxSize));
+            var c1 = screenToWorld(new Point(screenPos.X - boxSize, screenPos.Y - boxSize));
+            var c2 = screenToWorld(new Point(screenPos.X + boxSize, screenPos.Y + boxSize));
 
             if (c1 is null || c2 is null)
-                return null;    
+                return hitObjects;
 
             // Test each object against the pickbox
             foreach (var obj in drawableObjects)
@@ -877,13 +926,13 @@ namespace UI.Controls.Viewport
                         if (pt.X >= c1.Value.X && pt.X <= c2.Value.X &&
                             pt.Y <= c1.Value.Y && pt.Y >= c2.Value.Y)
                         {
-                            return obj;
+                            hitObjects.Add(obj);
                         }
                     }
                 }
             }
 
-            return null;
+            return hitObjects;
         }
 
         /// <summary>
@@ -980,7 +1029,7 @@ namespace UI.Controls.Viewport
         internal MouseHandlingResult HandleMouseUp(MouseButton button, Point point, Vector3? vector3)
         {
             // Handle window selection completion
-            if (CurrentInputMode == InputMode.WindowSelection && button == MouseButton.Left)
+            if (IsWindowSelectionMode && button == MouseButton.Left)
             {
                 // Select all preview objects
                 foreach (var obj in _windowSelectionPreviewObjects)
@@ -1011,6 +1060,65 @@ namespace UI.Controls.Viewport
             }
             
             return new MouseHandlingResult { Handled = false, NeedsRefresh = false, CaptureMouse = false };
+        }
+
+        internal IEnumerable<GeoPoint> GetGeoPointsAtCurrentMousePosition(Point screenPos, Func<Point, Vector3?> screenToWorld)
+        {
+            _geoPoints.Clear();
+            if (screenToWorld == null)
+                return _geoPoints;
+
+            var worldPos = screenToWorld(screenPos);
+            if (!worldPos.HasValue)
+                return _geoPoints;
+
+            var aperture = _viewportSettings?.ApertureSize ?? 15.0;
+            var hitObjects = HitTest(screenPos, screenToWorld, aperture);
+
+            var point = SnapToGrid(new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z));
+
+            foreach (var hitObject in hitObjects)
+            {
+                if (hitObject is GeometryBase geometry)
+                {
+                    _geoPoints.AddRange(geometry.GetGeoPoints(point, _viewportSettings?.GeoPointModes ?? GeoPointModes.None));
+                }
+            }
+
+            return _geoPoints;
+        }
+
+        internal GeoPoint? GetClosestGeoPoint(IEnumerable<GeoPoint> geoPoints, Point3D referencePoint)
+        {
+            return geoPoints.OrderBy(x => referencePoint.DistanceTo(x)).FirstOrDefault();
+        }
+
+        internal IEnumerable<OpenCADObject> CreateGeoPointGlyphs(IEnumerable<GeoPoint> geoPoints, double scaleFactor)
+        {
+            foreach (var geoPoint in geoPoints)
+            {
+                var glyph = CreateGlyph(geoPoint, scaleFactor);
+                if (glyph != null)
+                {
+                    yield return glyph;
+                }
+            }
+        }
+
+        private OpenCADObject CreateGlyph(GeoPoint geoPoint, double scaleFactor)
+        {
+            if (geoPoint == null || !geoPoint.IsValid())
+                return null;
+    
+            try
+            {
+                return new GeoPointGlyph(geoPoint, scaleFactor, _document);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to create glyph for {geoPoint.PointType}: {ex.Message}");
+                return null;
+            }
         }
 
         #endregion

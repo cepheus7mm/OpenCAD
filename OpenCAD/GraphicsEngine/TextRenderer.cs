@@ -1,6 +1,5 @@
 ﻿using OpenCAD;
 using OpenCAD.Geometry;
-using OpenCAD.NonGeometric;
 using OpenCAD.TextRendering;
 using OpenTK.Graphics.OpenGL;
 using Poly2Tri;
@@ -39,12 +38,12 @@ namespace GraphicsEngine
             System.Diagnostics.Debug.WriteLine($"TextRenderer initialized with VAO={_vao}, VBO={_vbo}");
         }
 
-        public bool CanRender(OpenCADObject obj) => obj is OpenCADText;
+        public bool CanRender(OpenCADObject obj) => obj is SText;
 
         // ONLY ONE RENDER METHOD - takes RenderContext
         public void Render(OpenCADObject obj, RenderContext context)
         {
-            if (obj is not OpenCADText textObj) return;
+            if (obj is not SText textObj) return;
 
             try
             {
@@ -95,7 +94,7 @@ namespace GraphicsEngine
             double glyphBaseY,
             double cosRot,
             double sinRot,
-            OpenCADText textObj,
+            SText textObj,
             Matrix4x4 viewMatrix,
             Matrix4x4 projectionMatrix,
             bool isHighlighted,

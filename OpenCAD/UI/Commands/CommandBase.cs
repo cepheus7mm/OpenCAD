@@ -87,7 +87,7 @@ namespace UI.Commands
         /// <summary>
         /// Helper method to parse a point from input
         /// </summary>
-        protected Point3D? ParsePoint(string input)
+        protected OpenCAD.Geometry.Point3D? ParsePoint(string input)
         {
             string[] parts = input.Split(new[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
 
@@ -99,7 +99,7 @@ namespace UI.Commands
                 double x = double.Parse(parts[0]);
                 double y = double.Parse(parts[1]);
                 double z = double.Parse(parts[2]);
-                return new Point3D(x, y, z);
+                return new OpenCAD.Geometry.Point3D(x, y, z);
             }
             catch (FormatException)
             {
@@ -118,8 +118,8 @@ namespace UI.Commands
         /// <param name="keyWords">Optional array of keywords to recognize</param>
         /// <param name="allowLastPoint">Whether to allow using the last entered point</param>
         protected async Task<InputResult> GetPoint(
-            string prompt, 
-            Point3D? defaultValue = null, 
+            string prompt,
+            OpenCAD.Geometry.Point3D? defaultValue = null, 
             string[]? keyWords = null, 
             bool allowLastPoint = false)
         {
@@ -327,8 +327,8 @@ namespace UI.Commands
         protected List<OpenCADObject>? SelectedObjects;
 
         // Base/target points used by preview; derived classes should set BasePoint before StartPreview.
-        protected Point3D BasePoint { get; set; } = Point3D.Origin;
-        protected Point3D TargetPoint { get; set; } = Point3D.Origin;
+        protected OpenCAD.Geometry.Point3D BasePoint { get; set; } = OpenCAD.Geometry.Point3D.Origin;
+        protected OpenCAD.Geometry.Point3D TargetPoint { get; set; } = OpenCAD.Geometry.Point3D.Origin;
 
         // Preview fields
         private readonly List<OpenCADObject> _previewObjects = new();

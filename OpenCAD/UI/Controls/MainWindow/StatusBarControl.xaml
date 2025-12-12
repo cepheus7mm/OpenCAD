@@ -65,8 +65,17 @@
                           ToolTip="Toggle snap to grid (ON/OFF)"
                           Click="SnapToggleButton_Click"/>
         </StatusBarItem>
-        
-        <StatusBarItem HorizontalAlignment="Right">
+
+		<!-- GeoSnap toggle button -->
+		<StatusBarItem>
+			<ToggleButton x:Name="geoSnapToggleButton"
+                          Style="{StaticResource StatusBarToggleButtonStyle}"
+                          Content="GEOSNAP"
+                          ToolTip="Toggle snap to grid (ON/OFF)"
+                          Click="GeoSnapToggleButton_Click"/>
+		</StatusBarItem>
+
+		<StatusBarItem HorizontalAlignment="Right">
      <TextBlock x:Name="positionTextBlock" Text="Line 1, Col 1" />
         </StatusBarItem>
     </StatusBar>

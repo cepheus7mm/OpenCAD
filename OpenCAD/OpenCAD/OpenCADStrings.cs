@@ -45,6 +45,10 @@
 
         public const string LinetypeScale = "Linetype Scale";
 
+        public const string ApertureSize = "Aperture Size";
+
+        public const string GeoPointModes = "GeoPoint Modes";
+
         /// <summary>
         /// Property name for grid color properties
         /// </summary>

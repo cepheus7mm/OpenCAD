@@ -36,14 +36,14 @@ namespace UI.Commands.Drawing
 
         private ArcInputStep _step;
         private ArcInputMode _arcInputMode = ArcInputMode.SCE;
-        private Point3D _center = Point3D.NotAPoint;
-        private Point3D _start = Point3D.NotAPoint;
-        private Point3D _end = Point3D.NotAPoint;
+        private OpenCAD.Geometry.Point3D _center = OpenCAD.Geometry.Point3D.NotAPoint;
+        private OpenCAD.Geometry.Point3D _start = OpenCAD.Geometry.Point3D.NotAPoint;
+        private OpenCAD.Geometry.Point3D _end = OpenCAD.Geometry.Point3D.NotAPoint;
 
         // preview arc instance (removed/added during preview)
         private Arc? _previewArc;
         private PropertyChangedEventHandler? _arcPreviewHandler;
-        private Point3D _second;
+        private OpenCAD.Geometry.Point3D _second;
 
         public override bool IsMultiStep => true;
 
@@ -144,7 +144,7 @@ namespace UI.Commands.Drawing
             }
 
             // determine end point of last drawable
-            Point3D lastEnd;
+            OpenCAD.Geometry.Point3D lastEnd;
             if (lastDrawable is Line lastLine)
                 lastEnd = lastLine.EndPoint;
             else if (lastDrawable is Arc lastArc)
@@ -168,7 +168,7 @@ namespace UI.Commands.Drawing
             return true;
         }
 
-        private async Task<Point3D> GetSecondInput()
+        private async Task<OpenCAD.Geometry.Point3D> GetSecondInput()
         {
             // Determine next step based on input mode
             _step = _arcInputMode switch
@@ -184,7 +184,7 @@ namespace UI.Commands.Drawing
             return await GetArcPoint();
         }
 
-        private void SetArcPoint(Point3D result)
+        private void SetArcPoint(OpenCAD.Geometry.Point3D result)
         {
             BasePoint = result;
 
@@ -199,7 +199,7 @@ namespace UI.Commands.Drawing
             };
         }
 
-        private async Task<Point3D> GetInitialInput()
+        private async Task<OpenCAD.Geometry.Point3D> GetInitialInput()
         {
             BasePoint = null;
             var step = _step switch
@@ -243,7 +243,7 @@ namespace UI.Commands.Drawing
                 return await GetArcPoint();
             }
 
-            else if (result.Point is Point3D point)
+            else if (result.Point is OpenCAD.Geometry.Point3D point)
                 return point;
 
             return null;
@@ -283,7 +283,7 @@ namespace UI.Commands.Drawing
             }
         }
 
-        private async Task<Point3D?> GetLastInput()
+        private async Task<OpenCAD.Geometry.Point3D?> GetLastInput()
         {
             // Determine next step based on input mode
             _step = _arcInputMode switch
@@ -332,7 +332,7 @@ namespace UI.Commands.Drawing
                         // Two possible preview computations:
                         // - non-PT3: center & start already known -> radius from start, angles from center
                         // - PT3: start, second are known and previewPoint is the end -> compute circle through three points
-                        Point3D previewCenter = default;
+                        OpenCAD.Geometry.Point3D previewCenter = default;
                         double radius = 0.0;
                         double startAngle = 0.0;
                         double endAngle = 0.0;
@@ -436,7 +436,7 @@ namespace UI.Commands.Drawing
                 double radiusVal = CalculateDistance(_center, _start);
                 double x = _center.X + radiusVal * Math.Cos(angle);
                 double y = _center.Y + radiusVal * Math.Sin(angle);
-                var endPoint = new Point3D(x, y, _center.Z);
+                var endPoint = new OpenCAD.Geometry.Point3D(x, y, _center.Z);
 
                 return endPoint;
             }
@@ -481,7 +481,7 @@ namespace UI.Commands.Drawing
             }
         }
 
-        private Point3D GetCenterFromStartEndRadius(double radius)
+        private OpenCAD.Geometry.Point3D GetCenterFromStartEndRadius(double radius)
         {
             // chord vector from start to end
             var chord = _end - _start; // Vector3D
@@ -501,14 +501,14 @@ namespace UI.Commands.Drawing
             {
                 Context?.OutputMessage(OpenCADStrings.InvalidPointInput);
                 // return midpoint as a safe fallback
-                return new Point3D(
+                return new OpenCAD.Geometry.Point3D(
                     (_start.X + _end.X) * 0.5,
                     (_start.Y + _end.Y) * 0.5,
                     (_start.Z + _end.Z) * 0.5);
             }
 
             // midpoint of the chord
-            var midpoint = new Point3D(
+            var midpoint = new OpenCAD.Geometry.Point3D(
                 (_start.X + _end.X) * 0.5,
                 (_start.Y + _end.Y) * 0.5,
                 (_start.Z + _end.Z) * 0.5);
@@ -534,9 +534,9 @@ namespace UI.Commands.Drawing
         /// Try to compute circle center and radius passing through three non-colinear points (XY plane).
         /// Returns false if points are colinear or computation unstable.
         /// </summary>
-        private bool TryGetCircleThroughThreePoints(Point3D p1, Point3D p2, Point3D p3, out Point3D center, out double radius)
+        private bool TryGetCircleThroughThreePoints(OpenCAD.Geometry.Point3D p1, OpenCAD.Geometry.Point3D p2, OpenCAD.Geometry.Point3D p3, out OpenCAD.Geometry.Point3D center, out double radius)
         {
-            center = Point3D.Origin;
+            center = OpenCAD.Geometry.Point3D.Origin;
             radius = double.NaN;
 
             double x1 = p1.X, y1 = p1.Y;
@@ -558,7 +558,7 @@ namespace UI.Commands.Drawing
             double cx = (d * e - b * f) / det;
             double cy = (-c * e + a * f) / det;
 
-            center = new Point3D(cx, cy, (p1.Z + p2.Z + p3.Z) / 3.0);
+            center = new OpenCAD.Geometry.Point3D(cx, cy, (p1.Z + p2.Z + p3.Z) / 3.0);
             radius = Math.Sqrt((cx - x1) * (cx - x1) + (cy - y1) * (cy - y1));
             if (double.IsNaN(radius) || double.IsInfinity(radius) || radius < 1e-12)
                 return false;
@@ -594,7 +594,7 @@ namespace UI.Commands.Drawing
             return test >= start || test <= end;
         }
 
-        private async Task<Point3D?> GetArcPoint(Point3D? basePoint = null)
+        private async Task<OpenCAD.Geometry.Point3D?> GetArcPoint(OpenCAD.Geometry.Point3D? basePoint = null)
         {
             var step = _step switch
             {
@@ -611,7 +611,7 @@ namespace UI.Commands.Drawing
             }
             var prompt = string.Format(OpenCADStrings.ArcPointPrompt, step);
             var result = await GetPoint(prompt);
-            if (result != null && result.Point is Point3D point)
+            if (result != null && result.Point is OpenCAD.Geometry.Point3D point)
                 return point;
 
             return null;
@@ -631,7 +631,7 @@ namespace UI.Commands.Drawing
         /// <summary>
         /// Calculate the distance between two points (used for radius)
         /// </summary>
-        private double CalculateDistance(Point3D center, Point3D point)
+        private double CalculateDistance(OpenCAD.Geometry.Point3D center, OpenCAD.Geometry.Point3D point)
         {
             double dx = point.X - center.X;
             double dy = point.Y - center.Y;
@@ -641,7 +641,7 @@ namespace UI.Commands.Drawing
         /// <summary>
         /// Calculate the angle from center to point (in radians, counter-clockwise from positive X-axis)
         /// </summary>
-        private double CalculateAngle(Point3D center, Point3D point)
+        private double CalculateAngle(OpenCAD.Geometry.Point3D center, OpenCAD.Geometry.Point3D point)
         {
             double dx = point.X - center.X;
             double dy = point.Y - center.Y;

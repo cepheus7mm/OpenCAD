@@ -1,4 +1,5 @@
 using OpenCAD;
+using OpenCAD.Geometry.Helpers;
 using System.Text.Json.Serialization;
 using System.Xml.Serialization;
 
@@ -18,6 +19,8 @@ namespace OpenCAD.Settings
         public ViewportSettings(OpenCADDocument document)
         {
             LinetypeScale = 1.0;
+            ApertureSize = 15;
+            GeoPointModes = GeoPointModes.Vertex | GeoPointModes.Middle | GeoPointModes.Center | GeoPointModes.Anchor;
 
             // Create and add the crosshair settings group
             var crosshairSettings = new CrosshairSettings(document);
@@ -38,7 +41,7 @@ namespace OpenCAD.Settings
         }
 
         /// <summary>
-        /// Gets or sets whether the grid is visible.
+        /// Gets or sets the scale.
         /// Default: true
         /// </summary>
         [JsonIgnore, XmlIgnore]
@@ -53,6 +56,59 @@ namespace OpenCAD.Settings
                     OnPropertyChanged();
                 }
             }
+        }
+
+        /// <summary>
+        /// Gets or sets the size of the geo point aperture.
+        /// Default: true
+        /// </summary>
+        [JsonIgnore, XmlIgnore]
+        public uint ApertureSize
+        {
+            get => GetPropertyValue<uint>(PropertyType.UInt, nameof(ApertureSize));
+            set
+            {
+                if (value > 0)
+                {
+                    SetPropertyValue(PropertyType.UInt, nameof(ApertureSize), OpenCADStrings.ApertureSize, value);
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets or sets the geo point mode.
+        /// Default: true
+        /// </summary>
+        [JsonIgnore, XmlIgnore]
+        public GeoPointModes GeoPointModes
+        {
+            get
+            {
+                if (GeoPointModeOverride != GeoPointModes.None)
+                {
+                    return GeoPointModeOverride;
+                }
+
+                return GetPropertyValue<GeoPointModes>(PropertyType.UInt, nameof(GeoPointModes));
+            }
+            set
+            {
+                if (value > 0)
+                {
+                    SetPropertyValue(PropertyType.UInt, nameof(GeoPointModes), OpenCADStrings.ApertureSize, value);
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        [JsonIgnore, XmlIgnore]
+        public GeoPointModes GeoPointModeOverride { get; set; } = GeoPointModes.None;
+
+        [JsonIgnore, XmlIgnore]
+        public bool GeoPointsEnabled
+        {
+            get => GetPropertyValue<GeoPointModes>(PropertyType.UInt, nameof(GeoPointModes)) != GeoPointModes.None;
         }
 
         /// <summary>

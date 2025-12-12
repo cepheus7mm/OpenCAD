@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using OpenCAD.Geometry.Helpers;
 using OpenCAD.Settings;
 
 namespace UI.Controls.MainWindow
@@ -139,6 +140,33 @@ namespace UI.Controls.MainWindow
                 
                 // Raise the event to trigger viewport refresh
                 ViewportSettingsChanged?.Invoke(this, EventArgs.Empty);
+            }
+        }
+        private void GeoSnapToggleButton_Click(object sender, RoutedEventArgs e)
+        {
+            // Show the GeoPointModesDialog
+            var initialSelection = _viewportSettings?.GeoPointModes ?? 0;
+            var dialog = new GeoPointModesDialog(initialSelection);
+            dialog.Owner = Window.GetWindow(this);
+
+            if (dialog.ShowDialog() == true)
+            {
+                // Apply selected modes to SnapSettings (assuming SnapSettings.EnabledModes exists)
+                if (_viewportSettings?.Snap != null)
+                {
+                    GeoPointModes geoPointModes = 0;
+                    foreach (var mode in dialog.SelectedModes)
+                    {
+                        geoPointModes |= mode;
+                    }
+                    _viewportSettings.GeoPointModes = geoPointModes;
+                    UpdateStatus("GeoPoint modes updated");
+                    ViewportSettingsChanged?.Invoke(this, EventArgs.Empty);
+                }
+            }
+            else
+            {
+                UpdateStatus("GeoPoint modes unchanged");
             }
         }
     }

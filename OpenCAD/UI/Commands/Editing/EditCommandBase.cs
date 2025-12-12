@@ -178,7 +178,7 @@ namespace UI.Commands.Editing
                 BasePoint = null;
                 var result = await GetPoint(BasePointPrompt, null);
 
-                if (result != null && result.Point is Point3D basePoint)
+                if (result != null && result.Point is OpenCAD.Geometry.Point3D basePoint)
                 {
                     BasePoint = basePoint;
                 }
@@ -197,7 +197,7 @@ namespace UI.Commands.Editing
                     {
                         // Prompt for target point using shared GetPoint on CommandBase
                         result = await GetPoint(TargetPointPrompt);
-                        if (result != null && result.Point is Point3D targetPoint)
+                        if (result != null && result.Point is OpenCAD.Geometry.Point3D targetPoint)
                         {
                             TargetPoint = targetPoint;
                         }

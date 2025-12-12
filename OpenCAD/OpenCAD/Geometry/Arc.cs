@@ -1,4 +1,5 @@
-﻿using OpenCAD.Geometry.Helpers;
+﻿using OpenCAD.Geometry.Calculator;
+using OpenCAD.Geometry.Helpers;
 using OpenCAD.Interfaces;
 using System.Text.Json.Serialization;
 using System.Xml.Serialization;
@@ -290,6 +291,66 @@ namespace OpenCAD.Geometry
             _normal = transformedNormal.Length > double.Epsilon ? transformedNormal.Normalized : transformedNormal;
 
             return true;
+        }
+
+        public override IEnumerable<GeoPoint> GetGeoPoints(Point3D referencePoint, GeoPointModes geoPointType)
+        {
+            var candidates = new List<GeoPoint>();
+            if (geoPointType.HasFlag(GeoPointModes.Vertex))
+            {
+                candidates.Add(new GeoPoint(StartPoint, GeoPointModes.Vertex) { RelatedGeometryId = ID });
+                candidates.Add(new GeoPoint(EndPoint, GeoPointModes.Vertex) { RelatedGeometryId = ID });
+            }
+            if (geoPointType.HasFlag(GeoPointModes.Middle))
+            {
+                candidates.Add(GeometricCalculator.MidPoint(this));
+            }
+            if (geoPointType.HasFlag(GeoPointModes.Center))
+            {
+                candidates.Add(new GeoPoint(Center, GeoPointModes.Center) { RelatedGeometryId = ID });
+            }
+            if (geoPointType.HasFlag(GeoPointModes.NearestPoint))
+            {
+                var geoPoint = new GeoPoint(GetClosestPointTo(referencePoint, false), GeoPointModes.NearestPoint);
+                geoPoint.RelatedGeometryId = ID;
+                candidates.Add(geoPoint);
+            }
+            if (geoPointType.HasFlag(GeoPointModes.Quadrant))
+            {
+                // Quadrant points at 0°, 90°, 180°, 270°
+                double[] quadrantAngles = { 0, Math.PI / 2, Math.PI, 3 * Math.PI / 2 };
+                foreach (var angle in quadrantAngles)
+                {
+                    if (IsAngleInArc(angle))
+                    {
+                        var qPoint = new Point3D(
+                            Center.X + Radius * Math.Cos(angle),
+                            Center.Y + Radius * Math.Sin(angle),
+                            Center.Z
+                        );
+                        var geoPoint = new GeoPoint(qPoint, GeoPointModes.Quadrant);
+                        geoPoint.RelatedGeometryId = ID;
+                        candidates.Add(geoPoint);
+                    }
+                }
+            }
+            if (geoPointType.HasFlag(GeoPointModes.Perpendicular) && _document.PreviewPoint is not null)
+            {
+                candidates.Add(GeometricCalculator.Perpendicular(_document.PreviewPoint, this));
+            }
+
+            if (geoPointType.HasFlag(GeoPointModes.Tangent))
+            {
+                var closest = GetClosestPointTo(referencePoint, false);
+                var dir = (closest - Center).Normalized;
+                var tangentDir = new Vector3D(-dir.Y, dir.X, dir.Z); // 90 degree rotation in XY plane
+                var tangentPoint = closest + tangentDir; // A point along the tangent line
+                var geoPoint = new GeoPoint(tangentPoint, GeoPointModes.Tangent);
+                geoPoint.RelatedGeometryId = ID;
+                candidates.Add(geoPoint);
+            }
+
+            return candidates;
         }
     }
 }

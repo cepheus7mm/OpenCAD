@@ -1,5 +1,4 @@
-﻿using OpenCAD.Geometry;
-using OpenCAD.Geometry.Helpers;
+﻿using OpenCAD.Geometry.Helpers;
 using OpenCAD.Interfaces;
 using OpenCAD.TextRendering;
 using System;
@@ -9,9 +8,9 @@ using System.Linq;
 using System.Text.Json.Serialization;
 using System.Xml.Serialization;
 
-namespace OpenCAD.NonGeometric
+namespace OpenCAD.Geometry
 {
-    public class OpenCADText : GeometryBase
+    public class SText : GeometryBase
     {
         // Thread-safe cache access
         private readonly object _cacheLock = new object();
@@ -25,11 +24,11 @@ namespace OpenCAD.NonGeometric
         /// <summary>
         /// Parameterless constructor required for deserialization.
         /// </summary>
-        public OpenCADText() : base()
+        public SText() : base()
         {
         }
 
-        public OpenCADText(OpenCADDocument doc, string text, Point3D basePoint, double rotation) : base(doc)
+        public SText(OpenCADDocument doc, string text, Point3D basePoint, double rotation) : base(doc)
         {
             Text = text;
             BasePoint = basePoint;
@@ -444,10 +443,10 @@ namespace OpenCAD.NonGeometric
         /// <summary>
         /// Creates a deep clone of this text object with a new ID.
         /// </summary>
-        public new OpenCADText Clone(OpenCADDocument? document = null)
+        public new SText Clone(OpenCADDocument? document = null)
         {
             // Use base Clone to handle properties and children
-            var clone = (OpenCADText)base.Clone(document);
+            var clone = (SText)base.Clone(document);
 
             // Reset the cache fields - the clone will recompute bounds as needed
             clone._cachedBounds = null;
@@ -458,6 +457,25 @@ namespace OpenCAD.NonGeometric
             clone._cachedIsItalic = false;
 
             return clone;
+        }
+
+        public override IEnumerable<GeoPoint> GetGeoPoints(Point3D referencePoint, GeoPointModes geoPointType)
+        {
+            var candidates = new List<GeoPoint>();
+            if (geoPointType.HasFlag(GeoPointModes.Anchor))
+            {
+                var geoPoint = new GeoPoint(BasePoint, GeoPointModes.Anchor);
+                geoPoint.RelatedGeometryId = this.ID;
+                candidates.Add(geoPoint);
+            }
+            if (geoPointType.HasFlag(GeoPointModes.NearestPoint))
+            {
+                var geoPoint = new GeoPoint(GetClosestPointTo(referencePoint), GeoPointModes.NearestPoint);
+                geoPoint.RelatedGeometryId = this.ID;
+                candidates.Add(geoPoint);
+            }
+
+            return candidates;
         }
     }
 }

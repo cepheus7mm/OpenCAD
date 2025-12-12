@@ -537,6 +537,9 @@ namespace OpenCAD
             set => _serviceProvider = value;
         }
 
+        [JsonIgnore, XmlIgnore]
+        public Point3D? PreviewPoint { get; set; }
+
         /// <summary>
         /// Thread-safe service resolution.
         /// </summary>

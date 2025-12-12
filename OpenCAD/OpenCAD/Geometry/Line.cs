@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Text.Json.Serialization;
 using System.Xml.Serialization;
 using System.Numerics;
+using OpenCAD.Geometry.Calculator;
 using OpenCAD.Geometry.Helpers;
 
 namespace OpenCAD.Geometry
@@ -121,6 +122,31 @@ namespace OpenCAD.Geometry
             return true;
         }
 
-        #endregion  
+        public override IEnumerable<GeoPoint> GetGeoPoints(Point3D referencePoint, GeoPointModes geoPointType)
+        {
+            var candidates = new List<GeoPoint> ();
+            if (geoPointType.HasFlag(GeoPointModes.Vertex))
+            {
+                candidates.Add(new GeoPoint(StartPoint, GeoPointModes.Vertex) { RelatedGeometryId = ID});
+                candidates.Add(new GeoPoint(EndPoint, GeoPointModes.Vertex) { RelatedGeometryId = ID });
+            }
+            if (geoPointType.HasFlag(GeoPointModes.Middle))
+            {
+                candidates.Add(GeometricCalculator.MidPoint(this));
+            }
+            if (geoPointType.HasFlag(GeoPointModes.Perpendicular) && _document.PreviewPoint is not null)
+            {
+                candidates.Add(GeometricCalculator.Perpendicular(_document.PreviewPoint, this));
+            }
+            if (geoPointType.HasFlag(GeoPointModes.NearestPoint))
+            {
+                var geoPoint = new GeoPoint(GetClosestPointTo(referencePoint), GeoPointModes.NearestPoint);
+                candidates.Add(geoPoint);
+            }
+
+            return candidates;
+        }
+
+        #endregion
     }
 }
