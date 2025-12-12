@@ -1,5 +1,6 @@
 using OpenCAD;
 using OpenCAD.Geometry;
+using OpenCAD.Geometry.Calculator;
 using OpenCAD.Geometry.Helpers;
 using System;
 using System.ComponentModel;
@@ -103,7 +104,7 @@ namespace UI.Commands.Drawing
                 // If PT3, compute center from three points now so CreateArc has a valid center
                 if (_arcInputMode == ArcInputMode.PT3)
                 {
-                    if (!TryGetCircleThroughThreePoints(_start, _second, _end, out var c, out var r))
+                    if (!GeometricCalculator.TryGetCircleThroughThreePoints(_start, _second, _end, out var c, out var r))
                     {
                         Context?.OutputMessage(OpenCADStrings.InvalidPointInput);
                         Cancel();
@@ -341,7 +342,7 @@ namespace UI.Commands.Drawing
                         if (_arcInputMode == ArcInputMode.PT3)
                         {
                             // compute circle from three points: _start, _second, previewPoint
-                            if (TryGetCircleThroughThreePoints(_start, _second, previewPoint, out var c, out var r))
+                            if (GeometricCalculator.TryGetCircleThroughThreePoints(_start, _second, previewPoint, out var c, out var r))
                             {
                                 previewCenter = c;
                                 radius = r;
@@ -528,42 +529,6 @@ namespace UI.Commands.Drawing
 
             // Keep Z consistent with midpoint (offset.Z is zero since perp.Z == 0)
             return midpoint + offset;
-        }
-
-        /// <summary>
-        /// Try to compute circle center and radius passing through three non-colinear points (XY plane).
-        /// Returns false if points are colinear or computation unstable.
-        /// </summary>
-        private bool TryGetCircleThroughThreePoints(OpenCAD.Geometry.Point3D p1, OpenCAD.Geometry.Point3D p2, OpenCAD.Geometry.Point3D p3, out OpenCAD.Geometry.Point3D center, out double radius)
-        {
-            center = OpenCAD.Geometry.Point3D.Origin;
-            radius = double.NaN;
-
-            double x1 = p1.X, y1 = p1.Y;
-            double x2 = p2.X, y2 = p2.Y;
-            double x3 = p3.X, y3 = p3.Y;
-
-            double a = x1 - x2;
-            double b = y1 - y2;
-            double c = x1 - x3;
-            double d = y1 - y3;
-
-            double e = ((x1 * x1 - x2 * x2) + (y1 * y1 - y2 * y2)) / 2.0;
-            double f = ((x1 * x1 - x3 * x3) + (y1 * y1 - y3 * y3)) / 2.0;
-
-            double det = a * d - b * c;
-            if (Math.Abs(det) < 1e-12)
-                return false; // colinear or nearly so
-
-            double cx = (d * e - b * f) / det;
-            double cy = (-c * e + a * f) / det;
-
-            center = new OpenCAD.Geometry.Point3D(cx, cy, (p1.Z + p2.Z + p3.Z) / 3.0);
-            radius = Math.Sqrt((cx - x1) * (cx - x1) + (cy - y1) * (cy - y1));
-            if (double.IsNaN(radius) || double.IsInfinity(radius) || radius < 1e-12)
-                return false;
-
-            return true;
         }
 
         /// <summary>

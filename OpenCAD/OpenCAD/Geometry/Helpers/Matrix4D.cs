@@ -134,6 +134,17 @@ namespace OpenCAD.Geometry.Helpers
         }
 
         /// <summary>
+        /// Transforms a scalar value (e.g., radius) by the uniform scale of this matrix.
+        /// If the matrix is not uniformly scaled, the X scale is used.
+        /// </summary>
+        public double Transform(double value)
+        {
+            // Compute the scale as the length of the first column (ignoring translation)
+            double scale = Math.Sqrt(M11 * M11 + M21 * M21 + M31 * M31);
+            return value * scale;
+        }
+
+        /// <summary>
         /// Transform a vector (treated as w=0) by this matrix.
         /// Translation component is ignored.
         /// </summary>

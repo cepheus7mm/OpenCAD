@@ -184,7 +184,7 @@ namespace OpenCAD.Geometry.Helpers
         private void BuildCircle(Color color)
         {
             // Create a full circle arc (0 to 2π)
-            var arc = new Arc(GeoPoint, _halfSize, 0, 1.9999 * Math.PI, Document);
+            var arc = new Circle(GeoPoint, _halfSize, Document);
             arc.Color = color;
             arc.LineWeight = LineWeight.LineWeight015;
             Add(arc);
@@ -301,14 +301,14 @@ namespace OpenCAD.Geometry.Helpers
             var center = GeoPoint;
             
             // Small circle
-            var arc = new Arc(center, radius, 0, 2 * Math.PI, Document);
+            var arc = new Circle(center, radius, Document);
             arc.Color = color;
             arc.LineWeight = LineWeight.LineWeight015;
             Add(arc);
             
             // Tangent line
             var lineStart = new Point3D(center.X + radius, center.Y, 0);
-            var lineEnd = new Point3D(center.X + Size / 2.0, center.Y, 0);
+            var lineEnd = new Point3D(center.X + radius, center.Y + Size, 0);
             AddLine(lineStart, lineEnd, color);
         }
         
@@ -319,7 +319,7 @@ namespace OpenCAD.Geometry.Helpers
         {
             double radius = Size * 0.25;
             
-            var arc = new Arc(GeoPoint, radius, 0, 2 * Math.PI, Document);
+            var arc = new Circle(GeoPoint, radius, Document);
             arc.Color = color;
             arc.LineWeight = LineWeight.LineWeight015;
             Add(arc);

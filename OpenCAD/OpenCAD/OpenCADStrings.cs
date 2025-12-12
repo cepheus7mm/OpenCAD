@@ -243,6 +243,11 @@
         public const string Radius = "Radius";
 
         /// <summary>
+        /// Property name for diameter
+        /// </summary>
+        public const string Diameter = "Diameter";
+
+        /// <summary>
         /// Property name for second point
         /// </summary>
         public const string SecondPoint = "Second Point";
@@ -725,6 +730,22 @@
 
         #endregion
 
+        #region Circle Command Messages
+
+        public const string CircleCommandInitialized = "CircleCommand initialized";
+
+        public const string CirclePointPrompt = "Specify {0} point of circle";
+
+        public const string CircleDistancePrompt = "Specify {0} of circle or pick a point";
+
+        public const string CircleEndAnglePrompt = "Specify end angle or pick a point:";
+
+        public const string CircleCreated = "Circle created with center ({0:F3}, {1:F3}, {2:F3}), radius {3:F3}, from angle {4:F3} to {5:F3}";
+
+        public const string UndoCreateCircle = "Create Circle with center ({0:F3}, {1:F3}, {2:F3}), radius {3:F3}, from angle {4:F3} to {5:F3}";
+
+        #endregion
+
         #region Text Command Messages
 
         /// <summary>
@@ -823,6 +844,11 @@
         /// String prompt for first point input
         /// </summary>
         public const string FirstPointPrompt = "Specify first point:";
+
+        /// <summary>
+        /// String prompt for first point input
+        /// </summary>
+        public const string FirstPoint = "first point";
 
         /// <summary>
         /// String prompt for second point input

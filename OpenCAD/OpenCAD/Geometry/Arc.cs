@@ -296,6 +296,11 @@ namespace OpenCAD.Geometry
         public override IEnumerable<GeoPoint> GetGeoPoints(Point3D referencePoint, GeoPointModes geoPointType)
         {
             var candidates = new List<GeoPoint>();
+            if (IsPreviewGeometry)
+            {
+                 // Preview geometries do not provide geo points
+                return candidates;
+            }
             if (geoPointType.HasFlag(GeoPointModes.Vertex))
             {
                 candidates.Add(new GeoPoint(StartPoint, GeoPointModes.Vertex) { RelatedGeometryId = ID });
@@ -339,13 +344,9 @@ namespace OpenCAD.Geometry
                 candidates.Add(GeometricCalculator.Perpendicular(_document.PreviewPoint, this));
             }
 
-            if (geoPointType.HasFlag(GeoPointModes.Tangent))
+            if (geoPointType.HasFlag(GeoPointModes.Tangent) && _document.PreviewPoint is not null)
             {
-                var closest = GetClosestPointTo(referencePoint, false);
-                var dir = (closest - Center).Normalized;
-                var tangentDir = new Vector3D(-dir.Y, dir.X, dir.Z); // 90 degree rotation in XY plane
-                var tangentPoint = closest + tangentDir; // A point along the tangent line
-                var geoPoint = new GeoPoint(tangentPoint, GeoPointModes.Tangent);
+                var geoPoint = GeometricCalculator.GetClosestTangent(Center, Radius, _document.PreviewPoint, referencePoint);
                 geoPoint.RelatedGeometryId = ID;
                 candidates.Add(geoPoint);
             }

@@ -59,7 +59,7 @@ namespace GraphicsEngine
 
         public bool CanRender(OpenCADObject obj)
         {
-            return obj is Arc;
+            return obj is Arc || obj is Circle;
         }
 
         public void Render(OpenCADObject obj, Matrix4x4 viewMatrix, Matrix4x4 projectionMatrix)
@@ -76,67 +76,76 @@ namespace GraphicsEngine
 
         public void Render(OpenCADObject obj, RenderContext context)
         {
-            if (obj is not Arc arc) return;
+            Arc arc;
+            if (obj is not Arc && obj is not Circle) return;
+            if (obj is Circle circle)
+            {
+                arc = new Arc(circle.Center, circle.Radius, 0.0, 2.0 * Math.PI - (1e-12), circle.Document);
+            }
+            else
+            {
+                arc = (Arc)obj;
+            }
 
             try
-            {
-                // Validate arc parameters
-                if (arc.Center == null || !IsValidPoint(arc.Center))
                 {
-                    Debug.WriteLine("[AR] Skipping arc with invalid center point");
-                    return;
-                }
+                    // Validate arc parameters
+                    if (arc.Center == null || !IsValidPoint(arc.Center))
+                    {
+                        Debug.WriteLine("[AR] Skipping arc with invalid center point");
+                        return;
+                    }
 
-                if (arc.Radius <= 0 || double.IsNaN(arc.Radius) || double.IsInfinity(arc.Radius))
+                    if (arc.Radius <= 0 || double.IsNaN(arc.Radius) || double.IsInfinity(arc.Radius))
+                    {
+                        Debug.WriteLine("[AR] Skipping arc with invalid radius");
+                        return;
+                    }
+
+                    // Get effective properties
+                    var effectiveColor = arc.Color;
+                    var effectiveLineWeight = arc.LineWeight;
+                    var effectiveLineType = arc.LineType;
+
+                    Vector4 color = new Vector4(
+                        effectiveColor.R / 255.0f,
+                        effectiveColor.G / 255.0f,
+                        effectiveColor.B / 255.0f,
+                        effectiveColor.A / 255.0f
+                    );
+
+                    float lineWidth = effectiveLineWeight.ToOpenGLWidth();
+                    int lineTypePattern = GetLineTypePattern(effectiveLineType);
+
+                    // Override for selected objects
+                    if (context.IsSelected)
+                    {
+                        lineTypePattern = 8; // Fine dashed pattern
+                        lineWidth = Math.Max(lineWidth, 2.0f);
+                    }
+
+                    bool useThinLineRendering = lineWidth <= THIN_LINE_THRESHOLD;
+
+                    // Orthographic detection
+                    bool isOrtho = MathF.Abs(context.ProjectionMatrix.M34) < 1e-6f &&
+                                  MathF.Abs(context.ProjectionMatrix.M44 - 1f) < 1e-6f;
+
+                    float glowRadius = context.IsHighlighted ? 5.0f : 0.0f;
+
+                    if (isOrtho)
+                    {
+                        RenderOrthographic(arc, context.ProjectionMatrix, color, lineWidth, lineTypePattern, useThinLineRendering, glowRadius);
+                    }
+                    else
+                    {
+                        RenderPerspective(arc, context.ViewMatrix, context.ProjectionMatrix, color, lineWidth, lineTypePattern, useThinLineRendering, glowRadius);
+                    }
+                }
+                catch (Exception ex)
                 {
-                    Debug.WriteLine("[AR] Skipping arc with invalid radius");
-                    return;
+                    Debug.WriteLine($"[AR] Exception rendering arc: {ex.Message}");
+                    Debug.WriteLine($"[AR] Stack trace: {ex.StackTrace}");
                 }
-
-                // Get effective properties
-                var effectiveColor = arc.Color;
-                var effectiveLineWeight = arc.LineWeight;
-                var effectiveLineType = arc.LineType;
-
-                Vector4 color = new Vector4(
-                    effectiveColor.R / 255.0f,
-                    effectiveColor.G / 255.0f,
-                    effectiveColor.B / 255.0f,
-                    effectiveColor.A / 255.0f
-                );
-
-                float lineWidth = effectiveLineWeight.ToOpenGLWidth();
-                int lineTypePattern = GetLineTypePattern(effectiveLineType);
-
-                // Override for selected objects
-                if (context.IsSelected)
-                {
-                    lineTypePattern = 8; // Fine dashed pattern
-                    lineWidth = Math.Max(lineWidth, 2.0f);
-                }
-
-                bool useThinLineRendering = lineWidth <= THIN_LINE_THRESHOLD;
-
-                // Orthographic detection
-                bool isOrtho = MathF.Abs(context.ProjectionMatrix.M34) < 1e-6f &&
-                              MathF.Abs(context.ProjectionMatrix.M44 - 1f) < 1e-6f;
-
-                float glowRadius = context.IsHighlighted ? 5.0f : 0.0f;
-
-                if (isOrtho)
-                {
-                    RenderOrthographic(arc, context.ProjectionMatrix, color, lineWidth, lineTypePattern, useThinLineRendering, glowRadius);
-                }
-                else
-                {
-                    RenderPerspective(arc, context.ViewMatrix, context.ProjectionMatrix, color, lineWidth, lineTypePattern, useThinLineRendering, glowRadius);
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[AR] Exception rendering arc: {ex.Message}");
-                Debug.WriteLine($"[AR] Stack trace: {ex.StackTrace}");
-            }
         }
 
         private bool IsValidPoint(Point3D point)

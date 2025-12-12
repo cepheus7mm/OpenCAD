@@ -125,6 +125,11 @@ namespace OpenCAD.Geometry
         public override IEnumerable<GeoPoint> GetGeoPoints(Point3D referencePoint, GeoPointModes geoPointType)
         {
             var candidates = new List<GeoPoint> ();
+            if (IsPreviewGeometry)
+            {
+                // Preview geometries do not provide geo points
+                return candidates;
+            }
             if (geoPointType.HasFlag(GeoPointModes.Vertex))
             {
                 candidates.Add(new GeoPoint(StartPoint, GeoPointModes.Vertex) { RelatedGeometryId = ID});

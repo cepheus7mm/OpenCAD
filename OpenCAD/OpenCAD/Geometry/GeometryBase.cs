@@ -113,6 +113,9 @@ namespace OpenCAD.Geometry
             set => SetPropertyValue<LineWeight?>(PropertyType.LineWeight, nameof(LineWeight), OpenCADStrings.LineWeight, value);
         }
 
+        [JsonIgnore, XmlIgnore]
+        public bool IsPreviewGeometry { get; set; } = false;
+
         public abstract double Length { get; }
 
         public abstract double Angle { get; }
