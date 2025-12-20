@@ -322,13 +322,13 @@ namespace UI.Commands.Drawing
                 try
                 {
                     // remove previous preview arc
-                    if (_previewArc != null && CachedViewport != null)
+                    if (_previewArc != null && viewport != null)
                     {
-                        try { CachedViewport.RemoveObject(_previewArc); } catch { }
+                        try { viewport.RemoveObject(_previewArc); } catch { }
                         _previewArc = null;
                     }
 
-                    if (previewPoint != null && CachedViewport != null && Context != null)
+                    if (previewPoint != null && viewport != null && Context != null)
                     {
                         // Two possible preview computations:
                         // - non-PT3: center & start already known -> radius from start, angles from center
@@ -388,21 +388,21 @@ namespace UI.Commands.Drawing
                             if (doc != null)
                             {
                                 var arc = new Arc(previewCenter, radius, startAngle, endAngle, doc);
-                                CachedViewport.AddObject(arc);
+                                viewport.AddObject(arc);
                                 _previewArc = arc;
-                                CachedViewport.Refresh();
+                                viewport.Refresh();
                             }
                         }
                         else
                         {
-                            if (CachedViewport != null)
-                                CachedViewport.Refresh();
+                            if (viewport != null)
+                                viewport.Refresh();
                         }
                     }
                     else
                     {
-                        if (CachedViewport != null)
-                            CachedViewport.Refresh();
+                        if (viewport != null)
+                            viewport.Refresh();
                     }
                 }
                 catch
@@ -466,9 +466,9 @@ namespace UI.Commands.Drawing
                         {
                             try
                             {
-                                if (_previewArc != null && CachedViewport != null)
+                                if (_previewArc != null && viewport != null)
                                 {
-                                    CachedViewport.RemoveObject(_previewArc);
+                                    viewport.RemoveObject(_previewArc);
                                     _previewArc = null;
                                 }
                             }
@@ -644,7 +644,6 @@ namespace UI.Commands.Drawing
                     var action = new Undo.AddGeometryAction(
                         arc,
                         document,
-                        viewport,
                         $"Create Arc at ({_center.X:F3}, {_center.Y:F3}, {_center.Z:F3}), " +
                         $"Radius: {radius:F3}, " +
                         $"Angles: {startAngle * 180 / Math.PI:F1}° to {endAngle * 180 / Math.PI:F1}°"

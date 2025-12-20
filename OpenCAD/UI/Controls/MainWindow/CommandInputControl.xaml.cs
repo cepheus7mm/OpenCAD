@@ -28,7 +28,8 @@ namespace UI.Controls.MainWindow
 
             // Forward events from ViewModel
             _viewModel.GeometryCreated += (s, e) => GeometryCreated?.Invoke(this, e);
-            _viewModel.ScrollToEndRequested += (s, e) => historyScrollViewer.ScrollToEnd();
+            // Use the TextBox's own ScrollToEnd (we removed the outer ScrollViewer)
+            _viewModel.ScrollToEndRequested += (s, e) => historyTextBox.ScrollToEnd();
             _viewModel.FocusRequested += (s, e) => FocusCommandInput();
 
             // Setup bindings
@@ -40,7 +41,8 @@ namespace UI.Controls.MainWindow
                     UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged
                 });
 
-            historyTextBlock.SetBinding(TextBlock.TextProperty, 
+            // Bind history to the read-only TextBox so selection & copy work.
+            historyTextBox.SetBinding(TextBox.TextProperty, 
                 new System.Windows.Data.Binding(nameof(CommandInputViewModel.HistoryText))
                 {
                     Source = _viewModel
@@ -52,7 +54,65 @@ namespace UI.Controls.MainWindow
                     Source = _viewModel
                 });
 
+            // Prevent any paste into the history TextBox (extra safety; IsReadOnly already blocks edits)
+            historyTextBox.PreviewKeyDown += HistoryTextBox_PreviewKeyDown;
+            historyTextBox.CommandBindings.Add(new CommandBinding(ApplicationCommands.Paste, OnPasteExecuted, OnPasteCanExecute));
+
+            // Allow focus so mouse selection and keyboard copy (Ctrl+C) work.
+            // To keep normal typing directed to the command input, intercept most printable keys here and return focus.
+            historyTextBox.PreviewKeyDown += HistoryTextBox_RedirectTyping;
+
             commandTextBox.Focus();
+        }
+
+        private void OnPasteExecuted(object sender, ExecutedRoutedEventArgs e)
+        {
+            // Swallow paste attempts into history
+            e.Handled = true;
+        }
+
+        private void OnPasteCanExecute(object sender, CanExecuteRoutedEventArgs e)
+        {
+            e.CanExecute = false;
+            e.Handled = true;
+        }
+
+        private void HistoryTextBox_PreviewKeyDown(object? sender, KeyEventArgs e)
+        {
+            // Prevent Ctrl+V and Shift+Insert into the history TextBox
+            if ((Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control && e.Key == Key.V)
+            {
+                e.Handled = true;
+            }
+
+            if ((Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift && e.Key == Key.Insert)
+            {
+                e.Handled = true;
+            }
+        }
+
+        private void HistoryTextBox_RedirectTyping(object? sender, KeyEventArgs e)
+        {
+            // Allow navigation and copy-related shortcuts.
+            bool isCopy =
+                (e.Key == Key.C && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control) ||
+                (e.Key == Key.Insert && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control) ||
+                (e.Key == Key.A && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control);
+
+            bool isNavigation =
+                e.Key == Key.Left || e.Key == Key.Right || e.Key == Key.Up || e.Key == Key.Down ||
+                e.Key == Key.PageUp || e.Key == Key.PageDown || e.Key == Key.Home || e.Key == Key.End ||
+                e.Key == Key.Tab || e.Key == Key.Escape || e.Key == Key.Back || e.Key == Key.Delete;
+
+            if (isCopy || isNavigation)
+            {
+                // Allow copy and navigation keys to operate in the history box.
+                return;
+            }
+
+            // For printable/input keys, return focus to the command input so typing continues there.
+            FocusCommandInput();
+            e.Handled = true;
         }
 
         /// <summary>

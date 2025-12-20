@@ -155,7 +155,6 @@ namespace UI.Commands.Drawing
                     var action = new Undo.AddGeometryAction(
                         line,
                         document,
-                        viewport,
                         string.Format(
                             OpenCADStrings.UndoCreateLine,
                             start.X, start.Y, start.Z,

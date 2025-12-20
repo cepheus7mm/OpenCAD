@@ -142,6 +142,7 @@ namespace UI.Controls.MainWindow
                 getDocument: () => _document,
                 setCommandPrompt: SetCommandPrompt
             );
+            _undoRedoManager.Context = _commandContext;
 
             // Initialize and discover commands
             _commandRegistry = new CommandRegistry();

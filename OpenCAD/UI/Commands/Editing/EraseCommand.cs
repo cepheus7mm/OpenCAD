@@ -62,10 +62,10 @@ namespace UI.Commands.Editing
                     }
                     Context?.OutputMessage(string.Format(OpenCADStrings.ObjectsErasedNoUndoFormat, SelectedObjects.Count));
                 }
-
                 var viewModel = viewport.DataContext as ViewportViewModel;
                 viewModel?.ClearSelection();
                 viewport.Refresh();
+                CommandCompleted();
             });
         }
     }

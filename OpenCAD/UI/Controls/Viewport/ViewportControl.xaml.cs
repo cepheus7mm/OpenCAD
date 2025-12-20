@@ -13,11 +13,15 @@ using OpenCAD.Settings;
 using Microsoft.Extensions.DependencyInjection;
 using OpenCAD.TextRendering;
 using OpenCAD.Geometry.Helpers;
+using System.Diagnostics;
 
 namespace UI.Controls.Viewport
 {
     public partial class ViewportControl : UserControl
     {
+        // Cache world-space viewport bounds per frame to avoid recomputation in crosshair
+        private (Point3D topLeft, Point3D topRight, Point3D bottomLeft, Point3D bottomRight)? _cachedWorldBounds;
+
         private readonly ViewportViewModel _viewModel;
         private RenderEngine? _renderEngine;
         private bool _isInitialized = false;
@@ -33,6 +37,9 @@ namespace UI.Controls.Viewport
 
         // Add near the top with other fields
         private readonly List<OpenCADObject> _previewObjects = new List<OpenCADObject>();
+
+        // Lazy text metrics cache
+        private ITextMetricsProvider? _lazyTextMetrics;
 
         // Forward events from ViewModel
         public event EventHandler<PointPickedEventArgs>? PointPicked
@@ -164,7 +171,6 @@ namespace UI.Controls.Viewport
         public void SetStatusBar(StatusBarControl statusBar) => _viewModel.SetStatusBar(statusBar);
         public void AddObject(OpenCADObject obj) => _viewModel.AddObject(obj);
         public void RemoveObject(OpenCADObject obj) => _viewModel.RemoveObject(obj);
-        public void ClearObjects() => _viewModel.ClearObjects();
         public void ClearSelection() => _viewModel.ClearSelection();
         
         /// <summary>
@@ -258,13 +264,8 @@ namespace UI.Controls.Viewport
 
             try
             {
-                ITextMetricsProvider? textMetrics = null;
-                if (Application.Current is UI.App app)
-                {
-                    textMetrics = app.Services.GetService<ITextMetricsProvider>();
-                }
-
-                _renderEngine = new RenderEngine(textMetrics);
+                // Defer text metrics creation: do not resolve at startup
+                _renderEngine = new RenderEngine();
 
                 var dpi = VisualTreeHelper.GetDpi(GlWPFControl);
                 int pixelWidth = Math.Max(1, (int)Math.Round(GlWPFControl.ActualWidth * dpi.DpiScaleX));
@@ -292,6 +293,22 @@ namespace UI.Controls.Viewport
             }
         }
 
+        private void EnsureTextMetricsInitialized()
+        {
+            if (_lazyTextMetrics == null)
+            {
+                if (Application.Current is UI.App app)
+                {
+                    _lazyTextMetrics = app.Services.GetService<ITextMetricsProvider>();
+                }
+
+                if (_lazyTextMetrics != null && _renderEngine != null)
+                {
+                    //_renderEngine.SetTextMetrics(_lazyTextMetrics);
+                }
+            }
+        }
+
         #endregion
 
         #region Rendering
@@ -301,7 +318,6 @@ namespace UI.Controls.Viewport
             if (!_isInitialized || _renderEngine == null)
                 return;
 
-            // Don't render until document is fully loaded
             if (!_documentFullyLoaded)
             {
                 try
@@ -311,13 +327,16 @@ namespace UI.Controls.Viewport
                 }
                 catch
                 {
-                    return; // Still not ready
+                    return;
                 }
             }
 
             try
             {
                 GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+
+                // Cache viewport bounds in world coords once per frame for overlay use
+                _cachedWorldBounds = ComputeViewportWorldBounds();
 
                 RenderGrid();
 
@@ -328,6 +347,27 @@ namespace UI.Controls.Viewport
             catch (Exception)
             {
             }
+        }
+
+        private (Point3D topLeft, Point3D topRight, Point3D bottomLeft, Point3D bottomRight)? ComputeViewportWorldBounds()
+        {
+            if (_renderEngine == null) return null;
+            try
+            {
+                var tl = ScreenToWorld(new Point(0, 0));
+                var tr = ScreenToWorld(new Point(GlWPFControl.ActualWidth, 0));
+                var bl = ScreenToWorld(new Point(0, GlWPFControl.ActualHeight));
+                var br = ScreenToWorld(new Point(GlWPFControl.ActualWidth, GlWPFControl.ActualHeight));
+                if (tl.HasValue && tr.HasValue && bl.HasValue && br.HasValue)
+                {
+                    return (new Point3D(tl.Value.X, tl.Value.Y, tl.Value.Z),
+                            new Point3D(tr.Value.X, tr.Value.Y, tr.Value.Z),
+                            new Point3D(bl.Value.X, bl.Value.Y, bl.Value.Z),
+                            new Point3D(br.Value.X, br.Value.Y, br.Value.Z));
+                }
+            }
+            catch { }
+            return null;
         }
 
         private void RenderSceneFlat(OpenCADDocument document)
@@ -410,6 +450,7 @@ namespace UI.Controls.Viewport
         {
             if (_renderEngine == null) return;
 
+            var frameSw = Stopwatch.StartNew();
             var overlayObjects = new List<OpenCADObject>();
 
             // Add preview line if available (for point picking)
@@ -423,28 +464,31 @@ namespace UI.Controls.Viewport
                 overlayObjects.Add(previewLine);
             }
 
-            // Add window selection rectangle if in WindowSelection mode
+            // Window selection rectangle timings
+            var windowSelSw = Stopwatch.StartNew();
             if (_viewModel.CurrentInputMode == ViewportViewModel.InputMode.WindowSelection &&
                 _viewModel.WindowSelectionStartPoint != null &&
                 _viewModel.WindowSelectionCurrentPoint != null)
             {
-                // Render the filled rectangle first (so it appears behind the border lines)
                 RenderWindowSelectionFill(
                     _viewModel.WindowSelectionStartPoint,
                     _viewModel.WindowSelectionCurrentPoint);
                 
-                // Then render the border lines on top
                 var selectionRectLines = CreateWindowSelectionRectangle(
                     _viewModel.WindowSelectionStartPoint,
                     _viewModel.WindowSelectionCurrentPoint);
                 overlayObjects.AddRange(selectionRectLines);
             }
-            
-            // Add GeoPoint glyphs if in PointPicking mode with GeoPointModes enabled
+            windowSelSw.Stop();
+
+            // GeoPoint glyph timings
+            var geoGlyphSw = Stopwatch.StartNew();
             if (_viewModel.CurrentInputMode == ViewportViewModel.InputMode.PointPicking &&
                 _viewModel.GeoPointModes != GeoPointModes.None &&
                 _currentMousePosDip.HasValue)
             {
+                EnsureTextMetricsInitialized();
+
                 var geoPoints = _viewModel.GetGeoPointsAtCurrentMousePosition(_currentMousePosDip.Value, ScreenToWorld);
                 if (geoPoints.Any())
                 {
@@ -454,8 +498,6 @@ namespace UI.Controls.Viewport
                     {
                         double screenToWorldScale = Math.Abs(worldPos1.Value.X - worldPos.Value.X);
                         var geoGlyphs = _viewModel.CreateGeoPointGlyphs(geoPoints, screenToWorldScale);
-                        
-                        // UPDATED: Recursively collect glyph children instead of adding glyph containers
                         foreach (var glyph in geoGlyphs)
                         {
                             CollectGlyphChildren(glyph, overlayObjects);
@@ -463,19 +505,28 @@ namespace UI.Controls.Viewport
                     }
                 }
             }
+            geoGlyphSw.Stop();
 
-            // Add crosshair if mouse is in viewport
+            // Crosshair timings
+            var crosshairSw = Stopwatch.StartNew();
             if (_currentMousePosDip.HasValue)
             {
                 var crosshairLines = CreateCrosshairLines(_currentMousePosDip.Value);
                 overlayObjects.AddRange(crosshairLines);
             }
+            crosshairSw.Stop();
 
-            // Render all overlay objects at once
+            // RenderOverlay timings
+            var overlayRenderSw = Stopwatch.StartNew();
             if (overlayObjects.Count > 0)
             {
                 _renderEngine.RenderOverlay(overlayObjects);
             }
+            overlayRenderSw.Stop();
+            frameSw.Stop();
+
+            // Emit per-frame timing logs (ms) for diagnostics
+            Debug.WriteLine($"[Overlay] frame={frameSw.Elapsed.TotalMilliseconds:F2}ms, windowSel={windowSelSw.Elapsed.TotalMilliseconds:F2}ms, geoGlyphs={geoGlyphSw.Elapsed.TotalMilliseconds:F2}ms, crosshair={crosshairSw.Elapsed.TotalMilliseconds:F2}ms, render={overlayRenderSw.Elapsed.TotalMilliseconds:F2}ms, count={overlayObjects.Count}");
         }
 
         /// <summary>
@@ -581,125 +632,60 @@ namespace UI.Controls.Viewport
 
             // Convert mouse position to world coordinates
             var worldPos = ScreenToWorld(mousePosDip);
-            if (worldPos == null)
+            if (!worldPos.HasValue)
                 return lines;
 
             // Create the center point - apply snapping if in point picking mode
-            Point3D centerPoint;
-            if (_viewModel.IsPointPickingMode && _viewModel.SnappingEnabled)
-            {
-                var unsnappedPoint = new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z);
-                centerPoint = _viewModel.SnapToGrid(unsnappedPoint);
-            }
-            else
-            {
-                centerPoint = new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z);
-            }
+            var centerPoint = _viewModel.IsPointPickingMode && _viewModel.SnappingEnabled
+                ? _viewModel.SnapToGrid(new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z))
+                : new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z);
 
-            // Calculate viewport bounds in world coordinates
-            var dpi = VisualTreeHelper.GetDpi(GlWPFControl);
-            
-            var topLeft = ScreenToWorld(new Point(0, 0));
-            var topRight = ScreenToWorld(new Point(GlWPFControl.ActualWidth, 0));
-            var bottomLeft = ScreenToWorld(new Point(0, GlWPFControl.ActualHeight));
-            var bottomRight = ScreenToWorld(new Point(GlWPFControl.ActualWidth, GlWPFControl.ActualHeight));
-
-            if (topLeft.HasValue && bottomRight.HasValue)
+            // Use cached viewport world bounds if available to avoid multiple ScreenToWorld calls
+            var bounds = _cachedWorldBounds ?? ComputeViewportWorldBounds();
+            if (bounds.HasValue)
             {
+                var tl = bounds.Value.topLeft;
+                var tr = bounds.Value.topRight;
+                var bl = bounds.Value.bottomLeft;
+                var br = bounds.Value.bottomRight;
+
                 // Horizontal crosshair line (extends to viewport edges)
-                var horizontalStart = new Point3D(topLeft.Value.X, centerPoint.Y, 0);
-                var horizontalEnd = new Point3D(topRight.HasValue ? topRight.Value.X : bottomRight.Value.X, centerPoint.Y, 0);
-                lines.Add(CreateCrosshairLine(horizontalStart, horizontalEnd));
+                lines.Add(CreateCrosshairLine(new Point3D(tl.X, centerPoint.Y, 0),
+                                              new Point3D(tr.X, centerPoint.Y, 0)));
 
                 // Vertical crosshair line (extends to viewport edges)
-                var verticalStart = new Point3D(centerPoint.X, topLeft.Value.Y, 0);
-                var verticalEnd = new Point3D(centerPoint.X, bottomLeft.HasValue ? bottomLeft.Value.Y : bottomRight.Value.Y, 0);
-                lines.Add(CreateCrosshairLine(verticalStart, verticalEnd));
+                lines.Add(CreateCrosshairLine(new Point3D(centerPoint.X, tl.Y, 0),
+                                              new Point3D(centerPoint.X, bl.Y, 0)));
             }
 
-            // Get pickbox size from settings (in pixels)
-            double pickboxSizePixels = _viewportSettings.Crosshair?.PickboxSize ?? 5.0;
-            double apertureboxSizePixels = _viewModel.ApertureSize > 0 ? _viewModel.ApertureSize : (_viewportSettings.Crosshair?.PickboxSize * 3.0 ?? 15.0);
-
-            // Calculate two points offset by the pickbox size in screen space
-            var screenCenter = mousePosDip;
-            var screenOffset = new Point(screenCenter.X + 1, screenCenter.Y);
-            
-            var worldCenter = ScreenToWorld(screenCenter);
-            var worldOffset = ScreenToWorld(screenOffset);
-
+            // Pickbox/aperture square around center
+            // Compute screen-to-world scale using ortho fast path when available
+            double screenToWorldScale = 1.0;
+            var worldCenter = worldPos;
+            var dpi = VisualTreeHelper.GetDpi(GlWPFControl);
+            var offsetDip = new Point(mousePosDip.X + 1, mousePosDip.Y);
+            var worldOffset = ScreenToWorld(offsetDip);
             if (worldCenter.HasValue && worldOffset.HasValue)
             {
-                // Calculate the world-space distance that corresponds to pickboxSizePixels
-                double screenToWorldScale = Math.Abs(worldOffset.Value.X - worldCenter.Value.X);
-                var boxSizePixels = _viewModel.IsPointPickingMode && _viewModel.GeoPointModes != GeoPointModes.None ? apertureboxSizePixels : pickboxSizePixels;
-                double halfBox = boxSizePixels * screenToWorldScale;
-                
-                if (!_viewModel.IsPointPickingMode || _viewModel.GeoPointModes != GeoPointModes.None)
-                {
-                    // Bottom edge
-                    lines.Add(CreateCrosshairLine(
-                        new Point3D(centerPoint.X - halfBox, centerPoint.Y - halfBox, 0),
-                        new Point3D(centerPoint.X + halfBox, centerPoint.Y - halfBox, 0)
-                    ));
-                    
-                    // Right edge
-                    lines.Add(CreateCrosshairLine(
-                        new Point3D(centerPoint.X + halfBox, centerPoint.Y - halfBox, 0),
-                        new Point3D(centerPoint.X + halfBox, centerPoint.Y + halfBox, 0)
-                    ));
-                    
-                    // Top edge
-                    lines.Add(CreateCrosshairLine(
-                        new Point3D(centerPoint.X + halfBox, centerPoint.Y + halfBox, 0),
-                        new Point3D(centerPoint.X - halfBox, centerPoint.Y + halfBox, 0)
-                    ));
-                    
-                    // Left edge
-                    lines.Add(CreateCrosshairLine(
-                        new Point3D(centerPoint.X - halfBox, centerPoint.Y + halfBox, 0),
-                        new Point3D(centerPoint.X - halfBox, centerPoint.Y - halfBox, 0)
-                    ));
-                }
+                screenToWorldScale = Math.Abs(worldOffset.Value.X - worldCenter.Value.X);
             }
 
-            // --- Aperture rendering (use ViewModel properties directly) ---
-            // Show aperture when ViewModel.GeoPointModes is not None
-            //if (_viewModel.GeoPointModes != GeoPointModes.None && _viewModel.IsPointPickingMode)
-            //{
-            //    // Aperture radius in pixels comes from the ViewModel property (falls back to settings)
-            //    double apertureRadiusPixels = _viewModel.ApertureSize > 0 ? _viewModel.ApertureSize : (_viewportSettings.Crosshair?.PickboxSize * 3.0 ?? 16.0);
-            //    var apertureRadiusWorld = apertureRadiusPixels * screenToWorldScale;
-            //    const int segments = 32;
-            //    var screenPoints = new List<Point>(segments);
-            //    var worldPoints = new List<Point3D?>(segments);
-            //    for (int i = 0; i < segments; ++i)
-            //    {
-            //        double angle = 2.0 * Math.PI * i / segments;
-            //        double sx = centerPoint.X + apertureRadiusWorld * Math.Cos(angle);
-            //        double sy = centerPoint.Y + apertureRadiusWorld * Math.Sin(angle);
-            //        worldPoints.Add(new Point3D(sx, sy, 0));
-            //    }
+            double pickboxSizePixels = _viewportSettings.Crosshair?.PickboxSize ?? 5.0;
+            double apertureboxSizePixels = _viewModel.ApertureSize > 0 ? _viewModel.ApertureSize : (_viewportSettings.Crosshair?.PickboxSize * 3.0 ?? 15.0);
+            var boxSizePixels = _viewModel.IsPointPickingMode && _viewModel.GeoPointModes != GeoPointModes.None ? apertureboxSizePixels : pickboxSizePixels;
+            double halfBox = boxSizePixels * screenToWorldScale;
 
-            //    //foreach (var sp in screenPoints)
-            //    //{
-            //    //    var wp = ScreenToWorld(sp);
-            //    //    if (wp.HasValue)
-            //    //        worldPoints.Add(new Point3D(wp.Value.X, wp.Value.Y, wp.Value.Z));
-            //    //    else
-            //    //        worldPoints.Add(null);
-            //    //}
-
-            //    for (int i = 0; i < segments; ++i)
-            //    {
-            //        var p1 = worldPoints[i];
-            //        var p2 = worldPoints[(i + 1) % segments];
-            //        if (p1 != null && p2 != null)
-            //        {
-            //            lines.Add(CreateCrosshairLine(p1, p2));
-            //        }
-            //    }
-            //}
+            if (!_viewModel.IsPointPickingMode || _viewModel.GeoPointModes != GeoPointModes.None)
+            {
+                lines.Add(CreateCrosshairLine(new Point3D(centerPoint.X - halfBox, centerPoint.Y - halfBox, 0),
+                                              new Point3D(centerPoint.X + halfBox, centerPoint.Y - halfBox, 0)));
+                lines.Add(CreateCrosshairLine(new Point3D(centerPoint.X + halfBox, centerPoint.Y - halfBox, 0),
+                                              new Point3D(centerPoint.X + halfBox, centerPoint.Y + halfBox, 0)));
+                lines.Add(CreateCrosshairLine(new Point3D(centerPoint.X + halfBox, centerPoint.Y + halfBox, 0),
+                                              new Point3D(centerPoint.X - halfBox, centerPoint.Y + halfBox, 0)));
+                lines.Add(CreateCrosshairLine(new Point3D(centerPoint.X - halfBox, centerPoint.Y + halfBox, 0),
+                                              new Point3D(centerPoint.X - halfBox, centerPoint.Y - halfBox, 0)));
+            }
 
             return lines;
         }
@@ -891,7 +877,8 @@ namespace UI.Controls.Viewport
                 : (_renderEngine.Camera.Position - _renderEngine.Camera.Target).Length() * 0.002f;
 
             // Only perform hit testing if in selection mode, NOT in point picking or window selection mode, and not dragging
-            bool shouldHitTest = _viewModel.CurrentInputMode == ViewportViewModel.InputMode.Selection && 
+            bool shouldHitTest = (_viewModel.CurrentInputMode == ViewportViewModel.InputMode.Selection ||
+                _viewModel.CurrentInputMode == ViewportViewModel.InputMode.CommandInput) &&
                 e.LeftButton != MouseButtonState.Pressed && 
                 e.MiddleButton != MouseButtonState.Pressed && 
                 e.RightButton != MouseButtonState.Pressed;

@@ -35,7 +35,7 @@ namespace UI.Commands.Undo
         {
         }
 
-        public void Execute()
+        public void Execute(ICommandContext context)
         {
             // Remove each object from the document and viewport
             foreach (var obj in _geometry)
@@ -48,7 +48,7 @@ namespace UI.Commands.Undo
             _viewport?.Refresh();
         }
 
-        public void Undo()
+        public void Undo(ICommandContext context)
         {
             // Re-add each object to the document and viewport
             foreach (var obj in _geometry)

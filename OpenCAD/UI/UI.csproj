@@ -10,6 +10,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Controls\Viewport\ViewportViewModelForTrim.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Page Remove="Themes\DarkTheme.xaml" />
     <Page Remove="Themes\LightTheme.xaml" />
     <Page Remove="Themes\WindowChrome.xaml" />

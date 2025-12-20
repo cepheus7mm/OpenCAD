@@ -10,7 +10,7 @@ namespace OpenCAD.Geometry
     /// Represents a circular arc defined by center point, radius, start angle, and end angle.
     /// Angles are in radians, measured counter-clockwise from the positive X-axis.
     /// </summary>
-    public class Arc : GeometryBase, IDrawable
+    public class Arc : GeometryBase, IDrawable, ICircularGeometry
     {
         /// <summary>
         /// Gets or sets the center point of the arc.

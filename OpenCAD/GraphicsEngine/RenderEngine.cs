@@ -92,7 +92,7 @@ namespace GraphicsEngine
             GL.ClearColor(0.08f, 0.08f, 0.08f, 1.0f);
 
             // Enable debug output and log context info
-            GLDiag.TryEnableDebugOutput();
+           // GLDiag.TryEnableDebugOutput();
             GLDiag.LogContextInfo();
 
             UpdateProjection(width, height);

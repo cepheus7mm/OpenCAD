@@ -21,7 +21,7 @@ namespace GraphicsEngine
     public class RenderEngine
     {
         private readonly List<IRenderer> _renderers = new();
-        private readonly ITextMetricsProvider? _textMetrics; // add
+        private ITextMetricsProvider? _textMetrics; // allow lazy set
         private Camera _camera;
         private Matrix4x4 _projectionMatrix;
         private Matrix4x4 _viewMatrix;
@@ -42,6 +42,16 @@ namespace GraphicsEngine
         public RenderEngine(ITextMetricsProvider? textMetrics) : this()
         {
             _textMetrics = textMetrics;
+        }
+
+        /// <summary>
+        /// Optionally provide text metrics later to enable text rendering lazily.
+        /// Calling this will re-register renderers to include TextRenderer.
+        /// </summary>
+        public void SetTextMetrics(ITextMetricsProvider textMetrics)
+        {
+            _textMetrics = textMetrics;
+            RegisterDefaultRenderers();
         }
 
         /// <summary>
@@ -123,7 +133,7 @@ namespace GraphicsEngine
             _renderers.Clear();
             _renderers.Add(new LineRenderer(_shaderProgram));
 
-            // Register TextRenderer when metrics are available
+            // Register TextRenderer when metrics are available (lazy)
             if (_textMetrics != null)
             {
                 _renderers.Add(new TextRenderer(_shaderProgram, _textMetrics));

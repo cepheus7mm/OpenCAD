@@ -176,9 +176,9 @@ namespace UI.Commands.Drawing
                     {
                         try
                         {
-                            if (_previewCircle != null && CachedViewport != null)
+                            if (_previewCircle != null && viewport != null)
                             {
-                                CachedViewport.RemoveObject(_previewCircle);
+                                viewport.RemoveObject(_previewCircle);
                                 _previewCircle = null;
                             }
                         }
@@ -449,7 +449,6 @@ namespace UI.Commands.Drawing
                     var action = new Undo.AddGeometryAction(
                         Circle,
                         document,
-                        viewport,
                         $"Create Circle at ({_center.X:F3}, {_center.Y:F3}, {_center.Z:F3}), Radius: {_radius:F3}"
                     );
                     undoManager.ExecuteAction(action);
@@ -480,14 +479,14 @@ namespace UI.Commands.Drawing
             try
             {
                 // remove previous preview Circle
-                if (_previewCircle != null && CachedViewport != null)
+                if (_previewCircle != null && viewport != null)
                 {
-                    try { CachedViewport.RemoveObject(_previewCircle); } 
+                    try { viewport.RemoveObject(_previewCircle); } 
                     catch { }
                     _previewCircle = null;
                 }
 
-                if (previewPoint != null && CachedViewport != null && Context != null)
+                if (previewPoint != null && viewport != null && Context != null)
                 {
                     // Two possible preview computations:
                     // - non-PT3: center & start already known -> radius from start, angles from center
@@ -532,21 +531,21 @@ namespace UI.Commands.Drawing
                         {
                             var circle = new Circle(previewCenter, radius, doc);
                             circle.IsPreviewGeometry = true;
-                            CachedViewport.AddObject(circle);
+                            viewport.AddObject(circle);
                             _previewCircle = circle;
-                            CachedViewport.Refresh();
+                            viewport.Refresh();
                         }
                     }
                     else
                     {
-                        if (CachedViewport != null)
-                            CachedViewport.Refresh();
+                        if (viewport != null)
+                            viewport.Refresh();
                     }
                 }
                 else
                 {
-                    if (CachedViewport != null)
-                        CachedViewport.Refresh();
+                    if (viewport != null)
+                        viewport.Refresh();
                 }
             }
             catch

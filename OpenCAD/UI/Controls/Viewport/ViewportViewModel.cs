@@ -25,7 +25,8 @@ namespace UI.Controls.Viewport
             None,
             PointPicking,
             Selection,
-            WindowSelection
+            WindowSelection,
+            CommandInput
         }
         #region Fields
 
@@ -40,15 +41,15 @@ namespace UI.Controls.Viewport
         private readonly List<Point3D> _tempPoints = new();
         private Action<Point3D>? _previewCallback;
         private Point3D? _previewPoint;
-        
+
         // Selection state
         //private bool _isSelectionMode = false;
         private OpenCADObject? _highlightedObject;
         private readonly List<OpenCADObject> _selectedObjects = new();
-        
+
         // Mouse state
         private Point _lastMousePos;
-        
+
         // Cursor state
         private Cursor _cursor = Cursors.Arrow;
 
@@ -96,7 +97,7 @@ namespace UI.Controls.Viewport
                     OnPropertyChanged();
                     UpdateCursor();
                 }
-}
+            }
         }
 
         /// <summary>
@@ -255,6 +256,11 @@ namespace UI.Controls.Viewport
         public event EventHandler<ObjectSelectedEventArgs>? ObjectSelected;
 
         /// <summary>
+        /// Event raised when an object is selected
+        /// </summary>
+        public event EventHandler<ObjectClickedEventArgs>? ObjectClicked;
+
+        /// <summary>
         /// Event raised when the viewport should be refreshed
         /// </summary>
         public event EventHandler? RefreshRequested;
@@ -290,6 +296,11 @@ namespace UI.Controls.Viewport
         public ViewportViewModel(OpenCADDocument objectToDisplay)
         {
             _document = objectToDisplay ?? throw new ArgumentNullException(nameof(objectToDisplay));
+
+            // Subscribe to document events so the VM reacts to canonical model changes.
+            _document.ObjectAdded += OnDocumentObjectAdded;
+            _document.ObjectRemoved += OnDocumentObjectRemoved;
+            _document.ObjectChanged += OnDocumentObjectChanged;
         }
 
         #endregion
@@ -380,7 +391,7 @@ namespace UI.Controls.Viewport
         public void EnablePointPickingMode()
         {
             //System.Diagnostics.Debug.WriteLine($"=== EnablePointPickingMode called, current state: InputMode={CurrentInputMode} ===");
-            
+
             //// Disable selection mode when entering point picking mode
             //if (_isSelectionMode)
             //{
@@ -465,9 +476,9 @@ namespace UI.Controls.Viewport
         {
             if (CurrentInputMode != InputMode.PointPicking)
                 return;
-            
+
             //System.Diagnostics.Debug.WriteLine("CancelPointPicking called - raising PointPickingCancelled event");
-            
+
             // Raise the cancelled event BEFORE disabling the mode
             // This allows commands to clean up properly
             PointPickingCancelled?.Invoke(this, EventArgs.Empty);
@@ -509,56 +520,71 @@ namespace UI.Controls.Viewport
         #region Public Methods - Object Management
 
         /// <summary>
-        /// Add an object to the scene
+        /// Add an object to the scene (model-first).
+        /// The document will raise ObjectAdded and the VM will react via subscription.
         /// </summary>
         public void AddObject(OpenCADObject obj)
         {
             ObjectToDisplay?.Add(obj);
-
-            // Log line details if it's a line
-            if (obj is Line line)
-            {
-                //System.Diagnostics.Debug.WriteLine($"  Line: Start({line.StartPoint.X}, {line.StartPoint.Y}, {line.StartPoint.Z}) -> End({line.EndPoint.X}, {line.EndPoint.Y}, {line.EndPoint.Z})");
-            }
-
-            ObjectAdded?.Invoke(this, new ObjectEventArgs(obj));
-            RefreshRequested?.Invoke(this, EventArgs.Empty);
+            // Do not raise ObjectAdded/Refresh here — document event handler will do it.
         }
 
         /// <summary>
-        /// Remove an object from the scene
+        /// Remove an object from the scene (model-first).
+        /// The document will raise ObjectRemoved and the VM will react via subscription.
         /// </summary>
         public void RemoveObject(OpenCADObject obj)
         {
-            // Remove from the document's children
-            ObjectToDisplay.Remove(obj);
-            
-            // If the object is currently selected, remove it from selection
-            if (_selectedObjects.Contains(obj))
-            {
-                _selectedObjects.Remove(obj);
-                OnPropertyChanged(nameof(SelectedObjects));
-                SelectionChanged?.Invoke(this, EventArgs.Empty);
-            }
-            
-            // If the object is highlighted, clear the highlight
-            if (HighlightedObject == obj)
-            {
-                HighlightedObject = null;
-            }
-            
-            // Request a refresh
-            RefreshRequested?.Invoke(this, EventArgs.Empty);
+            ObjectToDisplay?.Remove(obj);
+            // Do not raise Refresh here — document event handler will do it.
         }
 
         /// <summary>
-        /// Clear all objects from the scene
+        /// Document event handlers - update VM state when the canonical model changes.
         /// </summary>
-        public void ClearObjects()
+        private void OnDocumentObjectAdded(object? sender, OpenCAD.DocumentObjectEventArgs e)
         {
-            //System.Diagnostics.Debug.WriteLine("Cleared all objects");
-            // Note: OpenCADObject doesn't have a Clear method, so we can't implement this fully
-            // This would need to be added to OpenCADObject
+            if (sender != _document) return;
+
+            // Forward as VM-level event for UI consumers
+            ObjectAdded?.Invoke(this, new ObjectEventArgs(e.Object));
+
+            // Single refresh for the change
+            RefreshRequested?.Invoke(this, EventArgs.Empty);
+
+            // Notify property changes if selection collections depend on this
+            OnPropertyChanged(nameof(ObjectToDisplay));
+        }
+
+        private void OnDocumentObjectRemoved(object? sender, OpenCAD.DocumentObjectEventArgs e)
+        {
+            if (sender != _document) return;
+
+            // If the object was selected, remove it from selection
+            if (_selectedObjects.Contains(e.Object))
+            {
+                _selectedObjects.Remove(e.Object);
+                OnPropertyChanged(nameof(SelectedObjects));
+                SelectionChanged?.Invoke(this, EventArgs.Empty);
+            }
+
+            // If the object was highlighted, clear highlight (this triggers RefreshRequested via setter)
+            if (HighlightedObject == e.Object)
+            {
+                HighlightedObject = null;
+            }
+
+            ObjectRemoved?.Invoke(this, new ObjectEventArgs(e.Object));
+            RefreshRequested?.Invoke(this, EventArgs.Empty);
+
+            OnPropertyChanged(nameof(ObjectToDisplay));
+        }
+
+        private void OnDocumentObjectChanged(object? sender, OpenCAD.DocumentObjectEventArgs e)
+        {
+            if (sender != _document) return;
+
+            // When an existing object is mutated, simply refresh the viewport.
             RefreshRequested?.Invoke(this, EventArgs.Empty);
         }
 
@@ -619,113 +645,134 @@ namespace UI.Controls.Viewport
         /// </summary>
         public MouseHandlingResult HandleMouseDown(MouseButton button, Point mousePos, Vector3? worldPos)
         {
-            //System.Diagnostics.Debug.WriteLine($"HandleMouseDown: Button={button}, InputMode={CurrentInputMode}, WorldPos={(worldPos.HasValue ? $"({worldPos.Value.X:F2},{worldPos.Value.Y:F2},{worldPos.Value.Z:F2})" : "null")}");
-
-            // If in point picking mode and left button clicked
-            if (CurrentInputMode == InputMode.PointPicking && button == MouseButton.Left)
+            switch (button)
             {
-                //System.Diagnostics.Debug.WriteLine($"Point picking: screen=({mousePos.X:F2}, {mousePos.Y:F2})");
+                case MouseButton.Left:
+                    return HandleLeftMouseDown(mousePos, worldPos);
+                case MouseButton.Right:
+                    return HandleRightMouseDown(mousePos, worldPos);
+                case MouseButton.Middle:
+                    return HandleMiddleMouse(mousePos, worldPos);
+                default:
+                    _lastMousePos = mousePos;
+                    return new MouseHandlingResult { Handled = false, NeedsRefresh = false, CaptureMouse = true };
+            }
+        }
 
-                if (worldPos.HasValue)
+        private MouseHandlingResult HandleLeftMouseDown(Point mousePos, Vector3? worldPos)
+        {
+            if (CurrentInputMode == InputMode.PointPicking)
+            {
+                return HandleLeftMouseDownPointPicking(mousePos, worldPos);
+            }
+            else if (CurrentInputMode == InputMode.Selection)
+            {
+                return HandleLeftMouseDownPointSelection(mousePos, worldPos);
+            }
+            else if (CurrentInputMode == InputMode.CommandInput)
+            {
+                return HandleLeftMouseDownPointCommandInput(mousePos, worldPos);
+            }
+
+            _lastMousePos = mousePos;
+            return new MouseHandlingResult { Handled = false, NeedsRefresh = false, CaptureMouse = true };
+        }
+
+        private MouseHandlingResult HandleLeftMouseDownPointCommandInput(Point mousePos, Vector3? worldPos)
+        {
+            if (HighlightedObject != null && worldPos.HasValue)
+            {
+                var args = new ObjectClickedEventArgs(HighlightedObject, new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z));
+                ObjectClicked?.Invoke(this, args);
+                return new MouseHandlingResult { Handled = true, NeedsRefresh = false, CaptureMouse = false };
+            }
+            return new MouseHandlingResult { Handled = false, NeedsRefresh = false, CaptureMouse = false };
+        }
+
+        private MouseHandlingResult HandleLeftMouseDownPointSelection(Point mousePos, Vector3? worldPos)
+        {
+            if (HighlightedObject != null)
+            {
+                if (_selectedObjects.Contains(HighlightedObject))
                 {
-                    var point = new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z);
-
-                    if(_viewportSettings?.GeoPointModes != GeoPointModes.None &&
-                        _geoPoints.Any())
-                    {
-                        var geoPoint = GetClosestGeoPoint(_geoPoints, point);
-                        if(geoPoint != null)
-                        {
-                            point = geoPoint;
-                        }
-                    }
-                    
-                    // Apply snapping if enabled
-                    else if (SnappingEnabled)
-                    {
-                        var snappedPoint = SnapToGrid(point);
-                        //System.Diagnostics.Debug.WriteLine($"Snapping: ({point.X:F3}, {point.Y:F3}, {point.Z:F3}) -> ({snappedPoint.X:F3}, {snappedPoint.Y:F3}, {snappedPoint.Z:F3})");
-                        point = snappedPoint;
-                    }
-                    
-                    _tempPoints.Add(point);
-                    OnPropertyChanged(nameof(TempPoints));
-
-                    //System.Diagnostics.Debug.WriteLine($"Point picked and added: ({point.X:F3}, {point.Y:F3}, {point.Z:F3}), total count: {_tempPoints.Count}");
-
-                    // Raise the event
-                    PointPicked?.Invoke(this, new PointPickedEventArgs(point));
-
-                    _document.GetViewportSettings().GeoPointModeOverride = GeoPointModes.None;
-
-                    return new MouseHandlingResult { Handled = true, NeedsRefresh = true, CaptureMouse = false };
+                    DeselectObject(HighlightedObject);
                 }
                 else
                 {
-                    //System.Diagnostics.Debug.WriteLine("ERROR: Failed to convert screen to world coordinates in point picking mode");
+                    SelectObject(HighlightedObject);
+                }
+                return new MouseHandlingResult { Handled = true, NeedsRefresh = true, CaptureMouse = false };
+            }
+            else
+            {
+                _previousSelectionMode = CurrentInputMode;
+                CurrentInputMode = InputMode.WindowSelection;
+
+                if (worldPos.HasValue)
+                {
+                    _windowSelectionStartPoint = new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z);
+                }
+                else
+                {
+                    _windowSelectionStartPoint = null;
                 }
 
-                return new MouseHandlingResult { Handled = true, NeedsRefresh = false, CaptureMouse = false };
+                _windowSelectionCurrentPoint = null;
+                _windowSelectionPreviewObjects.Clear();
+                return new MouseHandlingResult { Handled = true, NeedsRefresh = true, CaptureMouse = true };
             }
-            else if (CurrentInputMode == InputMode.PointPicking && button == MouseButton.Right && !IsShiftKeyPressed)
+        }
+
+        private MouseHandlingResult HandleLeftMouseDownPointPicking(Point mousePos, Vector3? worldPos)
+        {
+            if (worldPos.HasValue)
             {
-                //System.Diagnostics.Debug.WriteLine("Point picking cancelled by right-click");
-                // Raise a "cancelled" event
+                var point = new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z);
+
+                if (_viewportSettings?.GeoPointModes != GeoPointModes.None && _geoPoints.Any())
+                {
+                    var geoPoint = GetClosestGeoPoint(_geoPoints, point);
+                    if (geoPoint != null)
+                    {
+                        point = geoPoint;
+                      }
+                }
+                else if (SnappingEnabled)
+                {
+                    var snappedPoint = SnapToGrid(point);
+                    point = snappedPoint;
+                }
+
+                _tempPoints.Add(point);
+                OnPropertyChanged(nameof(TempPoints));
+                PointPicked?.Invoke(this, new PointPickedEventArgs(point));
+                _document.GetViewportSettings().GeoPointModeOverride = GeoPointModes.None;
+
+                return new MouseHandlingResult { Handled = true, NeedsRefresh = true, CaptureMouse = false };
+            }
+            return new MouseHandlingResult { Handled = true, NeedsRefresh = false, CaptureMouse = false };
+        }
+
+        private MouseHandlingResult HandleRightMouseDown(Point mousePos, Vector3? worldPos)
+        {
+            if (CurrentInputMode == InputMode.PointPicking && !IsShiftKeyPressed)
+            {
                 PointPickingCancelled?.Invoke(this, EventArgs.Empty);
                 return new MouseHandlingResult { Handled = true, NeedsRefresh = false, CaptureMouse = false };
             }
-
-            // Add this block before the final camera control handling
-            else if (CurrentInputMode == InputMode.PointPicking && button == MouseButton.Right && IsShiftKeyPressed)
+            else if (CurrentInputMode == InputMode.PointPicking && IsShiftKeyPressed)
             {
-                // Raise the event to request a context menu at the mouse position
                 GeoPointModesOverrideContextMenuRequested?.Invoke(this, mousePos);
                 return new MouseHandlingResult { Handled = true, NeedsRefresh = false, CaptureMouse = false };
             }
 
-            // If in selection mode and left button clicked
-            if (CurrentInputMode == InputMode.Selection && button == MouseButton.Left)
-            {
-                //System.Diagnostics.Debug.WriteLine($"Selection mode click: HighlightedObject={(HighlightedObject?.GetType().Name ?? "null")}, SelectedObjectsCount={_selectedObjects.Count}");
-                if (HighlightedObject != null)
-                {
-                    // Toggle selection of the highlighted object
-                    if (_selectedObjects.Contains(HighlightedObject))
-                    {
-                        DeselectObject(HighlightedObject);
-                    }
-                    else
-                    {
-                        SelectObject(HighlightedObject);
-                    }
-                    return new MouseHandlingResult { Handled = true, NeedsRefresh = true, CaptureMouse = false };
-                }
-                else
-                {
-                    // If no object is highlighted, switch to window selection mode
-                    //System.Diagnostics.Debug.WriteLine("No highlighted object - switching to WindowSelection mode");
-                    _previousSelectionMode = CurrentInputMode;
-                    CurrentInputMode = InputMode.WindowSelection;
-        
-                    // Store WORLD coordinates, not screen coordinates
-                    if (worldPos.HasValue)
-                    {
-                                    _windowSelectionStartPoint = new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z);
-                    }
-                    else
-                    {
-                        _windowSelectionStartPoint = null; // Fallback if no world pos available
-                    }
-        
-                    _windowSelectionCurrentPoint = null;
-                    _windowSelectionPreviewObjects.Clear();
-                    return new MouseHandlingResult { Handled = true, NeedsRefresh = true, CaptureMouse = true };
-                }
-            }
-
-            // Normal mouse handling for camera control
             _lastMousePos = mousePos;
-            //System.Diagnostics.Debug.WriteLine("Mouse down handled as camera control");
+            return new MouseHandlingResult { Handled = false, NeedsRefresh = false, CaptureMouse = true };
+        }
+
+        private MouseHandlingResult HandleMiddleMouse(Point mousePos, Vector3? worldPos)
+        {
+            _lastMousePos = mousePos;
             return new MouseHandlingResult { Handled = false, NeedsRefresh = false, CaptureMouse = true };
         }
 
@@ -741,38 +788,7 @@ namespace UI.Controls.Viewport
             // Handle window selection mode
             if (IsWindowSelectionMode && worldPos is not null)
             {
-                // Update the current point of the selection window
-                _windowSelectionCurrentPoint = new Point3D(worldPos.X, worldPos.Y, worldPos.Z);
-                
-                // Clear previous preview objects
-                _windowSelectionPreviewObjects.Clear();
-                
-                // Calculate the selection rectangle bounds
-                if (_windowSelectionStartPoint?.IsValid() ?? false)
-                {
-                    double minX = Math.Min(_windowSelectionStartPoint.X, _windowSelectionCurrentPoint.X);
-                    double maxX = Math.Max(_windowSelectionStartPoint.X, _windowSelectionCurrentPoint.X);
-                    double minY = Math.Min(_windowSelectionStartPoint.Y, _windowSelectionCurrentPoint.Y);
-                    double maxY = Math.Max(_windowSelectionStartPoint.Y, _windowSelectionCurrentPoint.Y);
-                    
-                    // Collect all drawable objects
-                    var drawableObjects = new List<OpenCADObject>();
-                    CollectDrawableObjects(ObjectToDisplay, drawableObjects);
-                    
-                    // Test each object to see if it's fully inside the selection rectangle
-                    foreach (var obj in drawableObjects)
-                    {
-                        if (IsObjectInsideRectangle(obj, minX, maxX, minY, maxY))
-                        {
-                            _windowSelectionPreviewObjects.Add(obj);
-                        }
-                    }
-                    
-                    OnPropertyChanged(nameof(WindowSelectionPreviewObjects));
-                }
-                
-                _lastMousePos = currentPos;
-                return new MouseHandlingResult { Handled = true, NeedsRefresh = true, CaptureMouse = true };
+                return HandleMouseMoveWindowSelection(currentPos, worldPos);
             }
 
             // Update status bar
@@ -783,7 +799,7 @@ namespace UI.Controls.Viewport
                 {
                     var rawPoint = new Point3D(worldPos.X, worldPos.Y, worldPos.Z);
                     var snappedPoint = SnapToGrid(rawPoint);
-    
+
                     // Update status bar with snapped coordinates
                     var snappedVector = new Vector3D(snappedPoint.X, snappedPoint.Y, snappedPoint.Z);
                     UpdateStatusBarWithWorldCoordinates(snappedVector);
@@ -807,7 +823,7 @@ namespace UI.Controls.Viewport
 
                     // Update the preview point for rendering
                     PreviewPoint = previewPoint;
-    
+
                     // Also call the callback for command logic
                     _previewCallback(previewPoint);
                 }
@@ -872,6 +888,42 @@ namespace UI.Controls.Viewport
             _lastMousePos = currentPos;
 
             return new MouseHandlingResult { Handled = false, NeedsRefresh = needsRefresh, CaptureMouse = false };
+        }
+
+        private MouseHandlingResult HandleMouseMoveWindowSelection(Point currentPos, Vector3D worldPos)
+        {
+            // Update the current point of the selection window
+            _windowSelectionCurrentPoint = new Point3D(worldPos.X, worldPos.Y, worldPos.Z);
+
+            // Clear previous preview objects
+            _windowSelectionPreviewObjects.Clear();
+
+            // Calculate the selection rectangle bounds
+            if (_windowSelectionStartPoint?.IsValid() ?? false)
+            {
+                double minX = Math.Min(_windowSelectionStartPoint.X, _windowSelectionCurrentPoint.X);
+                double maxX = Math.Max(_windowSelectionStartPoint.X, _windowSelectionCurrentPoint.X);
+                double minY = Math.Min(_windowSelectionStartPoint.Y, _windowSelectionCurrentPoint.Y);
+                double maxY = Math.Max(_windowSelectionStartPoint.Y, _windowSelectionCurrentPoint.Y);
+
+                // Collect all drawable objects
+                var drawableObjects = new List<OpenCADObject>();
+                CollectDrawableObjects(ObjectToDisplay, drawableObjects);
+
+                // Test each object to see if it's fully inside the selection rectangle
+                foreach (var obj in drawableObjects)
+                {
+                    if (IsObjectInsideRectangle(obj, minX, maxX, minY, maxY))
+                    {
+                        _windowSelectionPreviewObjects.Add(obj);
+                    }
+                }
+
+                OnPropertyChanged(nameof(WindowSelectionPreviewObjects));
+            }
+
+            _lastMousePos = currentPos;
+            return new MouseHandlingResult { Handled = true, NeedsRefresh = true, CaptureMouse = true };
         }
 
         /// <summary>
@@ -986,7 +1038,7 @@ namespace UI.Controls.Viewport
                            extents.Min.Y >= minY && extents.Max.Y <= maxY;
                 }
             }
-            
+
             return false;
         }
 
@@ -1039,15 +1091,15 @@ namespace UI.Controls.Viewport
                         _selectedObjects.Add(obj);
                     }
                 }
-                
+
                 // Clear window selection state
                 _windowSelectionStartPoint = null;
                 _windowSelectionCurrentPoint = null;
                 _windowSelectionPreviewObjects.Clear();
-                
+
                 // Return to previous mode (Selection)
                 CurrentInputMode = _previousSelectionMode != InputMode.None ? _previousSelectionMode : InputMode.Selection;
-                
+
                 // Notify of selection changes
                 if (_selectedObjects.Count > 0)
                 {
@@ -1055,10 +1107,10 @@ namespace UI.Controls.Viewport
                     OnPropertyChanged(nameof(WindowSelectionPreviewObjects));
                     SelectionChanged?.Invoke(this, EventArgs.Empty);
                 }
-                
+
                 return new MouseHandlingResult { Handled = true, NeedsRefresh = true, CaptureMouse = false };
             }
-            
+
             return new MouseHandlingResult { Handled = false, NeedsRefresh = false, CaptureMouse = false };
         }
 
@@ -1109,7 +1161,7 @@ namespace UI.Controls.Viewport
         {
             if (geoPoint == null || !geoPoint.IsValid())
                 return null;
-    
+
             try
             {
                 return new GeoPointGlyph(geoPoint, scaleFactor, _document);
@@ -1119,6 +1171,16 @@ namespace UI.Controls.Viewport
                 System.Diagnostics.Debug.WriteLine($"Failed to create glyph for {geoPoint.PointType}: {ex.Message}");
                 return null;
             }
+        }
+
+        internal void SetCommandInputMode()
+        {
+            _inputMode = InputMode.CommandInput;
+        }
+
+        internal void SetSelectionInputMode()
+        {
+            _inputMode = InputMode.Selection;
         }
 
         #endregion
@@ -1192,6 +1254,22 @@ namespace UI.Controls.Viewport
         public ObjectSelectedEventArgs(OpenCADObject obj)
         {
             Object = obj;
+        }
+    }
+
+    /// <summary>
+    /// Event args for object clicked event
+    /// </summary>
+    public class ObjectClickedEventArgs : EventArgs
+    {
+        public OpenCADObject Object { get; }
+
+        public Point3D PickedPoint { get; }
+
+        public ObjectClickedEventArgs(OpenCADObject obj, Point3D point)
+        {
+            Object = obj;
+            PickedPoint = point;
         }
     }
 

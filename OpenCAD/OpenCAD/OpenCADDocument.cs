@@ -304,14 +304,58 @@ namespace OpenCAD
         }
 
         public override bool Add(OpenCADObject obj)
-        {            
+        {
             var added = base.Add(obj);
             if (added && obj is IDrawable)
             {
                 LastGeometricChild = obj.ID;
+
+                // Notify listeners that an object was added
+                ObjectAdded?.Invoke(this, new DocumentObjectEventArgs(obj));
             }
             return added;
         }
+
+        /// <summary>
+        /// Remove an object from the document and notify listeners.
+        /// </summary>
+        public bool RemoveObject(OpenCADObject obj)
+        {
+            if (obj == null) return false;
+
+            var removed = base.Remove(obj);
+            if (removed)
+            {
+                // If the removed object was the last geometric child, clear the record.
+                if (obj is IDrawable && LastGeometricChild.HasValue && LastGeometricChild.Value == obj.ID)
+                {
+                    LastGeometricChild = Guid.Empty;
+                }
+
+                ObjectRemoved?.Invoke(this, new DocumentObjectEventArgs(obj));
+            }
+            return removed;
+        }
+
+        /// <summary>
+        /// Notify listeners that an object changed in-place.
+        /// Call this after mutating an existing object's properties.
+        /// </summary>
+        public void NotifyObjectChanged(OpenCADObject obj)
+        {
+            if (obj == null) return;
+            ObjectChanged?.Invoke(this, new DocumentObjectEventArgs(obj));
+        }
+
+        /// <summary>
+        /// Events raised when the document's object graph is modified.
+        /// Consumers (viewmodels) should subscribe to keep UI in sync.
+        /// </summary>
+        public event EventHandler<DocumentObjectEventArgs>? ObjectAdded;
+
+        public event EventHandler<DocumentObjectEventArgs>? ObjectRemoved;
+
+        public event EventHandler<DocumentObjectEventArgs>? ObjectChanged;
 
         public IDrawable? GetLastGeometricChild()
         {
@@ -735,6 +779,19 @@ namespace OpenCAD
             {
                 throw new FormatException("Invalid color format.", ex);
             }
+        }
+    }
+
+    /// <summary>
+    /// Event args for document object changes.
+    /// </summary>
+    public class DocumentObjectEventArgs : EventArgs
+    {
+        public OpenCADObject Object { get; }
+
+        public DocumentObjectEventArgs(OpenCADObject obj)
+        {
+            Object = obj ?? throw new ArgumentNullException(nameof(obj));
         }
     }
 }

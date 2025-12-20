@@ -15,7 +15,7 @@ namespace OpenCAD.Geometry.Helpers
         Center = 4,          
         Point = 8,          
         Quadrant = 16,     
-        Crossing = 32,         
+        Intersection = 32,         
         Anchor = 64,           
         Perpendicular = 128,      
         Tangent = 256,     

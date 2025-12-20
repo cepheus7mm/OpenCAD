@@ -71,7 +71,7 @@ namespace OpenCAD.Geometry.Helpers
                     BuildDiamond(glyphColor);
                     break;
                     
-                case GeoPointModes.Crossing:
+                case GeoPointModes.Intersection:
                     BuildPlusSign(glyphColor);
                     break;
                     
@@ -118,7 +118,7 @@ namespace OpenCAD.Geometry.Helpers
                 GeoPointModes.Center => Color.Magenta,
                 GeoPointModes.Point => Color.Orange,
                 GeoPointModes.Quadrant => Color.LightGreen,
-                GeoPointModes.Crossing => Color.White,
+                GeoPointModes.Intersection => Color.White,
                 GeoPointModes.Anchor => Color.LightBlue,
                 GeoPointModes.Perpendicular => Color.Red,
                 GeoPointModes.Tangent => Color.Pink,

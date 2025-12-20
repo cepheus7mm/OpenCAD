@@ -15,20 +15,28 @@
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <!-- Command History Display -->
-            <ScrollViewer x:Name="historyScrollViewer"
-                         Grid.Row="0"
-                         VerticalScrollBarVisibility="Auto"
-                         HorizontalScrollBarVisibility="Auto"
-                         Padding="0">
-                <TextBlock x:Name="historyTextBlock"
-                          FontFamily="Consolas"
-                          FontSize="11"
-                          Foreground="{DynamicResource OutputForegroundBrush}"
-                          Padding="8,8,8,0"
-                          TextWrapping="NoWrap"
-                          Text="Welcome to OpenCAD Command Input&#x0A;Type 'help' for available commands"/>
-            </ScrollViewer>
+            <!-- Command History Display: read-only TextBox (use TextBox scrolling, not an outer ScrollViewer) -->
+            <TextBox x:Name="historyTextBox"
+                     Grid.Row="0"
+                     FontFamily="Consolas"
+                     FontSize="11"
+                     Foreground="{DynamicResource OutputForegroundBrush}"
+                     Padding="8,8,8,0"
+                     TextWrapping="NoWrap"
+                     AcceptsReturn="True"
+                     IsReadOnly="True"
+                     BorderThickness="0"
+                     Background="Transparent"
+                     HorizontalScrollBarVisibility="Auto"
+                     VerticalScrollBarVisibility="Auto"
+                     VerticalAlignment="Stretch"
+                     HorizontalAlignment="Stretch">
+                <TextBox.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Command="ApplicationCommands.Copy" Header="Copy"/>
+                    </ContextMenu>
+                </TextBox.ContextMenu>
+            </TextBox>
 
             <!-- Integrated Command Input Line -->
             <Grid Grid.Row="1" 

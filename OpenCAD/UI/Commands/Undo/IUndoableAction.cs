@@ -8,12 +8,12 @@ namespace UI.Commands.Undo
         /// <summary>
         /// Execute the action (used for redo)
         /// </summary>
-        void Execute();
+        void Execute(ICommandContext context);
 
         /// <summary>
         /// Undo the action
         /// </summary>
-        void Undo();
+        void Undo(ICommandContext context);
 
         /// <summary>
         /// Description of the action for display purposes

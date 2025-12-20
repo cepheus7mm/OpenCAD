@@ -265,7 +265,6 @@ namespace UI.Commands.Drawing
                     var action = new Undo.AddGeometryAction(
                         text,
                         document,
-                        viewport,
                         string.Format(
                             "Create Text at ({0:F3}, {1:F3}, {2:F3}), Height: {3:F3}: \"{4}\"",
                             basePoint.X, basePoint.Y, basePoint.Z,

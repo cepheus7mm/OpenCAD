@@ -335,8 +335,8 @@ namespace UI.Commands
         protected PropertyChangedEventHandler? _previewHandler;
 
         // Cached providers captured when preview starts (so awaits won't lose them)
-        protected ViewportControl? CachedViewport { get; private set; }
-        protected OpenCADDocument? CachedDocument { get; private set; }
+        protected ViewportControl? viewport { get; private set; }
+        protected OpenCADDocument? document { get; private set; }
         protected UndoRedoManager? CachedUndoManager { get; private set; }
 
         protected ViewportViewModel? CachedViewModel { get; private set; }
@@ -358,8 +358,8 @@ namespace UI.Commands
                 if (viewport == null) return;
 
                 // Cache providers immediately so awaiting user input cannot lose them
-                CachedViewport = viewport;
-                CachedDocument = Context.GetDocument();
+                this.viewport = viewport;
+                document = Context.GetDocument();
                 CachedUndoManager = Context.GetUndoRedoManager();
                 CachedViewModel = viewModel;
 
@@ -372,11 +372,11 @@ namespace UI.Commands
                         if (previewPoint != null && BasePoint != null)
                         {
                             TargetPoint = previewPoint;
-                            UpdatePreviewObjects(CachedViewport!);
+                            UpdatePreviewObjects(this.viewport!);
                         }
                         else
                         {
-                            ClearPreviewObjects(CachedViewport!);
+                            ClearPreviewObjects(this.viewport!);
                         }
                     }
                 };
@@ -406,14 +406,14 @@ namespace UI.Commands
                 // ignore cleanup errors
             }
 
-            if (CachedViewport != null)
-                ClearPreviewObjects(CachedViewport);
+            if (viewport != null)
+                ClearPreviewObjects(viewport);
 
             _previewHandler = null;
 
             // Clear cached provider references
-            CachedViewport = null;
-            CachedDocument = null;
+            viewport = null;
+            document = null;
             CachedUndoManager = null;
             CachedViewModel = null;
 
@@ -439,7 +439,7 @@ namespace UI.Commands
                 // Clear existing preview objects
                 viewport.ClearPreviewObjects();
 
-                var document = CachedDocument ?? viewport.Document;
+                var document = this.document ?? viewport.Document;
                 if (document == null || SelectedObjects == null)
                     return;
 
@@ -476,8 +476,8 @@ namespace UI.Commands
         {
             try
             {
-                if (CachedViewport != null)
-                    ClearPreviewObjects(CachedViewport);
+                if (viewport != null)
+                    ClearPreviewObjects(viewport);
             }
             catch
             {
@@ -563,5 +563,7 @@ namespace UI.Commands
             }
         }
         #endregion
+
+        public virtual void HandleObjectClick(OpenCADObject obj, Point3D worldPoint) { }
     }
 }

@@ -26,7 +26,7 @@ namespace UI.Commands.Undo
             Description = description;
         }
 
-        public void Execute()
+        public void Execute(ICommandContext context)
         {
             foreach (var g in _geometries)
                 _document.Add(g);
@@ -49,7 +49,7 @@ namespace UI.Commands.Undo
             }
         }
 
-        public void Undo()
+        public void Undo(ICommandContext context)
         {
             foreach (var g in _geometries)
                 _document.Remove(g);

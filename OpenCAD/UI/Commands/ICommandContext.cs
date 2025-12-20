@@ -62,5 +62,7 @@ namespace UI.Commands
         /// Useful for UI operations such as AddObject/RemoveObject/Refresh.
         /// </summary>
         void PostToUI(System.Action action);
+
+        event EventHandler<ObjectClickedEventArgs>? ObjectClicked;
     }
 }

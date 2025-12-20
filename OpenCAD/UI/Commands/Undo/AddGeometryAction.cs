@@ -1,93 +1,56 @@
 using System;
-using System.Windows;
-using System.Windows.Threading;
 using OpenCAD;
-using UI.Controls.Viewport;
 
 namespace UI.Commands.Undo
 {
     /// <summary>
-    /// Undoable action for adding geometry to the document
+    /// Undoable action for adding geometry to the document (model-first).
+    /// UI updates occur via document events or via ICommandContext.PostToUI as a best-effort.
     /// </summary>
     public class AddGeometryAction : IUndoableAction
     {
         private readonly OpenCADObject _geometry;
         private readonly OpenCADDocument _document;
-        private readonly ViewportControl? _viewport;
 
         public string Description { get; }
 
-        public AddGeometryAction(OpenCADObject geometry, OpenCADDocument document, ViewportControl? viewport, string description)
+        public AddGeometryAction(OpenCADObject geometry, OpenCADDocument document, string description)
         {
-            _geometry = geometry;
-            _document = document;
-            _viewport = viewport;
+            _geometry = geometry ?? throw new ArgumentNullException(nameof(geometry));
+            _document = document ?? throw new ArgumentNullException(nameof(document));
             Description = description;
         }
 
-        public void Execute()
+        public void Execute(ICommandContext context)
         {
-            // Document change is non-UI and can be applied on caller thread
+            // Apply change to canonical model only
             _document.Add(_geometry);
+            _document.MarkAsModified();
 
-            // Viewport is a WPF control - update it on UI thread (best-effort, non-blocking)
-            if (_viewport != null)
-            {
-                PostToUI(() =>
-                {
-                    try
-                    {
-                        _viewport.AddObject(_geometry);
-                        _viewport.Refresh();
-                    }
-                    catch
-                    {
-                        // swallow UI errors - document already updated
-                    }
-                });
-            }
-        }
-
-        public void Undo()
-        {
-            // Remove from document (non-UI)
-            _document.Remove(_geometry);
-
-            // Ensure UI removal happens on UI thread
-            if (_viewport != null)
-            {
-                PostToUI(() =>
-                {
-                    try
-                    {
-                        _viewport.RemoveObject(_geometry);
-                        _viewport.Refresh();
-                    }
-                    catch
-                    {
-                        // swallow UI errors
-                    }
-                });
-            }
-        }
-
-        // Best-effort UI dispatcher helper (mirrors CommandContext PostToUI semantics)
-        private static void PostToUI(Action action)
-        {
+            // Notify model listeners; viewmodel subscribed to document events will refresh.
+            // Post a best-effort UI refresh if context is available.
             try
             {
-                var disp = Application.Current?.Dispatcher;
-                if (disp != null && !disp.CheckAccess())
-                {
-                    disp.BeginInvoke(action, DispatcherPriority.Normal);
-                    return;
-                }
-
-                action();
+                context?.PostToUI(() => context?.GetActiveViewport()?.Refresh());
             }
             catch
             {
-                try { action(); } catch { /* swallow */ }
+                // best-effort only
+            }
+        }
+
+        public void Undo(ICommandContext context)
+        {
+            _document.Remove(_geometry);
+            _document.MarkAsModified();
+
+            try
+            {
+                context?.PostToUI(() => context?.GetActiveViewport()?.Refresh());
+            }
+            catch
+            {
+                // best-effort only
             }
         }
     }

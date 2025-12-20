@@ -22,6 +22,8 @@ namespace UI.Commands
         private readonly Func<OpenCADDocument?> _getDocument;
         private readonly Action<string> _setCommandPrompt; // <-- new
 
+        public event EventHandler<ObjectClickedEventArgs>? ObjectClicked;
+
         public CommandContext(
             Action<string> outputMessage,
             Func<Point3D?> getLastPoint,

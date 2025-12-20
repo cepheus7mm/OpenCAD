@@ -250,7 +250,7 @@ namespace UI.Commands.Editing
             }
 
             // Apply rotation (use cached providers)
-            if (CachedDocument == null || CachedViewport == null)
+            if (document == null || viewport == null)
             {
                 Context?.OutputMessage(UnableToActOnObjectsMissingContext);
                 Cancel();
@@ -264,10 +264,10 @@ namespace UI.Commands.Editing
                 var clonedObjects = new List<OpenCADObject>();
                 foreach (var obj in SelectedObjects!)
                 {
-                    var clone = obj.Clone(CachedDocument);
+                    var clone = obj.Clone(document);
                     if (clone != null)
                     {
-                        CachedDocument.Add(clone);
+                        document.Add(clone);
                         clonedObjects.Add(clone);
                     }
                 }
@@ -289,8 +289,8 @@ namespace UI.Commands.Editing
                 catch (InvalidOperationException)
                 {
                     // Non-invertible matrix should be treated as invalid input
-                    if (CachedViewport != null)
-                        ClearPreviewObjects(CachedViewport);
+                    if (viewport != null)
+                        ClearPreviewObjects(viewport);
                     if (CachedViewModel != null && _previewHandler != null)
                         CachedViewModel.PropertyChanged -= _previewHandler;
 
