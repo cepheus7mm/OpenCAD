@@ -17,12 +17,21 @@ namespace UI.Commands.InputHelpers
             Double,
             Keyword,
             Arbitrary,
+            ProcessingResult,
             Cancel
+        }
+
+        public enum ProcessingResultType
+        {
+            None,
+            Completed,
+            RequiresMoreInput
         }
 
         public double DoubleValue { get; set; }
         public Point3D? Point { get; set; }
         public string? Keyword { get; set; }
+        public ProcessingResultType ProcessingResult { get; set; } = ProcessingResultType.None;
 
         public InputResultType ResultType
         {

@@ -287,6 +287,16 @@
         /// </summary>
         public const string ObjectID = "Object ID";
 
+        public const string Position = "Position";
+
+        public const string Bulge = "Bulge";
+
+        public const string StartWidth = "Start Width";
+
+        public const string EndWidth = "End Width";
+
+        public const string Index = "Index";
+
         #endregion
 
         #region Default Layer Names

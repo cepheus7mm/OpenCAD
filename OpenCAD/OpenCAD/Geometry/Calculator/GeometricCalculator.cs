@@ -1,6 +1,7 @@
 ﻿using OpenCAD.Geometry.Helpers;
 using OpenCAD.Interfaces;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -385,6 +386,220 @@ namespace OpenCAD.Geometry.Calculator
                 // Wrap-around case: arc crosses 0°
                 return angle >= start - tolerance || angle <= end + tolerance;
             }
+        }
+
+        public static double GetBulgeFromVertices(Point3D startPoint, Point3D endPoint, Point3D arcPoint)
+        {
+            double chordLength = GetChordLength(startPoint, endPoint);
+            double sagitta = Math.Sqrt(Math.Pow(arcPoint.X - (startPoint.X + endPoint.X) / 2, 2) + Math.Pow(arcPoint.Y - (startPoint.Y + endPoint.Y) / 2, 2));
+            if (sagitta == 0)
+                return 0;
+            double radius = (chordLength * chordLength) / (8 * sagitta) + sagitta / 2;
+            double bulge = (4 * sagitta) / chordLength;
+            // Determine the sign of the bulge based on the orientation of the arc point
+            double crossProduct = (endPoint.X - startPoint.X) * (arcPoint.Y - startPoint.Y) - (endPoint.Y - startPoint.Y) * (arcPoint.X - startPoint.X);
+            if (crossProduct < 0)
+                bulge = -bulge;
+            return bulge;
+        }
+
+        public static double GetBulgeFromRadius(Point3D startPoint, Point3D endPoint, double radius)
+        {
+            double chordLength = GetChordLength(startPoint, endPoint);
+            if (radius == 0)
+                return 0;
+            double sagitta = radius - Math.Sqrt(radius * radius - (chordLength * chordLength) / 4);
+            double bulge = (4 * sagitta) / chordLength;
+            return bulge;
+        }
+
+        public static double GetRadiusFromBulge(Point3D startPoint, Point3D endPoint, double bulge)
+        {
+            double chordLength = GetChordLength(startPoint, endPoint);
+            if (bulge == 0)
+                return double.PositiveInfinity; // Straight line
+            double sagitta = GetSagittaFromBulge(startPoint, endPoint, bulge);
+            return (chordLength * chordLength) / (8 * sagitta) + sagitta / 2;
+        }
+
+        public static double GetChordLength(Point3D startPoint, Point3D endPoint)
+        {
+            return startPoint.DistanceTo(endPoint);
+        }
+
+        public static double GetSagittaFromBulge(Point3D startPoint, Point3D endPoint, double bulge)
+        {
+            double chordLength = GetChordLength(startPoint, endPoint);
+            return (Math.Abs(bulge) * chordLength) / 2.0;
+        }
+
+        public static double GetAngleFromBulge(double bulge)
+        {
+            return 4 * Math.Atan(bulge);
+        }
+
+        public static double GetBulgeFromAngle(double angle)
+        {
+            return Math.Tan(angle / 4);
+        }
+
+        public static Point3D GetMidpointFromBulge(Point3D startPoint, Point3D endPoint, double bulge)
+        {
+            if (Math.Abs(bulge) < 1e-10)
+            {
+                // Straight line case
+                return new Point3D(
+                    (startPoint.X + endPoint.X) / 2.0,
+                    (startPoint.Y + endPoint.Y) / 2.0,
+                    (startPoint.Z + endPoint.Z) / 2.0
+                );
+            }
+
+            double chordMidX = (startPoint.X + endPoint.X) / 2.0;
+            double chordMidY = (startPoint.Y + endPoint.Y) / 2.0;
+            double chordLength = GetChordLength(startPoint, endPoint);
+            double sagitta = (bulge * chordLength) / 4.0;
+            // Calculate the direction perpendicular to the chord
+            double dx = endPoint.X - startPoint.X;
+            double dy = endPoint.Y - startPoint.Y;
+            double length = Math.Sqrt(dx * dx + dy * dy);
+            double perpX = -dy / length;
+            double perpY = dx / length;
+            // Midpoint of the arc
+            double midX = chordMidX + perpX * sagitta;
+            double midY = chordMidY + perpY * sagitta;
+            return new Point3D(midX, midY, (startPoint.Z + endPoint.Z) / 2.0);
+        }
+
+        /// <summary>
+        /// Calculates bulge from a tangent direction constraint at the start point.
+        /// The arc will be tangent to the specified direction at the start point.
+        /// </summary>
+        /// <param name="startPoint">Start point of the arc segment</param>
+        /// <param name="endPoint">End point of the arc segment</param>
+        /// <param name="directionAngle">Tangent direction angle at start point in radians</param>
+        /// <returns>Bulge value for the arc segment</returns>
+        public static double GetBulgeFromDirection(Point3D startPoint, Point3D endPoint, double directionAngle)
+        {
+            // Direction vector (unit tangent at start)
+            double dx_tan = Math.Cos(directionAngle);
+            double dy_tan = Math.Sin(directionAngle);
+            
+            // Chord vector
+            double dx_chord = endPoint.X - startPoint.X;
+            double dy_chord = endPoint.Y - startPoint.Y;
+            double chordLength = Math.Sqrt(dx_chord * dx_chord + dy_chord * dy_chord);
+            
+            if (chordLength < 1e-10)
+                return 0; // Degenerate case: start and end are the same
+            
+            // Perpendicular to tangent (points toward center for CCW arc)
+            double perpX = -dy_tan;
+            double perpY = dx_tan;
+            
+            // Chord midpoint
+            double midX = (startPoint.X + endPoint.X) / 2.0;
+            double midY = (startPoint.Y + endPoint.Y) / 2.0;
+            
+            // Vector from start to midpoint
+            double toMidX = midX - startPoint.X;
+            double toMidY = midY - startPoint.Y;
+            
+            // Dot product: chord direction · tangent direction
+            double dot = (dx_chord * dx_tan + dy_chord * dy_tan) / chordLength;
+            double sagitta = 0.0;
+            double bulge = 0.0;
+            double cross = 0.0;
+            // Check if tangent is perpendicular to chord (semicircle case)
+            if (Math.Abs(dot) < 1e-10)
+            {
+                // Tangent perpendicular to chord -> semicircle
+                sagitta = chordLength / 2.0;
+                bulge = (4 * sagitta) / chordLength; // bulge = 2.0
+                
+                // Determine sign based on orientation
+                cross = dx_chord * dy_tan - dy_chord * dx_tan;
+                return cross < 0 ? -bulge : bulge;
+            }
+            
+            // Project vector-to-midpoint onto perpendicular direction
+            double projection = toMidX * perpX + toMidY * perpY;
+            
+            // Calculate sagitta using the angle constraint
+            // sagitta = projection / sin(angle between chord and tangent)
+            double sinAngle = Math.Sqrt(1 - dot * dot);
+            sagitta = Math.Abs(projection / sinAngle);
+            
+            // Calculate bulge
+            bulge = (4 * sagitta) / chordLength;
+            
+            // Determine sign based on orientation (cross product)
+            cross = dx_chord * dy_tan - dy_chord * dx_tan;
+            if (cross < 0)
+                bulge = -bulge;
+            
+            return bulge;
+        }
+
+        /// <summary>
+        /// Calculates bulge from a center point.
+        /// </summary>
+        /// <param name="startPoint">Start point of the arc segment</param>
+        /// <param name="endPoint">End point of the arc segment</param>
+        /// <param name="center">Center point of the arc</param>
+        /// <returns>Bulge value for the arc segment</returns>
+        public static double GetBulgeFromCenter(Point3D startPoint, Point3D endPoint, Point3D center)
+        {
+            // Calculate angles from center to start and end
+            double angleStart = Math.Atan2(startPoint.Y - center.Y, startPoint.X - center.X);
+            double angleEnd = Math.Atan2(endPoint.Y - center.Y, endPoint.X - center.X);
+            
+            // Calculate included angle (always take the smaller arc)
+            double includedAngle = angleEnd - angleStart;
+            
+            // Normalize to [-π, π]
+            while (includedAngle > Math.PI) includedAngle -= 2 * Math.PI;
+            while (includedAngle < -Math.PI) includedAngle += 2 * Math.PI;
+            
+            // Calculate bulge from angle
+            return Math.Tan(includedAngle / 4.0);
+        }
+
+        public static (double radius, double startAngle, double endAngle, Point3D center) GetArcParametersFromBulge(Point3D startPoint, Point3D endPoint, double bulge)
+        {
+            double radius = GetRadiusFromBulge(startPoint, endPoint, bulge);
+            var chordMid = GetPointOnLineAtParameter(startPoint, endPoint, 0.5);
+            double chordLength = startPoint.DistanceTo(endPoint);
+            double sagitta = GetSagittaFromBulge(startPoint, endPoint, bulge);
+            double dx = endPoint.X - startPoint.X;
+            double dy = endPoint.Y - startPoint.Y;
+            double perpX = -dy / chordLength;
+            double perpY = dx / chordLength;
+            double dir = bulge > 0 ? 1.0 : -1.0;
+            double centerX = chordMid.X + perpX * (radius - sagitta) * dir;
+            double centerY = chordMid.Y + perpY * (radius - sagitta) * dir;
+            double startAngle = Math.Atan2(startPoint.Y - centerY, startPoint.X - centerX);
+            double endAngle = Math.Atan2(endPoint.Y - centerY, endPoint.X - centerX);
+
+            if (dir > 0)
+            {
+                if (endAngle < startAngle) endAngle += 2.0 * Math.PI;
+            }
+            else
+            {
+                if (endAngle > startAngle) endAngle -= 2.0 * Math.PI;
+            }
+
+            return (radius, startAngle, endAngle, new Point3D(centerX, centerY, startPoint.Z));
+        }
+
+        public static Point3D GetPointOnLineAtParameter(Point3D p1, Point3D p2, double param)
+        {             
+            return new Point3D(
+                p1.X + param * (p2.X - p1.X),
+                p1.Y + param * (p2.Y - p1.Y),
+                p1.Z + param * (p2.Z - p1.Z)
+            );
         }
     }
 }

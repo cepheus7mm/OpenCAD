@@ -1,4 +1,4 @@
-using OpenCAD;
+﻿using OpenCAD;
 using System.Numerics;
 using OpenTK.Graphics.OpenGL;
 using System.Diagnostics;
@@ -17,6 +17,7 @@ namespace GraphicsEngine
         private Matrix4x4 _projectionMatrix;
         private Matrix4x4 _viewMatrix;
         private ShaderProgram? _shaderProgram;
+        private PolylineShaderProgram? _polylineShaderProgram;
         private PolygonRenderer? _polygonRenderer;  // ADD THIS LINE
         private ProjectionMode _projectionMode = ProjectionMode.Orthographic; // Default to orthographic for CAD
         private int _viewportWidth;
@@ -84,6 +85,11 @@ namespace GraphicsEngine
 
             // Create shader program
             _shaderProgram = new ShaderProgram();
+            _polylineShaderProgram = new PolylineShaderProgram();
+
+            // Initialize polygon renderer used for filled overlays (window selection)
+            // This was missing previously which caused RenderFilledPolygon to be a no-op.
+            _polygonRenderer = new PolygonRenderer(_shaderProgram);
 
             // Set baseline GL state
             GL.Enable(EnableCap.DepthTest);
@@ -107,60 +113,22 @@ namespace GraphicsEngine
         /// </summary>
         private void RegisterDefaultRenderers()
         {
-            if (_shaderProgram == null)
+            if (_shaderProgram == null || _polylineShaderProgram == null)
                 throw new InvalidOperationException("ShaderProgram must be initialized before registering renderers");
 
+            _renderers.Clear();
             _renderers.Add(new LineRenderer(_shaderProgram));
             _renderers.Add(new ArcRenderer(_shaderProgram));
-            
-            // Initialize polygon renderer for filled shapes
-            _polygonRenderer = new PolygonRenderer(_shaderProgram);  // ADD THIS LINE
+            _renderers.Add(new PolylineRenderer(_polylineShaderProgram));
 
-            // Add text renderer only if a metrics provider was injected
+            // Register TextRenderer when metrics are available (lazy)
             if (_textMetrics != null)
             {
                 _renderers.Add(new TextRenderer(_shaderProgram, _textMetrics));
             }
-            else
-            {
-                System.Diagnostics.Debug.WriteLine("RenderEngine: no ITextMetricsProvider injected - text rendering disabled.");
-            }
 
             System.Diagnostics.Debug.WriteLine($"Registered {_renderers.Count} renderer(s)");
         }
-
-        /// <summary>
-        /// Render a collection of OpenCADObjects
-        /// </summary>
-        //public void Render(IEnumerable<OpenCADObject> objects)
-        //{
-        //    // Clearing is now handled by the caller to allow layered rendering
-        //    // GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
-
-        //    // Force a pure orthographic pipeline: no camera view in ortho
-        //    _viewMatrix = (_projectionMode == ProjectionMode.Orthographic)
-        //        ? Matrix4x4.Identity
-        //        : _camera.GetViewMatrix();
-
-        //    if (_projectionMode != ProjectionMode.Orthographic && _viewMatrix.IsIdentity)
-        //    {
-        //        //System.Diagnostics.Debug.WriteLine("WARNING: View matrix is IDENTITY in perspective!");
-        //        //System.Diagnostics.Debug.WriteLine($"Camera - Position: {_camera.Position}, Target: {_camera.Target}, Up: {_camera.Up}");
-        //    }
-
-        //    int count = 0;
-        //    var drawableObjects = objects.Where(o => o.IsDrawable).ToList();
-        //    foreach (var obj in drawableObjects)
-        //    {
-        //        count++;
-        //        RenderObject(obj);
-        //    }
-
-        //    if (count == 0)
-        //        //System.Diagnostics.Debug.WriteLine("Render called with 0 objects.");
-
-        //    GLDiag.Check("End of Render");
-        //}
 
         /// <summary>
         /// Render a collection of OpenCADObjects with optional highlighting and selection
@@ -184,6 +152,9 @@ namespace GraphicsEngine
 
             int count = 0;
             var drawableObjects = objects.Where(o => o.IsDrawable).ToList();
+            int[] vp = new int[4];
+            GL.GetInteger(GetPName.Viewport, vp);
+
             foreach (var obj in drawableObjects)
             {
                 count++;
@@ -193,6 +164,7 @@ namespace GraphicsEngine
                 {
                     ViewMatrix = _viewMatrix,
                     ProjectionMatrix = _projectionMatrix,
+                    Viewport = new Vector2(vp[2], vp[3]),
                     IsHighlighted = highlightedSet.Contains(obj),
                     IsSelected = selectedSet.Contains(obj)
                 };
@@ -246,22 +218,6 @@ namespace GraphicsEngine
 
             GLDiag.Check("End of RenderOverlay");
         }
-
-        ///// <summary>
-        ///// Render a single OpenCADObject
-        ///// </summary>
-        //private void RenderObject(OpenCADObject obj)
-        //{
-        //    var renderer = _renderers.FirstOrDefault(r => r.CanRender(obj));
-        //    if (renderer != null)
-        //    {
-        //        renderer.Render(obj, _viewMatrix, _projectionMatrix);
-        //    }
-        //    else
-        //    {
-        //        //System.Diagnostics.Debug.WriteLine($"No renderer found for type {obj.GetType().FullName}");
-        //    }
-        //}
 
         /// <summary>
         /// Render a single OpenCADObject with context

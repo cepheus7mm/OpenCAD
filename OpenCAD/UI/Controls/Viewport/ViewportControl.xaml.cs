@@ -197,7 +197,8 @@ namespace UI.Controls.Viewport
 
         internal void AddPreviewObject(OpenCADObject obj)
         {
-            _previewObjects.Add(obj);
+            if (!_previewObjects.Contains(obj))
+                _previewObjects.Add(obj);
             Refresh();
         }
 

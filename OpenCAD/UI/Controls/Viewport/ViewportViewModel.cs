@@ -667,18 +667,18 @@ namespace UI.Controls.Viewport
             }
             else if (CurrentInputMode == InputMode.Selection)
             {
-                return HandleLeftMouseDownPointSelection(mousePos, worldPos);
+                return HandleLeftMouseDownSelection(mousePos, worldPos);
             }
             else if (CurrentInputMode == InputMode.CommandInput)
             {
-                return HandleLeftMouseDownPointCommandInput(mousePos, worldPos);
+                return HandleLeftMouseDownCommandInput(mousePos, worldPos);
             }
 
             _lastMousePos = mousePos;
             return new MouseHandlingResult { Handled = false, NeedsRefresh = false, CaptureMouse = true };
         }
 
-        private MouseHandlingResult HandleLeftMouseDownPointCommandInput(Point mousePos, Vector3? worldPos)
+        private MouseHandlingResult HandleLeftMouseDownCommandInput(Point mousePos, Vector3? worldPos)
         {
             if (HighlightedObject != null && worldPos.HasValue)
             {
@@ -689,7 +689,7 @@ namespace UI.Controls.Viewport
             return new MouseHandlingResult { Handled = false, NeedsRefresh = false, CaptureMouse = false };
         }
 
-        private MouseHandlingResult HandleLeftMouseDownPointSelection(Point mousePos, Vector3? worldPos)
+        private MouseHandlingResult HandleLeftMouseDownSelection(Point mousePos, Vector3? worldPos)
         {
             if (HighlightedObject != null)
             {
