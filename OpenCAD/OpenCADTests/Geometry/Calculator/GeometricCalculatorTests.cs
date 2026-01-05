@@ -15,11 +15,11 @@ namespace OpenCADTests
 
             var (pt1, pt2) = GeometricCalculator.Intersection(line1, line2);
 
-            Assert.IsTrue(pt1.IsValid());
+            Assert.IsTrue(pt1.IsValid);
             Assert.AreEqual(5, pt1.X, 1e-10);
             Assert.AreEqual(0, pt1.Y, 1e-10);
             Assert.AreEqual(0, pt1.Z, 1e-10);
-            Assert.IsTrue(pt2.IsNotAPoint());
+            Assert.AreEqual(pt2, Point3D.NotAPoint);
         }
 
         [TestMethod]
@@ -30,8 +30,8 @@ namespace OpenCADTests
 
             var (pt1, pt2) = GeometricCalculator.Intersection(line1, line2);
 
-            Assert.IsTrue(pt1.IsNotAPoint());
-            Assert.IsTrue(pt2.IsNotAPoint());
+            Assert.AreEqual(pt1, Point3D.NotAPoint);
+            Assert.AreEqual(pt2, Point3D.NotAPoint);
         }
 
         [TestMethod]
@@ -42,8 +42,8 @@ namespace OpenCADTests
 
             var (pt1, pt2) = GeometricCalculator.Intersection(line1, line2);
 
-            Assert.IsTrue(pt1.IsNotAPoint());
-            Assert.IsTrue(pt2.IsNotAPoint());
+            Assert.AreEqual(pt1, Point3D.NotAPoint);
+            Assert.AreEqual(pt2, Point3D.NotAPoint);
         }
 
         [TestMethod]
@@ -54,11 +54,11 @@ namespace OpenCADTests
 
             var (pt1, pt2) = GeometricCalculator.Intersection(line1, line2);
 
-            Assert.IsTrue(pt1.IsValid());
+            Assert.IsTrue(pt1.IsValid);
             Assert.AreEqual(5, pt1.X, 1e-10);
             Assert.AreEqual(0, pt1.Y, 1e-10);
             Assert.AreEqual(1, pt1.Z, 1e-10);
-            Assert.IsTrue(pt2.IsNotAPoint());
+            Assert.AreEqual(pt2, Point3D.NotAPoint);
         }
 
         [TestMethod]
@@ -70,8 +70,8 @@ namespace OpenCADTests
             var (pt1, pt2) = GeometricCalculator.Intersection(line, circle);
             var x1 = Math.Min(pt1.X, pt2.X);
             var x2 = Math.Max(pt1.X, pt2.X);
-            Assert.IsTrue(pt1.IsValid());
-            Assert.IsTrue(pt2.IsValid());
+            Assert.IsTrue(pt1.IsValid);
+            Assert.IsTrue(pt2.IsValid);
             Assert.AreEqual(-5, x1, 1e-10);
             Assert.AreEqual(0, pt1.Y, 1e-10);
             Assert.AreEqual(5, x2, 1e-10);
@@ -86,10 +86,10 @@ namespace OpenCADTests
 
             var (pt1, pt2) = GeometricCalculator.Intersection(line, circle);
 
-            Assert.IsTrue(pt1.IsValid());
+            Assert.IsTrue(pt1.IsValid);
             Assert.AreEqual(0, pt1.X, 1e-10);
             Assert.AreEqual(5, pt1.Y, 1e-10);
-            Assert.IsTrue(pt2.IsNotAPoint());
+            Assert.AreEqual(pt2, Point3D.NotAPoint);
         }
 
         [TestMethod]
@@ -100,8 +100,8 @@ namespace OpenCADTests
 
             var (pt1, pt2) = GeometricCalculator.Intersection(line, circle);
 
-            Assert.IsTrue(pt1.IsNotAPoint());
-            Assert.IsTrue(pt2.IsNotAPoint());
+            Assert.AreEqual(pt1, Point3D.NotAPoint);
+            Assert.AreEqual(pt2, Point3D.NotAPoint);
         }
 
         [TestMethod]
@@ -114,8 +114,8 @@ namespace OpenCADTests
 
             var x1 = Math.Min(pt1.X, pt2.X);
             var x2 = Math.Max(pt1.X, pt2.X);
-            Assert.IsTrue(pt1.IsValid());
-            Assert.IsTrue(pt2.IsValid());
+            Assert.IsTrue(pt1.IsValid);
+            Assert.IsTrue(pt2.IsValid);
             Assert.AreEqual(-5, x1, 1e-10);
             Assert.AreEqual(0, pt1.Y, 1e-10);
             Assert.AreEqual(5, x2, 1e-10);
@@ -133,8 +133,8 @@ namespace OpenCADTests
             // Arc is treated as full circle, so both intersection points are returned
             var x1 = Math.Min(pt1.X, pt2.X);
             var x2 = Math.Max(pt1.X, pt2.X);
-            Assert.IsTrue(pt1.IsValid());
-            Assert.IsTrue(pt2.IsValid());
+            Assert.IsTrue(pt1.IsValid);
+            Assert.IsTrue(pt2.IsValid);
             Assert.AreEqual(-5, x1, 1e-10);
             Assert.AreEqual(0, pt1.Y, 1e-10);
             Assert.AreEqual(5, x2, 1e-10);
@@ -177,8 +177,8 @@ namespace OpenCADTests
 
             var (pt1, pt2) = GeometricCalculator.Intersection(circle1, circle2);
 
-            Assert.IsTrue(pt1.IsValid());
-            Assert.IsTrue(pt2.IsValid());
+            Assert.IsTrue(pt1.IsValid);
+            Assert.IsTrue(pt2.IsValid);
             Assert.AreEqual(4, pt1.X, 1e-10);
             Assert.AreEqual(3, Math.Abs(pt1.Y), 1e-10); // Should be ±3
             Assert.AreEqual(4, pt2.X, 1e-10);
@@ -193,10 +193,10 @@ namespace OpenCADTests
 
             var (pt1, pt2) = GeometricCalculator.Intersection(circle1, circle2);
 
-            Assert.IsTrue(pt1.IsValid());
+            Assert.IsTrue(pt1.IsValid);
             Assert.AreEqual(5, pt1.X, 1e-10);
             Assert.AreEqual(0, pt1.Y, 1e-10);
-            Assert.IsTrue(pt2.IsNotAPoint());
+           Assert.AreEqual(pt2, Point3D.NotAPoint);
         }
 
         [TestMethod]
@@ -207,8 +207,8 @@ namespace OpenCADTests
 
             var (pt1, pt2) = GeometricCalculator.Intersection(circle1, circle2);
 
-            Assert.IsTrue(pt1.IsNotAPoint());
-            Assert.IsTrue(pt2.IsNotAPoint());
+            Assert.AreEqual(pt1, Point3D.NotAPoint);
+            Assert.AreEqual(pt2, Point3D.NotAPoint);
         }
 
         [TestMethod]
@@ -219,8 +219,8 @@ namespace OpenCADTests
 
             var (pt1, pt2) = GeometricCalculator.Intersection(circle1, circle2);
 
-            Assert.IsTrue(pt1.IsNotAPoint());
-            Assert.IsTrue(pt2.IsNotAPoint());
+            Assert.AreEqual(pt1, Point3D.NotAPoint);
+            Assert.AreEqual(pt2, Point3D.NotAPoint);
         }
 
         [TestMethod]
@@ -232,8 +232,8 @@ namespace OpenCADTests
             var (pt1, pt2) = GeometricCalculator.Intersection(arc1, arc2);
 
             // Both intersection points returned (treated as full circles)
-            Assert.IsTrue(pt1.IsValid());
-            Assert.IsTrue(pt2.IsValid());
+            Assert.IsTrue(pt1.IsValid);
+            Assert.IsTrue(pt2.IsValid);
             Assert.AreEqual(4, pt1.X, 1e-10);
             Assert.AreEqual(4, pt2.X, 1e-10);
 

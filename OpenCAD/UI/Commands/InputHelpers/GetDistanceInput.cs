@@ -118,9 +118,9 @@ namespace UI.Commands.InputHelpers
                             keywords: keyWords,
                             cancellationToken: cancellationToken);
 
-                        if (second?.ResultType == InputResult.InputResultType.Point && second.Point != null)
+                        if (second?.ResultType == InputResult.InputResultType.Point && second.Point.HasValue)
                         {
-                            return CreateDoubleResult(BasePoint.DistanceTo(second.Point));
+                            return CreateDoubleResult(BasePoint.Value.DistanceTo(second.Point.Value));
                         }
                         if (second?.ResultType == InputResult.InputResultType.Keyword && second.Keyword != null && second.Keyword.Length == 0)
                         {
@@ -194,7 +194,7 @@ namespace UI.Commands.InputHelpers
 
                 if (second?.ResultType == InputResult.InputResultType.Point && second.Point != null)
                 {
-                    return CreateDoubleResult(BasePoint.DistanceTo(second.Point));
+                    return CreateDoubleResult(BasePoint.Value.DistanceTo(second.Point.Value));
                 }
 
                 return CreateCancelResult();

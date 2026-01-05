@@ -31,7 +31,7 @@ namespace UI.Commands.Drawing
             try
             {
                 // Get initial start point (allow using last point)
-                BasePoint = _firstStartPoint;
+                BasePoint = _firstStartPoint.HasValue ? _firstStartPoint.Value : Point3D.NotAPoint;
                 var result = await GetPoint(
                     "Specify start point",
                     allowLastPoint: true);
@@ -65,10 +65,10 @@ namespace UI.Commands.Drawing
                         allowLastPoint: false,
                         keyWords: new[] { "C", "Close", "U", "Undo" });
 
-                    var endPoint = null as Point3D;
+                    var endPoint = Point3D.NotAPoint;
                     if (result != null && result.Point is Point3D)
                     {
-                        endPoint = result.Point;
+                        endPoint = result.Point.Value;
                     }
 
                     if (result.ResultType == InputHelpers.InputResult.InputResultType.Cancel)
@@ -86,7 +86,7 @@ namespace UI.Commands.Drawing
                             // Close the figure by connecting to the first start point
                             if (_firstStartPoint != null && !startPoint.Equals(_firstStartPoint))
                             {
-                                CreateLine(startPoint, _firstStartPoint);
+                                CreateLine(startPoint, _firstStartPoint.Value);
                                 Context?.OutputMessage("Figure closed.");
                             }
                             break;

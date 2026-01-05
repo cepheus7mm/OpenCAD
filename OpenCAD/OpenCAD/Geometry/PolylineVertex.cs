@@ -27,7 +27,7 @@ namespace OpenCAD.Geometry
         [JsonIgnore, XmlIgnore]
         public Point3D Position
         {
-            get => GetPropertyValue<Point3D>(PropertyType.Point, nameof(Position)) ?? Point3D.Origin;
+            get => GetPropertyValue<Point3D>(PropertyType.Point, nameof(Position));
             set => SetPropertyValue(PropertyType.Point, nameof(Position), OpenCADStrings.Position, value);
         }
 

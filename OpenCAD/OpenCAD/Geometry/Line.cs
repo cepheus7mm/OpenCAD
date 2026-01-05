@@ -1,20 +1,22 @@
-﻿using OpenCAD.Interfaces;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 using System.Xml.Serialization;
 using System.Numerics;
 using OpenCAD.Geometry.Calculator;
 using OpenCAD.Geometry.Helpers;
+using OpenCAD.Interfaces;
 
 namespace OpenCAD.Geometry
 {
-    public class Line : GeometryBase, ILinearGeometry
+    public class Line : GeometryBase, ICurve
     {
+        // ---------------------------------------------------------------------
+        // Private fields
+        // ---------------------------------------------------------------------
         private readonly object _propertyLock = new();
+
+        // ---------------------------------------------------------------------
+        // Constructors
+        // ---------------------------------------------------------------------
 
         /// <summary>
         /// Parameterless constructor required for deserialization.
@@ -29,17 +31,21 @@ namespace OpenCAD.Geometry
             EndPoint = end;
         }
 
+        // ---------------------------------------------------------------------
+        // Public properties
+        // ---------------------------------------------------------------------
+
         [JsonIgnore, XmlIgnore]
         public Point3D StartPoint
         {
-            get => GetPropertyValue<Point3D>(PropertyType.Point, nameof(StartPoint)) ?? new Point3D();
+            get => GetPropertyValue<Point3D>(PropertyType.Point, nameof(StartPoint));
             set => SetPropertyValue(PropertyType.Point, nameof(StartPoint), OpenCADStrings.StartPoint, value);
         }
 
         [JsonIgnore, XmlIgnore]
         public Point3D EndPoint
         {
-            get => GetPropertyValue<Point3D>(PropertyType.Point, nameof(EndPoint)) ?? new Point3D();
+            get => GetPropertyValue<Point3D>(PropertyType.Point, nameof(EndPoint));
             set => SetPropertyValue(PropertyType.Point, nameof(EndPoint), OpenCADStrings.EndPoint, value);
         }
 
@@ -48,110 +54,145 @@ namespace OpenCAD.Geometry
 
         [JsonIgnore, XmlIgnore]
         public override double Angle => StartPoint.AngleTo(EndPoint);
-        
-        public override Vector3D? GetFirstDerivate(Point3D point)
-        {
-            // For a straight line the first derivative (tangent) is constant:
-            // the normalized direction vector from StartPoint to EndPoint.
-            var dir = EndPoint - StartPoint; // returns Vector3D
-            double len = dir.Length;
 
-            // If the line has zero length there is no well-defined tangent.
-            if (len <= double.Epsilon)
-                return null;
-
-            return new Vector3D(dir.X / len, dir.Y / len, dir.Z / len);
-        }
-
-        public override double GetParameterAtPoint(Point3D point)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override Point3D GetPointAtParameter(double parameter)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override Point3D GetClosestPointTo(Point3D point, bool extend = false)
-        {
-            var lineVec = EndPoint - StartPoint;
-            var pointVec = point - StartPoint;
-            double lineLenSq = lineVec.LengthSquared;
-            if (lineLenSq < double.Epsilon)
-                return StartPoint; // Line is a point
-            double t = Vector3D.Dot(pointVec, lineVec) / lineLenSq;
-            if (!extend)
-                t = Math.Max(0, Math.Min(1, t)); // Clamp to [0, 1]
-            return StartPoint + lineVec * t;
-        }
-
-        public override Vector3D? GetSecondDerivate(Point3D point)
-        {
-            var firstDerivate = GetFirstDerivate(EndPoint);
-            return firstDerivate?.Rotate(Math.PI / 2, _normal);
-        }
+        // ---------------------------------------------------------------------
+        // Base class overrides (GeometryBase)
+        // ---------------------------------------------------------------------
 
         public override Extents GetExtents()
         {
-            return new Extents
-            {
-                Min = new Point3D(
-                    Math.Min(StartPoint.X, EndPoint.X),
-                    Math.Min(StartPoint.Y, EndPoint.Y),
-                    Math.Min(StartPoint.Z, EndPoint.Z)
-                ),
-                Max = new Point3D(
-                    Math.Max(StartPoint.X, EndPoint.X),
-                    Math.Max(StartPoint.Y, EndPoint.Y),
-                    Math.Max(StartPoint.Z, EndPoint.Z)
-                )
-            };
-        }
-        
-        #region Editing
-
-        public override bool Transform(Matrix4D transformation)
-        {
-            // Convert to System.Numerics.Vector3 (float precision is OK for rendering/transforms)
-            var s = Vector3D.Transform(new Vector3D(StartPoint.X, StartPoint.Y, StartPoint.Z), transformation);
-            var e = Vector3D.Transform(new Vector3D(EndPoint.X, EndPoint.Y, EndPoint.Z), transformation);
-
-            StartPoint = new Point3D(s.X, s.Y, s.Z);
-            EndPoint = new Point3D(e.X, e.Y, e.Z);
-            return true;
+            return new Extents(StartPoint, EndPoint);
         }
 
         public override IEnumerable<GeoPoint> GetGeoPoints(Point3D referencePoint, GeoPointModes geoPointType)
         {
-            var candidates = new List<GeoPoint> ();
+            var candidates = new List<GeoPoint>();
             if (IsPreviewGeometry)
             {
                 // Preview geometries do not provide geo points
                 return candidates;
             }
-            if (geoPointType.HasFlag(GeoPointModes.Vertex))
+
+            // Use unified segment calculation with bulge = 0 for line
+            candidates.AddRange(GeometricCalculator.GetSegmentGeoPoints(StartPoint, EndPoint, 0.0, referencePoint, geoPointType));
+
+            // Set the RelatedGeometryId for all candidates
+            foreach (var geoPoint in candidates)
             {
-                candidates.Add(new GeoPoint(StartPoint, GeoPointModes.Vertex) { RelatedGeometryId = ID});
-                candidates.Add(new GeoPoint(EndPoint, GeoPointModes.Vertex) { RelatedGeometryId = ID });
+                geoPoint.RelatedGeometryId = ID;
             }
-            if (geoPointType.HasFlag(GeoPointModes.Middle))
+
+            // Line-specific: Perpendicular point (requires document preview point)
+            if (geoPointType.HasFlag(GeoPointModes.Perpendicular) && _document.PreviewPoint.HasValue)
             {
-                candidates.Add(GeometricCalculator.MidPoint(this));
-            }
-            if (geoPointType.HasFlag(GeoPointModes.Perpendicular) && _document.PreviewPoint is not null)
-            {
-                candidates.Add(GeometricCalculator.Perpendicular(_document.PreviewPoint, this));
-            }
-            if (geoPointType.HasFlag(GeoPointModes.NearestPoint))
-            {
-                var geoPoint = new GeoPoint(GetClosestPointTo(referencePoint), GeoPointModes.NearestPoint);
-                candidates.Add(geoPoint);
+                candidates.Add(GeometricCalculator.Perpendicular(_document.PreviewPoint.Value, this));
             }
 
             return candidates;
         }
 
-        #endregion
+        // ---------------------------------------------------------------------
+        // ICurve implementation
+        // ---------------------------------------------------------------------
+
+        public bool IsClosed => false;
+
+        public bool IsPeriodic => false;
+
+        public double DomainStart => 0.0;
+
+        public double DomainEnd => 1.0;
+
+        public double GetParameterAtPoint(Point3D point)
+        {
+            return GeometricCalculator.GetParameterAtPoint(point, StartPoint, EndPoint);
+        }
+
+        public Point3D GetPointAtParameter(double parameter)
+        {
+            return GeometricCalculator.GetPointAtParameter(parameter, StartPoint, EndPoint);
+        }
+
+        public Vector3D GetFirstDerivativeAtParameter(double t)
+        {
+            return GeometricCalculator.GetFirstDerivative(t, StartPoint, EndPoint);
+        }
+
+        public Vector3D GetSecondDerivativeAtParameter(double t)
+        {
+            return GeometricCalculator.GetSecondDerivative(t, StartPoint, EndPoint);
+        }
+
+        public double GetClosestParameter(Point3D point, bool extend = false)
+        {
+            return GeometricCalculator.GetClosestParameter(point, StartPoint, EndPoint, extend);
+        }
+
+        public Point3D GetClosestPoint(Point3D point, bool extend = false)
+        {
+            return GeometricCalculator.GetClosestPoint(point, StartPoint, EndPoint, extend);
+        }
+
+        public double GetLength()
+        {
+            return StartPoint.DistanceTo(EndPoint);
+        }
+
+        public double GetLength(double t0, double t1)
+        {
+            return GetPointAtParameter(t0).DistanceTo(GetPointAtParameter(t1));
+        }
+
+        public ICurve Trim(double t0, double t1)
+        {
+            // Normalize order
+            if (t1 < t0)
+            {
+                double tmp = t0;
+                t0 = t1;
+                t1 = tmp;
+            }
+
+            // Clamp to domain if needed (optional)
+            double a = Math.Max(DomainStart, Math.Min(DomainEnd, t0));
+            double b = Math.Max(DomainStart, Math.Min(DomainEnd, t1));
+
+            // Evaluate endpoints
+            Point3D p0 = GetPointAtParameter(a);
+            Point3D p1 = GetPointAtParameter(b);
+
+            // Return a new line segment
+            var newLine = new Line(Document, p0, p1);
+            newLine.SetBasicPropertiesFrom(this);
+
+            return newLine;
+        }
+
+        public ICurve Transform(Matrix4D transform)
+        {
+            // Transform endpoints
+            Point3D s = StartPoint.Transform(transform);
+            Point3D e = EndPoint.Transform(transform);
+            // Update normal as well
+            var tn = transform.TransformVector(_normal);
+
+
+            // Return a new line curve
+            var newLine = new Line(Document, s, e);
+            newLine.SetBasicPropertiesFrom(this);
+            newLine._normal = tn;
+
+            return newLine;
+        }
+
+        // ---------------------------------------------------------------------
+        // Internal methods
+        // ---------------------------------------------------------------------
+        // (none at present — reserved for future helpers)
+
+        // ---------------------------------------------------------------------
+        // Private methods
+        // ---------------------------------------------------------------------
+        // (none at present)
     }
 }

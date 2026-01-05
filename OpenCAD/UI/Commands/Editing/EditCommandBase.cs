@@ -154,8 +154,8 @@ namespace UI.Commands.Editing
             _needsSelection = false;
             _initialSelectionCount = 0;
             _cancellationTokenSource?.Cancel();
-            BasePoint = null;
-            TargetPoint = null;
+            BasePoint = Point3D.NotAPoint;
+            TargetPoint = Point3D.NotAPoint;
         }
 
         /// <summary>
@@ -175,7 +175,7 @@ namespace UI.Commands.Editing
             try
             {
                 // Prompt for base point using shared GetPoint on CommandBase
-                BasePoint = null;
+                BasePoint = Point3D.NotAPoint;
                 var result = await GetPoint(BasePointPrompt, null);
 
                 if (result != null && result.Point is OpenCAD.Geometry.Point3D basePoint)
@@ -230,7 +230,7 @@ namespace UI.Commands.Editing
 
         public bool TryGetTransformation(out Matrix4D transformation)
         {
-            if (BasePoint == null || TargetPoint == null)
+            if (BasePoint == Point3D.NotAPoint || TargetPoint == Point3D.NotAPoint)
             {
                 transformation = Matrix4D.Identity;
                 return false;

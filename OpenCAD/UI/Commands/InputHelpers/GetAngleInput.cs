@@ -105,14 +105,14 @@ namespace UI.Commands.InputHelpers
                 return bad;
             }
 
-            if (result.ResultType == InputResult.InputResultType.Point && result.Point != null)
+            if (result.ResultType == InputResult.InputResultType.Point && result.Point.HasValue)
             {
                 if (basePoint == null)
                     return bad;
 
                 // Angle from basePoint to picked point
-                double dx = result.Point.X - basePoint.X;
-                double dy = result.Point.Y - basePoint.Y;
+                double dx = result.Point.Value.X - basePoint.Value.X;
+                double dy = result.Point.Value.Y - basePoint.Value.Y;
                 double angle = Math.Atan2(dy, dx);
                 return new InputResult { ResultType = InputResult.InputResultType.Double, DoubleValue = angle };
             }

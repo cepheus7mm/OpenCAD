@@ -1,5 +1,6 @@
 ﻿using OpenCAD;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using System.Xml.Serialization;
 
 namespace OpenCAD.Settings
@@ -81,16 +82,22 @@ namespace OpenCAD.Settings
 
         public string LengthToString(double length)
         {
-            return LinearUnits switch
+            // Handle sign here and delegate positive value to helpers
+            bool negative = length < 0;
+            double absLength = Math.Abs(length);
+
+            string inner = LinearUnits switch
             {
-                LinearType.FeetAndInches => LengthFeetAndInches(length),
-                LinearType.DecimalFeet => $"{length.ToString($"F{LinearDecimalPlaces}")}{OpenCADStrings.Feet}",
-                LinearType.DecimalInches => $"{(length * 12.0).ToString($"F{LinearDecimalPlaces}")}{OpenCADStrings.Inches}",
-                LinearType.DecimalMillimeters => $"{(length).ToString($"F{LinearDecimalPlaces}")}{OpenCADStrings.Millimeters}",
-                LinearType.DecimalCentimeters => $"{(length).ToString($"F{LinearDecimalPlaces}")}{OpenCADStrings.Centimeters}",
-                LinearType.DecimalMeters => $"{(length).ToString($"F{LinearDecimalPlaces}")}{OpenCADStrings.Meters}",
-                _ => length.ToString(),
+                LinearType.FeetAndInches => LengthFeetAndInches(absLength),
+                LinearType.DecimalFeet => $"{absLength.ToString($"F{LinearDecimalPlaces}")}{OpenCADStrings.Feet}",
+                LinearType.DecimalInches => $"{(absLength * 12.0).ToString($"F{LinearDecimalPlaces}")}{OpenCADStrings.Inches}",
+                LinearType.DecimalMillimeters => $"{(absLength).ToString($"F{LinearDecimalPlaces}")}{OpenCADStrings.Millimeters}",
+                LinearType.DecimalCentimeters => $"{(absLength).ToString($"F{LinearDecimalPlaces}")}{OpenCADStrings.Centimeters}",
+                LinearType.DecimalMeters => $"{(absLength).ToString($"F{LinearDecimalPlaces}")}{OpenCADStrings.Meters}",
+                _ => absLength.ToString(),
             };
+
+            return negative ? "-" + inner : inner;
         }
 
         public double StringToLength(string lengthString)
@@ -100,7 +107,19 @@ namespace OpenCAD.Settings
 
             lengthString = lengthString.Trim();
 
-            return LinearUnits switch
+            // Top-level sign handling: strip optional leading '+' or '-' and apply sign after parsing
+            int sign = 1;
+            if (lengthString.StartsWith("-", StringComparison.Ordinal))
+            {
+                sign = -1;
+                lengthString = lengthString.Substring(1).Trim();
+            }
+            else if (lengthString.StartsWith("+", StringComparison.Ordinal))
+            {
+                lengthString = lengthString.Substring(1).Trim();
+            }
+
+            double parsed = LinearUnits switch
             {
                 LinearType.FeetAndInches      => ParseFeetAndInches(lengthString),
                 LinearType.DecimalFeet        => ParseDecimalFeet(lengthString),
@@ -110,6 +129,8 @@ namespace OpenCAD.Settings
                 LinearType.DecimalMeters      => ParseDecimalMeters(lengthString),
                 _ => throw new NotSupportedException($"Unsupported LinearMeasurementType: {LinearUnits}")
             };
+
+            return sign * parsed;
         }
 
         private double ParseFeetAndInches(string lengthString)
@@ -168,6 +189,7 @@ namespace OpenCAD.Settings
 
         private string LengthFeetAndInches(double length)
         {
+            // length passed in is positive; top-level caller handles sign.
             int feet = (int)length;
             double inches = (length - feet) * 12.0;
             return $"{feet}{OpenCADStrings.Feet} {inches.ToString($"F{LinearDecimalPlaces}")}{OpenCADStrings.Inches}";
@@ -180,15 +202,21 @@ namespace OpenCAD.Settings
         /// <returns>A string representation of the angle</returns>
         public string AngleToString(double angle)
         {
-            return AngularUnits switch
+            // Capture sign at top level, delegate absolute value to helpers, then reapply sign as a leading '-'
+            bool negative = angle < 0;
+            double absAngle = Math.Abs(angle);
+
+            string inner = AngularUnits switch
             {
-                AngularType.DegreesMinsSecs => ConvertToDMS(angle),
-                AngularType.DegreesDecimal => $"{RadiansToDegrees(angle).ToString($"F{AngularDecimalPlaces}")}{OpenCADStrings.Degrees}",
-                AngularType.Radians => $"{angle.ToString($"F{AngularDecimalPlaces}")}{OpenCADStrings.Radians}",
-                AngularType.Gradians => $"{RadiansToGradians(angle).ToString($"F{AngularDecimalPlaces}")}{OpenCADStrings.Gradians}",
-                AngularType.Bearings => ConvertToBearing(angle),
-                _ => angle.ToString(),
+                AngularType.DegreesMinsSecs => ConvertToDMS(absAngle),
+                AngularType.DegreesDecimal => $"{RadiansToDegrees(absAngle).ToString($"F{AngularDecimalPlaces}")}{OpenCADStrings.Degrees}",
+                AngularType.Radians => $"{absAngle.ToString($"F{AngularDecimalPlaces}")}{OpenCADStrings.Radians}",
+                AngularType.Gradians => $"{RadiansToGradians(absAngle).ToString($"F{AngularDecimalPlaces}")}{OpenCADStrings.Gradians}",
+                AngularType.Bearings => ConvertToBearing(absAngle),
+                _ => absAngle.ToString(),
             };
+
+            return negative ? "-" + inner : inner;
         }
 
         public static double RadiansToDegrees(double radians)
@@ -288,86 +316,267 @@ namespace OpenCAD.Settings
 
             str = str.Trim();
 
-            return AngularUnits switch
+            int sign = 1;
+            if (str.StartsWith("-", StringComparison.Ordinal))
             {
-                AngularType.DegreesMinsSecs => ParseDegreesMinsSecs(str),
-                AngularType.DegreesDecimal  => ParseDegreesDecimal(str),
-                AngularType.Radians         => ParseRadians(str),
-                AngularType.Gradians        => ParseGradians(str),
-                AngularType.Bearings        => ParseBearings(str),
-                _ => throw new NotSupportedException($"Unsupported AngularUnits: {AngularUnits}")
-            };
+                sign = -1;
+                str = str[1..].Trim();
+            }
+            else if (str.StartsWith("+", StringComparison.Ordinal))
+            {
+                str = str[1..].Trim();
+            }
+
+            double parsed = ParseAngleAuto(str);
+
+            return sign * parsed;
+        }
+
+        private double ParseAngleAuto(string s)
+        {
+            // 1. Bearings: look for N/S/E/W tokens
+            if (LooksLikeBearing(s))
+                return ParseBearings(s);
+
+            // 2. DMS: look for ° ' " or colon patterns
+            if (LooksLikeDms(s))
+                return ParseDegreesMinsSecs(s);
+
+            // 4. Gradians: look for "g" suffix or explicit pattern
+            if (LooksLikeGradians(s))
+                return ParseGradians(s);
+
+            // 3. Radians: look for "rad" suffix or something like "π"
+            if (LooksLikeRadians(s))
+                return ParseRadians(s);
+
+            // 5. Fallback: plain decimal degrees
+            return ParseDegreesDecimal(s);
+        }
+
+        private bool LooksLikeBearing(string s)
+        {
+            s = s.ToUpperInvariant();
+            return (s.Contains('N') || s.Contains('S')) && (s.Contains('E') || s.Contains('W')) && !s.Contains("DEG");
+        }
+
+        private bool LooksLikeDms(string s)
+        {
+            s = s.ToUpperInvariant();
+            return (s.Contains('°') || s.Contains('D')) && (s.Contains('\'') || s.Contains('M')) && (s.Contains('"') || s.Contains('S')) || s.Contains(':');
+        }
+
+        private bool LooksLikeRadians(string s)
+        {
+            s = s.ToLowerInvariant();
+            return s.EndsWith("rad") || s.Contains("radians") || s.EndsWith("r") || s.Contains('π') || s.Contains("pi");
+        }
+
+        private bool LooksLikeGradians(string s)
+        {
+            s = s.ToLowerInvariant();
+            return (s.EndsWith("gon") || s.EndsWith("g") || s.Contains("gradians")) && !s.Contains("deg");
         }
 
         private double ParseDegreesMinsSecs(string str)
         {
-            // Example: "12° 34' 56.78\""
-            var dmsMatch = System.Text.RegularExpressions.Regex.Match(
-                str,
-                @"(-?\d+)[^\d]+(\d+)[^\d]+([\d\.]+)",
-                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-            if (dmsMatch.Success)
-            {
-                int deg = int.Parse(dmsMatch.Groups[1].Value);
-                int min = int.Parse(dmsMatch.Groups[2].Value);
-                double sec = double.Parse(dmsMatch.Groups[3].Value);
-                double angleDeg = deg + (min / 60.0) + (sec / 3600.0);
-                return angleDeg * Math.PI / 180.0;
-            }
-            throw new FormatException("Invalid DMS angle format.");
+            str = str.Trim();
+
+            // Regex that matches:
+            //  - degrees with optional ° or d
+            //  - optional minutes with ' or m
+            //  - optional seconds with " or s
+            var match = Regex.Match(
+                  str,
+                  @"^\s*
+                  (?<deg>-?\d+(?:\.\d+)?)\s*(°|d)?\s*
+                  (?<min>\d+(?:\.\d+)?)?\s*(' |m)?\s*
+                  (?<sec>\d+(?:\.\d+)?)?\s*(\""|s)?
+                  \s*$",
+                   RegexOptions.IgnoreCase | RegexOptions.IgnorePatternWhitespace);
+
+            if (!match.Success)
+                throw new FormatException("Invalid DMS angle format.");
+
+            double deg = double.Parse(match.Groups["deg"].Value);
+
+            double min = match.Groups["min"].Success
+                ? double.Parse(match.Groups["min"].Value)
+                : 0.0;
+
+            double sec = match.Groups["sec"].Success
+                ? double.Parse(match.Groups["sec"].Value)
+                : 0.0;
+
+            double angleDeg = deg + (min / 60.0) + (sec / 3600.0);
+            return angleDeg * Math.PI / 180.0;
         }
 
         private double ParseDegreesDecimal(string str)
         {
-            // Example: "123.45°"
-            str = str.Replace(OpenCADStrings.Degrees, "", StringComparison.OrdinalIgnoreCase).Trim();
+            str = str.Trim();
+
+            // Strip any degree-like suffix using regex
+            str = Regex.Replace(str, @"(°|deg|degree|degrees|d)$", "", RegexOptions.IgnoreCase).Trim();
+
+            // Fix trailing decimal point
+            if (str.EndsWith(".", StringComparison.Ordinal))
+                str += "0";
+
             double degVal = double.Parse(str);
             return degVal * Math.PI / 180.0;
         }
 
         private double ParseRadians(string str)
         {
-            // Example: "2.13rad"
-            str = str.Replace(OpenCADStrings.Radians, "", StringComparison.OrdinalIgnoreCase).Trim();
+            if (string.IsNullOrWhiteSpace(str))
+                throw new ArgumentNullException(nameof(str));
+
+            str = str.Trim().ToLowerInvariant();
+
+            // Normalize common tokens
+            str = str.Replace("radians", "")
+                     .Replace("radian", "")
+                     .Replace("rad", "")
+                     .Replace("r", "")     // careful: only safe after lowercasing
+                     .Trim();
+
+            // Replace unicode pi with ascii pi
+            str = str.Replace("π", "pi");
+
+            // If the string contains "pi", treat it as a pi-expression
+            if (str.Contains("pi"))
+            {
+                // Replace "pi" with a token we can evaluate
+                // Examples:
+                //   "pi"       → "1*pi"
+                //   "3pi/2"    → "3*pi/2"
+                //   "-pi/4"    → "-1*pi/4"
+                //   "pi/ 2"    → "1*pi/2"
+
+                // Insert explicit multiplication before pi when needed
+                str = Regex.Replace(str, @"(?<![\w])pi", "1*pi");   // leading pi
+                str = Regex.Replace(str, @"(\d)pi", "$1*pi");       // 3pi → 3*pi
+
+                // Now evaluate the expression safely
+                return EvaluatePiExpression(str);
+            }
+
+            // Otherwise, it's a plain numeric radian value
             return double.Parse(str);
+        }
+
+        private double EvaluatePiExpression(string expr)
+        {
+            // Split on '/'
+            var parts = expr.Split('/');
+
+            double numerator = EvaluatePiTerm(parts[0]);
+
+            if (parts.Length == 1)
+                return numerator;
+
+            if (parts.Length == 2)
+            {
+                double denominator = EvaluatePiTerm(parts[1]);
+                return numerator / denominator;
+            }
+
+            throw new FormatException("Invalid radian expression.");
+        }
+
+        private double EvaluatePiTerm(string term)
+        {
+            term = term.Trim();
+
+            // Split on '*'
+            var factors = term.Split('*');
+
+            double result = 1.0;
+
+            foreach (var f in factors)
+            {
+                string t = f.Trim();
+
+                if (t == "pi")
+                    result *= Math.PI;
+                else
+                    result *= double.Parse(t);
+            }
+
+            return result;
         }
 
         private double ParseGradians(string str)
         {
-            // Example: "150.00g"
-            str = str.Replace(OpenCADStrings.Gradians, "", StringComparison.OrdinalIgnoreCase).Trim();
+            if (string.IsNullOrWhiteSpace(str))
+                throw new ArgumentNullException(nameof(str));
+
+            str = str.Trim().ToLowerInvariant();
+
+            // Remove common gradian indicators
+            str = str
+                .Replace("gon", "")
+                .Replace("gradians", "")
+                .Replace("grads", "")
+                .Replace("grad", "")
+                .Replace("g", "")
+                .Trim();
+
+            // Handle trailing decimal point like "150."
+            if (str.EndsWith(".", StringComparison.Ordinal))
+                str += "0";
+
             double gradVal = double.Parse(str);
             return gradVal * Math.PI / 200.0;
         }
 
         private double ParseBearings(string str)
         {
-            // Example: "N 12° 34' 56.78\" E"
-            var bearingMatch = System.Text.RegularExpressions.Regex.Match(
-                str,
-                @"([NnSs])\s*(\d+)[^\d]+(\d+)[^\d]+([\d\.]+)[^\d]*([EeWw])",
-                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-            if (bearingMatch.Success)
-            {
-                char ns = char.ToUpperInvariant(bearingMatch.Groups[1].Value[0]);
-                int deg = int.Parse(bearingMatch.Groups[2].Value);
-                int min = int.Parse(bearingMatch.Groups[3].Value);
-                double sec = double.Parse(bearingMatch.Groups[4].Value);
-                char ew = char.ToUpperInvariant(bearingMatch.Groups[5].Value[0]);
-                double angleDeg = deg + (min / 60.0) + (sec / 3600.0);
-                double angleRad = angleDeg * Math.PI / 180.0;
+            if (string.IsNullOrWhiteSpace(str))
+                throw new ArgumentNullException(nameof(str));
 
-                // Bearings: N/E is 0, S/E is 90, S/W is 180, N/W is 270
-                if (ns == 'N' && ew == 'E')
-                    return angleRad;
-                if (ns == 'S' && ew == 'E')
-                    return Math.PI - angleRad;
-                if (ns == 'S' && ew == 'W')
-                    return Math.PI + angleRad;
-                if (ns == 'N' && ew == 'W')
-                    return 2 * Math.PI - angleRad;
-            }
-            throw new FormatException("Invalid bearing angle format.");
+            str = str.Trim().ToUpperInvariant();
+
+            // Extract leading N/S
+            if (str.Length < 2)
+                throw new FormatException("Invalid bearing format.");
+
+            char ns = str[0];
+            if (ns != 'N' && ns != 'S')
+                throw new FormatException("Bearing must start with N or S.");
+
+            // Extract trailing E/W
+            char ew = str[^1];
+            if (ew != 'E' && ew != 'W')
+                throw new FormatException("Bearing must end with E or W.");
+
+            // Extract the angle portion between them
+            string anglePart = str.Substring(1, str.Length - 2).Trim();
+
+            // Parse the angle using your DMS parser
+            double angleRad = ParseDegreesMinsSecs(anglePart);
+
+            // Convert bearing to azimuth (radians)
+            // Quadrants:
+            //   NE: 0° + angle
+            //   SE: 180° - angle
+            //   SW: 180° + angle
+            //   NW: 360° - angle
+
+            if (ns == 'N' && ew == 'E')
+                return angleRad;
+
+            if (ns == 'S' && ew == 'E')
+                return Math.PI - angleRad;
+
+            if (ns == 'S' && ew == 'W')
+                return Math.PI + angleRad;
+
+            if (ns == 'N' && ew == 'W')
+                return (2 * Math.PI) - angleRad;
+
+            throw new FormatException("Invalid bearing quadrant.");
         }
     }
 }

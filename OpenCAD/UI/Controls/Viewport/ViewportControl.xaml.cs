@@ -461,7 +461,7 @@ namespace UI.Controls.Viewport
             if (previewPoint != null && tempPoints.Count > 0)
             {
                 var lastPoint = tempPoints[tempPoints.Count - 1];
-                var previewLine = new Line(_document, lastPoint, previewPoint);
+                var previewLine = new Line(_document, lastPoint, previewPoint.Value);
                 overlayObjects.Add(previewLine);
             }
 
@@ -472,12 +472,12 @@ namespace UI.Controls.Viewport
                 _viewModel.WindowSelectionCurrentPoint != null)
             {
                 RenderWindowSelectionFill(
-                    _viewModel.WindowSelectionStartPoint,
-                    _viewModel.WindowSelectionCurrentPoint);
+                    _viewModel.WindowSelectionStartPoint.Value,
+                    _viewModel.WindowSelectionCurrentPoint.Value);
                 
                 var selectionRectLines = CreateWindowSelectionRectangle(
-                    _viewModel.WindowSelectionStartPoint,
-                    _viewModel.WindowSelectionCurrentPoint);
+                    _viewModel.WindowSelectionStartPoint.Value,
+                    _viewModel.WindowSelectionCurrentPoint.Value);
                 overlayObjects.AddRange(selectionRectLines);
             }
             windowSelSw.Stop();
@@ -895,12 +895,14 @@ namespace UI.Controls.Viewport
                 }
             }
             
-            var vector3D = new Vector3D();
+            Vector3D? vector3D;
             if (worldPos.HasValue)
             {
-                vector3D.X = worldPos.Value.X;
-                vector3D.Y = worldPos.Value.Y;
-                vector3D.Z = worldPos.Value.Z;
+                vector3D = new Vector3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z);
+            }
+            else
+            {
+                return; // Cannot proceed without valid world position
             }
 
             var result = _viewModel.HandleMouseMove(

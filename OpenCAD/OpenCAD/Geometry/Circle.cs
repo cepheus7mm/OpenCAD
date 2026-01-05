@@ -1,6 +1,7 @@
 ﻿using OpenCAD.Geometry.Calculator;
 using OpenCAD.Geometry.Helpers;
 using OpenCAD.Interfaces;
+using System.Net;
 using System.Text.Json.Serialization;
 using System.Xml.Serialization;
 
@@ -10,7 +11,7 @@ namespace OpenCAD.Geometry
     /// Represents a circular arc defined by center point, radius, start angle, and end angle.
     /// Angles are in radians, measured counter-clockwise from the positive X-axis.
     /// </summary>
-    public class Circle : GeometryBase, IDrawable, ICircularGeometry
+    public class Circle : GeometryBase, IDrawable, ICircularGeometry, ICurve
     {
         /// <summary>
         /// Gets or sets the center point of the arc.
@@ -18,7 +19,7 @@ namespace OpenCAD.Geometry
         [JsonIgnore, XmlIgnore]
         public Point3D Center
         {
-            get => GetPropertyValue<Point3D>(PropertyType.Point, nameof(Center)) ?? new Point3D(0, 0, 0);
+            get => GetPropertyValue<Point3D>(PropertyType.Point, nameof(Center));
             set => SetPropertyValue(PropertyType.Point, nameof(Center), "Center", value);
         }
 
@@ -42,19 +43,13 @@ namespace OpenCAD.Geometry
         [JsonIgnore, XmlIgnore]
         public override double Angle => GetSweepAngle();
 
-        [JsonIgnore, XmlIgnore]
-        public double StartAngle => 0;
-
-        [JsonIgnore, XmlIgnore]
-        public double EndAngle => 2 * Math.PI;
-
         /// <summary>
         /// Creates an arc with specified parameters.
         /// </summary>
         public Circle(Point3D center, double radius, OpenCADDocument? document = null)
             : base(document)
         {
-            Center = center ?? new Point3D(0, 0, 0);
+            Center = center;
             Radius = Math.Max(0, radius);
         }
 
@@ -82,105 +77,32 @@ namespace OpenCAD.Geometry
             return $"Circle: Center={Center}, Radius={Radius:F3}";
         }
 
-        public override Vector3D? GetFirstDerivate(Point3D point)
+        public double GetParameterAtPoint(Point3D point)
         {
-            throw new NotImplementedException();
+            double angle = Math.Atan2(point.Y - Center.Y, point.X - Center.X);
+
+            if (angle < 0)
+                angle += 2.0 * Math.PI;
+
+            return angle / (2.0 * Math.PI);
         }
 
-        public override Vector3D? GetSecondDerivate(Point3D point)
+        public Point3D GetPointAtParameter(double parameter)
         {
-            throw new NotImplementedException();
-        }
+            // Normalize to [0,1]
+            double t = parameter - Math.Floor(parameter);
 
-        public override double GetParameterAtPoint(Point3D point)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override Point3D GetPointAtParameter(double parameter)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override Point3D GetClosestPointTo(Point3D point, bool extend = false)
-        {
-            // Vector from center to query point
-            var pointVec = point - Center;
-
-            // Handle degenerate radius
-            if (Radius < double.Epsilon)
-                return Center;
-
-            // Direction from center to point
-            var dir = pointVec.Normalized;
-
-            // Project onto circle
-            var projected = Center + dir * Radius;
-
-            // Angle of direction
-            double angle = Math.Atan2(dir.Y, dir.X);
-
-            angle = NormalizeAngle(angle);
-
-            // Return point on circle
-            return Center + new Vector3D(Math.Cos(angle), Math.Sin(angle), 0) * Radius;
+            return GeometricCalculator.GetPointAtParameter(t, StartPoint, Center, 2 * Math.PI);
         }
 
         public override Extents GetExtents()
         {
-            // Initialize
-            var minX = double.MaxValue;
-            var maxX = double.MinValue;
-            var minY = double.MaxValue;
-            var maxY = double.MinValue;
-            var minZ = double.MaxValue;
-            var maxZ = double.MinValue;
-
-            // Check if cardinal points fall within the arc's sweep
-            // Cardinal angles: 0° (right), 90° (top), 180° (left), 270° (bottom)
-            double[] cardinalAngles = { 0, Math.PI / 2, Math.PI, 3 * Math.PI / 2 };
-
-            foreach (var angle in cardinalAngles)
-            {
-                var x = Center.X + Radius * Math.Cos(angle);
-                var y = Center.Y + Radius * Math.Sin(angle);
-
-                minX = Math.Min(minX, x);
-                maxX = Math.Max(maxX, x);
-                minY = Math.Min(minY, y);
-                maxY = Math.Max(maxY, y);
-            }
-
-            return new Extents
-            {
-                Min = new Point3D(minX, minY, minZ),
-                Max = new Point3D(maxX, maxY, maxZ)
-            };
-        }
-
-        public override bool Transform(Matrix4D transformation)
-        {
-            // Preserve original geometry points
-            var originalCenter = Center.Clone();
-            var originalRadius = Radius;
-
-            // Transform center and endpoints
-            var transformedCenter = transformation.Transform(originalCenter);
-            var transformedRadius = transformation.Transform(originalRadius);
-
-            // Update center
-            Center = transformedCenter;
-
-            Radius = transformedRadius;
-
-            // If radius collapsed, reset to original radius
-            if (Radius < double.Epsilon)
-            {
-                Radius = originalRadius;
-                return false;
-            }
-
-            return true;
+            // Full sweep = 2π
+            return Extents.FromArc(
+                new Point3D(Center.X + Radius, Center.Y, Center.Z),
+                new Point3D(Center.X + Radius, Center.Y, Center.Z),
+                Center,
+                2 * Math.PI);
         }
 
         public override IEnumerable<GeoPoint> GetGeoPoints(Point3D referencePoint, GeoPointModes geoPointType)
@@ -197,7 +119,7 @@ namespace OpenCAD.Geometry
             }
             if (geoPointType.HasFlag(GeoPointModes.NearestPoint))
             {
-                var geoPoint = new GeoPoint(GetClosestPointTo(referencePoint, false), GeoPointModes.NearestPoint);
+                var geoPoint = new GeoPoint(GetClosestPoint(referencePoint, false), GeoPointModes.NearestPoint);
                 geoPoint.RelatedGeometryId = ID;
                 candidates.Add(geoPoint);
             }
@@ -217,21 +139,134 @@ namespace OpenCAD.Geometry
                     candidates.Add(geoPoint);
                 }
             }
-            if (geoPointType.HasFlag(GeoPointModes.Perpendicular) && _document.PreviewPoint is not null)
+            if (geoPointType.HasFlag(GeoPointModes.Perpendicular) && _document.PreviewPoint.HasValue)
             {
-                var geoPoint = new GeoPoint(GetClosestPointTo(_document.PreviewPoint, false), GeoPointModes.NearestPoint);
+                var geoPoint = new GeoPoint(GetClosestPoint(_document.PreviewPoint.Value, false), GeoPointModes.NearestPoint);
                 geoPoint.RelatedGeometryId = ID;
                 candidates.Add(geoPoint);
             }
 
-            if (geoPointType.HasFlag(GeoPointModes.Tangent) && _document.PreviewPoint is not null)
+            if (geoPointType.HasFlag(GeoPointModes.Tangent) && _document.PreviewPoint.HasValue)
             {
-                var geoPoint = GeometricCalculator.GetClosestTangent(Center, Radius, _document.PreviewPoint, referencePoint);
+                var geoPoint = GeometricCalculator.GetClosestTangent(Center, Radius, _document.PreviewPoint.Value, referencePoint);
                 geoPoint.RelatedGeometryId = ID;
                 candidates.Add(geoPoint);
             }
 
             return candidates;
+        }
+        // ---------------------------------------------------------------------
+        // ICurve implementation
+        // ---------------------------------------------------------------------
+
+        [JsonIgnore, XmlIgnore]
+        public bool IsClosed => true;
+
+        [JsonIgnore, XmlIgnore]
+        public bool IsPeriodic => true;
+
+        [JsonIgnore, XmlIgnore]
+        public double DomainStart => 0.0;
+
+        [JsonIgnore, XmlIgnore]
+        public double DomainEnd => 1.0;
+
+        [JsonIgnore, XmlIgnore]
+        public Point3D StartPoint => new Point3D(Center.X + Radius, Center.Y, Center.Z);
+
+        [JsonIgnore, XmlIgnore]
+        public Point3D EndPoint => StartPoint;
+
+        public Vector3D GetFirstDerivativeAtParameter(double t)
+        {
+            return GeometricCalculator.GetFirstDerivative(t, StartPoint, Center, GetSweepAngle());
+        }
+
+        public Vector3D GetSecondDerivativeAtParameter(double t)
+        {
+            return GeometricCalculator.GetSecondDerivative(t, StartPoint, Center, GetSweepAngle());
+        }
+
+        public double GetClosestParameter(Point3D point, bool extend = false)
+        {
+            return GeometricCalculator.GetClosestParameter(point, StartPoint, Center, GetSweepAngle(), extend);
+        }
+
+        public Point3D GetClosestPoint(Point3D point, bool extend = false)
+        {
+            return GeometricCalculator.GetClosestPoint(point, StartPoint, Center, GetSweepAngle(), extend);
+        }
+
+        public double GetLength()
+        {
+            return GeometricCalculator.GetLength(StartPoint, Center, GetSweepAngle());
+        }
+
+        public double GetLength(double t0, double t1)
+        {
+            double dt = Math.Abs(t1 - t0);
+            var fullLength = GeometricCalculator.GetLength(StartPoint, Center, GetSweepAngle());
+            return fullLength * dt;
+        }
+
+        public ICurve Trim(double t0, double t1)
+        {
+            // Normalize order
+            if (t1 < t0)
+            {
+                double tmp = t0;
+                t0 = t1;
+                t1 = tmp;
+            }
+
+            // Clamp to domain [0,1]
+            double a = Math.Max(0.0, Math.Min(1.0, t0));
+            double b = Math.Max(0.0, Math.Min(1.0, t1));
+
+            // Evaluate new angles
+            var point = GeometricCalculator.GetPointAtParameter(a, StartPoint, Center, 2 * Math.PI);
+            var newStart = Math.Atan2(point.Y - Center.Y, point.X - Center.X);
+
+            point = GeometricCalculator.GetPointAtParameter(b, StartPoint, Center, 2 * Math.PI);
+            var newEnd = Math.Atan2(point.Y - Center.Y, point.X - Center.X);
+
+            // Return a new Arc segment
+            var newCircle = new Circle(Center, Radius, Document);
+            newCircle.SetBasicPropertiesFrom(this);
+
+            return newCircle;
+        }
+
+        public ICurve Transform(Matrix4D transform)
+        {
+            // Transform center and endpoints
+            var transformedCenter = transform.Transform(Center);
+            var transformedRadius = transform.Transform(Radius);
+
+            // Update normal as well
+            var tn = transform.TransformVector(_normal);
+
+            // If radius collapsed, set angles to 0 and keep center
+            if (transformedRadius < 1e-12)
+            {
+                var newCircle1 = new Circle(transformedCenter, transformedRadius, Document);
+                newCircle1.SetBasicPropertiesFrom(this);
+                newCircle1.SetNormal(tn);
+                return newCircle1;
+            }
+
+            // Transform the stored normal vector
+            var transformedNormal = transform.TransformVector(_normal);
+            _normal = transformedNormal.Length > double.Epsilon ? transformedNormal.Normalized : transformedNormal;
+
+
+
+            // Return a new Arc segment
+            var newCircle = new Circle(Center, Radius, Document);
+            newCircle.SetBasicPropertiesFrom(this);
+            newCircle.SetNormal(tn);
+
+            return newCircle;
         }
     }
 }

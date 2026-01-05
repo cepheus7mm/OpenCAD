@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using OpenCAD;
 using OpenCAD.Geometry;
 using OpenCAD.Geometry.Helpers;
+using OpenCAD.Interfaces;
 
 namespace UI.Commands.Undo
 {
@@ -33,9 +34,9 @@ namespace UI.Commands.Undo
 
             foreach (var obj in _objects)
             {
-                if (obj is GeometryBase geom)
+                if (obj is ICurve curve)
                 {
-                    try { geom.Transform(_matrix); }
+                    try { curve.Transform(_matrix); }
                     catch (NotImplementedException) { }
                 }
 
@@ -59,9 +60,9 @@ namespace UI.Commands.Undo
 
             foreach (var obj in _objects)
             {
-                if (obj is GeometryBase geom)
+                if (obj is ICurve curve)
                 {
-                    try { geom.Transform(_inverse); }
+                    try { curve.Transform(_inverse); }
                     catch (NotImplementedException) { }
                 }
 

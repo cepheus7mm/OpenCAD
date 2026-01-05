@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using OpenCAD;
 using OpenCAD.Geometry;
 using OpenCAD.Geometry.Helpers;
+using OpenCAD.Interfaces;
 using UI.Commands.Editing;
 using UI.Commands.InputHelpers;
 using UI.Commands.Undo;
@@ -371,7 +372,7 @@ namespace UI.Commands
                         var previewPoint = CachedViewModel?.PreviewPoint;
                         if (previewPoint != null && BasePoint != null)
                         {
-                            TargetPoint = previewPoint;
+                            TargetPoint = previewPoint.Value;
                             UpdatePreviewObjects(this.viewport!);
                         }
                         else
@@ -417,8 +418,8 @@ namespace UI.Commands
             CachedUndoManager = null;
             CachedViewModel = null;
 
-            BasePoint = null;
-            TargetPoint = null;
+            BasePoint = Point3D.NotAPoint;
+            TargetPoint = Point3D.NotAPoint;
 
             if (completeCommand)
                 CommandCompleted();
@@ -493,14 +494,9 @@ namespace UI.Commands
         {
             try
             {
-                if (source is GeometryBase geom)
+                if (source is ICurve curve)
                 {
-                    var clone = geom.Clone(document) as GeometryBase;
-                    if (clone != null)
-                    {
-                        clone.Transform(translation);
-                        return clone;
-                    }
+                    return curve.Transform(translation) as OpenCADObject;
                 }
             }
             catch (NotSupportedException ex)

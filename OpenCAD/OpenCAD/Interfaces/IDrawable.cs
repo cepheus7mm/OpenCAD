@@ -35,17 +35,5 @@ namespace OpenCAD.Interfaces
         /// </summary>
         /// <param name="layer">The layer to use for ByLayer resolution.</param>
         LineWeight LineWeight { get; set; }
-
-        public abstract Extents GetExtents();
-
-        public abstract Vector3D? GetFirstDerivate(Point3D point);
-
-        public abstract Vector3D? GetSecondDerivate(Point3D point);
-
-        public abstract double GetParameterAtPoint(Point3D point);
-
-        public abstract Point3D GetPointAtParameter(double parameter);
-
-        public abstract Point3D GetClosestPointTo(Point3D point, bool extend = false);
     }
 }

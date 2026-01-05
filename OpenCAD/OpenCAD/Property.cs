@@ -103,10 +103,10 @@ namespace OpenCAD
                     _value = document is null ? Color.FromArgb(int.Parse(strValue, System.Globalization.NumberStyles.HexNumber)) : document.StringToColor(strValue);
                     break;
                 case PropertyType.Point:
-                    _value = document is null ? Point3D.ParseFromPropertyString(strValue) : document.StringToPoint(strValue);
+                    _value = document!.StringToPoint(strValue);
                     break;
                 case PropertyType.Vector:
-                    _value = document is null ? Vector3D.ParseFromPropertyString(strValue) : document.StringToVector(strValue);
+                    _value = document!.StringToVector(strValue);
                     break;
                 default:
                     throw new NotSupportedException($"FromStringRepresentation is not supported for PropertyType {Type}");
@@ -139,10 +139,10 @@ namespace OpenCAD
                     value = (Color)_value;
                     break;
                 case PropertyType.Point:
-                    value = new Point3D((Point3D)_value);
+                    value = (Point3D)_value;
                     break;
                 case PropertyType.Vector:
-                    value = new Vector3D((Vector3D)_value);
+                    value = (Vector3D)_value;
                     break;
                 case PropertyType.Curve:
                     throw new NotImplementedException();

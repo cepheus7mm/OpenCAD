@@ -53,7 +53,7 @@ namespace OpenCAD.Geometry
         [JsonIgnore, XmlIgnore]
         public Point3D BasePoint
         {
-            get => GetPropertyValue<Point3D>(PropertyType.Point, nameof(BasePoint)) ?? new Point3D();
+            get => GetPropertyValue<Point3D>(PropertyType.Point, nameof(BasePoint));
             set => SetPropertyValue(PropertyType.Point, nameof(BasePoint), OpenCADStrings.BasePoint, value);
         }
 
@@ -271,11 +271,7 @@ namespace OpenCAD.Geometry
             // If no bounds available, return a point extents at the base point
             if (!bounds.HasValue || bounds.Value.Width < double.Epsilon || bounds.Value.Height < double.Epsilon)
             {
-                return new Extents
-                {
-                    Min = BasePoint,
-                    Max = BasePoint
-                };
+                return new Extents(BasePoint, BasePoint);
             }
 
             // Get the four corners of the text bounds in local space
@@ -312,14 +308,10 @@ namespace OpenCAD.Geometry
                 maxZ = Math.Max(maxZ, worldCorners[i].Z);
             }
 
-            return new Extents
-            {
-                Min = new Point3D(minX, minY, minZ),
-                Max = new Point3D(maxX, maxY, maxZ)
-            };
+            return new Extents(new Point3D(minX, minY, minZ), new Point3D(maxX, maxY, maxZ));
         }
 
-        public override Point3D GetClosestPointTo(Point3D point, bool extend = false)
+        public Point3D GetClosestPointTo(Point3D point, bool extend = false)
         {
             var bounds = GetTextBounds();
             if (!bounds.HasValue || bounds.Value.Width < double.Epsilon || bounds.Value.Height < double.Epsilon)
@@ -380,64 +372,6 @@ namespace OpenCAD.Geometry
                 basePoint.Y + rotatedY,
                 basePoint.Z
             );
-        }
-
-        public override Vector3D? GetFirstDerivate(Point3D point)
-        {
-            return new Vector3D(1, 1, 1).Rotate(Rotation, _normal);
-        }
-
-        public override Vector3D? GetSecondDerivate(Point3D point)
-        {
-            return new Vector3D(1, 1, 1).Rotate(Rotation + Math.PI / 2, _normal);
-        }
-
-        public override double GetParameterAtPoint(Point3D point)
-        {
-            return 1.0;
-        }
-
-        public override Point3D GetPointAtParameter(double parameter)
-        {
-            return BasePoint;
-        }
-
-        public override bool Transform(Matrix4D transformation)
-        {
-            // Transform the base point
-            var transformedBasePoint = transformation.Transform(BasePoint);
-            BasePoint = transformedBasePoint;
-
-            // Transform the normal vector
-            var transformedNormal = transformation.TransformVector(_normal);
-            _normal = transformedNormal.Length > double.Epsilon ? transformedNormal.Normalized : transformedNormal;
-
-            // Extract rotation from the transformation matrix
-            // Create a unit vector along the current rotation direction
-            var currentDirection = new Vector3D(Math.Cos(Rotation), Math.Sin(Rotation), 0);
-            
-            // Transform the direction vector
-            var transformedDirection = transformation.TransformVector(currentDirection);
-            
-            // Calculate the new rotation angle from the transformed direction
-            if (transformedDirection.Length > double.Epsilon)
-            {
-                var normalizedDirection = transformedDirection.Normalized;
-                double newRotation = Math.Atan2(normalizedDirection.Y, normalizedDirection.X);
-                Rotation = newRotation;
-            }
-
-            // Extract scale from the transformation matrix if needed
-            // Calculate scale factor from the transformed direction vector length
-            double scaleFactor = transformedDirection.Length;
-            if (scaleFactor > double.Epsilon && Math.Abs(scaleFactor - 1.0) > double.Epsilon)
-            {
-                // Apply scale to font size
-                FontSize *= scaleFactor;
-            }
-
-            // Cache is automatically invalidated by property setters
-            return true;
         }
 
         /// <summary>

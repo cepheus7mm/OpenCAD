@@ -1,3 +1,4 @@
+using Newtonsoft.Json.Linq;
 using OpenCAD;
 using OpenCAD.Geometry;
 using System;
@@ -78,9 +79,9 @@ namespace UI.Commands.InputHelpers
                     formattedPrompt = string.Format(
                             OpenCADStrings.PromptWithLastPointFormat,
                             displayPrompt,
-                            lastPoint.X,
-                            lastPoint.Y,
-                            lastPoint.Z);
+                            lastPoint.Value.X,
+                            lastPoint.Value.Y,
+                            lastPoint.Value.Z);
                 }
                 else
                 {
@@ -129,7 +130,7 @@ namespace UI.Commands.InputHelpers
                     if (_basePoint != null)
                     {
                         _viewModel.ClearTempPoints();
-                        _viewModel.AddTempPoint(_basePoint);
+                        _viewModel.AddTempPoint(_basePoint.Value);
                         _viewModel.EnablePreviewMode(OnPreviewPointChanged);
                     }
                 }
@@ -275,13 +276,13 @@ namespace UI.Commands.InputHelpers
                     try { _viewModel.SetPreviewPoint(point); } catch { }
                 });
             }
-            if ((!point?.IsValid() ?? true) && AllowArbitraryInput)
+            if (point.HasValue && AllowArbitraryInput)
             {
                 _pointOrKeywordTaskSource.TrySetResult(new InputResult { ResultType = InputResult.InputResultType.Arbitrary, Keyword = input });
             }
 
             // Complete the task with the result
-            if (point != null && point.IsValid())
+            if (point.HasValue)
             {
                 _pointOrKeywordTaskSource.TrySetResult(new InputResult { Point = point, ResultType = InputResult.InputResultType.Point });
             }
@@ -309,9 +310,9 @@ namespace UI.Commands.InputHelpers
                     _context.OutputMessage(
                         string.Format(
                             OpenCADStrings.PointSelectedFormat,
-                            lastPoint.X,
-                            lastPoint.Y,
-                            lastPoint.Z));
+                            lastPoint.Value.X,
+                            lastPoint.Value.Y,
+                            lastPoint.Value.Z));
                 }
                 
                 return lastPoint;
@@ -331,17 +332,17 @@ namespace UI.Commands.InputHelpers
             }
 
             // If we successfully parsed a point, set it as the last point
-            if (parsedPoint != null)
+            if (parsedPoint.HasValue)
             {
-                _context.SetLastPoint(parsedPoint);
+                _context.SetLastPoint(parsedPoint.Value);
                 
                 // Output the point
                 _context.OutputMessage(
                     string.Format(
                         OpenCADStrings.PointSelectedFormat,
-                        parsedPoint.X,
-                        parsedPoint.Y,
-                        parsedPoint.Z));
+                        parsedPoint.Value.X,
+                        parsedPoint.Value.Y,
+                        parsedPoint.Value.Z));
             }
             else
             {

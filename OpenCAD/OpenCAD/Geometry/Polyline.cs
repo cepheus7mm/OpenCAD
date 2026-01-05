@@ -9,36 +9,35 @@ namespace OpenCAD.Geometry
     /// <summary>
     /// Represents a polyline - a Index of connected line and arc segments defined by vertices
     /// </summary>
-    public class Polyline : GeometryBase
+    public class Polyline : GeometryBase, ICurve
     {
+        #region Private Fields
+
+        private readonly PolylineSegmentCache _segments;
+        private readonly VertexCache _verticies;
+
+        #endregion
+
+        #region Constructors
+
         /// <summary>
         /// Parameterless constructor required for deserialization
         /// </summary>
         public Polyline() : base()
         {
+            _segments = new PolylineSegmentCache(this);
+            _verticies = new VertexCache(this);
         }
 
         public Polyline(OpenCADDocument doc) : base(doc)
         {
+            _segments = new PolylineSegmentCache(this);
+            _verticies = new VertexCache(this);
         }
 
-        public Polyline(OpenCADDocument doc, IEnumerable<Point3D> vertices, bool closed = false) : base(doc)
-        {
-            foreach (var vertex in vertices)
-            {
-                AddVertex(vertex);
-            }
-            IsClosed = closed;
-        }
+        #endregion
 
-        public Polyline(OpenCADDocument doc, IEnumerable<(Point3D position, double bulge)> vertices, bool closed = false) : base(doc)
-        {
-            foreach (var (position, bulge) in vertices)
-            {
-                AddVertex(position, bulge);
-            }
-            IsClosed = closed;
-        }
+        #region Public Properties
 
         /// <summary>
         /// Whether the polyline is closed (last vertex connects to first)
@@ -46,288 +45,21 @@ namespace OpenCAD.Geometry
         [JsonIgnore, XmlIgnore]
         public bool IsClosed
         {
-            get => GetPropertyValue<bool>(PropertyType.Boolean, nameof(IsClosed));
-            set => SetPropertyValue(PropertyType.Boolean, nameof(IsClosed), "Closed", value);
+            get
+            {
+                var vertices = GetOrderedVertices();
+                if (vertices.Count < 2)
+                    return false;
+
+                return vertices[0].Position.DistanceTo(vertices[^1].Position) < 1e-8;
+            }
         }
 
         /// <summary>
         /// Number of vertices in the polyline
         /// </summary>
         [JsonIgnore, XmlIgnore]
-        public int VertexCount => children.Count;
-
-        private uint _nextIndex = 0;
-
-        #region Vertex Management
-
-        /// <summary>
-        /// Adds a vertex to the end of the polyline
-        /// </summary>
-        public PolylineVertex AddVertex(Point3D position, double bulge = 0.0)
-        {
-            var vertex = new PolylineVertex(_document, position, bulge)
-            {
-                Index = _nextIndex++
-            };
-            Add(vertex);
-            return vertex;
-        }
-
-        public void AddVertex(PolylineVertex vertex)
-        {
-            vertex.Index = _nextIndex++;
-            Add(vertex);
-        }
-
-        /// <summary>
-        /// Inserts a vertex at the specified index
-        /// </summary>
-        public void InsertVertex(int index, Point3D position, double bulge = 0.0)
-        {
-            if (index < 0 || index > VertexCount)
-                throw new ArgumentOutOfRangeException(nameof(index));
-
-            var vertices = GetOrderedVertices().ToList();
-            var newVertex = new PolylineVertex(_document, position, bulge);
-
-            // Re-Index: build new list with insertion and assign Index deterministically
-            vertices.Insert(index, newVertex);
-
-            // Remove all existing vertices
-            foreach (var v in GetOrderedVertices().ToList())
-                Remove(v);
-
-            // Re-add and assign Indexs in order
-            _nextIndex = 0;
-            foreach (var v in vertices)
-            {
-                v.Index = _nextIndex++;
-                Add(v);
-            }
-        }
-
-        /// <summary>
-        /// Removes the vertex at the specified index
-        /// </summary>
-        public bool RemoveVertex(int index)
-        {
-            var vertices = GetOrderedVertices().ToList();
-            if (index < 0 || index >= vertices.Count)
-                return false;
-
-            return Remove(vertices[index]);
-        }
-
-        /// <summary>
-        /// Removes a vertex at the specified position (with tolerance)
-        /// </summary>
-        public bool RemoveVertexAt(Point3D position, double tolerance = 1e-6)
-        {
-            var vertex = GetOrderedVertices()
-                .FirstOrDefault(v => v.Position.DistanceTo(position) < tolerance);
-
-            return vertex != null && Remove(vertex);
-        }
-
-        /// <summary>
-        /// Clears all vertices
-        /// </summary>
-        public void ClearVertices()
-        {
-            var vertices = GetOrderedVertices().ToList();
-            foreach (var vertex in vertices)
-            {
-                Remove(vertex);
-            }
-        }
-
-        /// <summary>
-        /// Gets all vertices in order (ordered by their addition Index, which is preserved in the children dictionary)
-        /// </summary>
-        public IReadOnlyList<PolylineVertex> GetVertices()
-        {
-            return GetOrderedVertices().ToList();
-        }
-
-        /// <summary>
-        /// Gets the vertex at the specified index
-        /// </summary>
-        public PolylineVertex? GetVertex(int index)
-        {
-            var vertices = GetOrderedVertices().ToList();
-            if (index < 0 || index >= vertices.Count)
-                return null;
-
-            return vertices[index];
-        }
-
-        /// <summary>
-        /// Helper to get vertices in deterministic order
-        /// </summary>
-        private IEnumerable<PolylineVertex> GetOrderedVertices()
-        {
-            // Sort by Index to guarantee order
-            return children.Values.OfType<PolylineVertex>().OrderBy(v => v.Index);
-        }
-
-        #endregion
-
-        #region Segment Queries
-
-        /// <summary>
-        /// Gets the number of segments (edges) in the polyline
-        /// </summary>
-        public int GetSegmentCount()
-        {
-            int count = VertexCount;
-            if (count < 2)
-                return 0;
-
-            return IsClosed ? count : count - 1;
-        }
-
-        /// <summary>
-        /// Gets segment information (start point, end point, bulge)
-        /// </summary>
-        public (Point3D start, Point3D end, double bulge) GetSegment(int index)
-        {
-            var vertices = GetOrderedVertices().ToList();
-            int segmentCount = GetSegmentCount();
-
-            if (index < 0 || index >= segmentCount)
-                throw new ArgumentOutOfRangeException(nameof(index));
-
-            var startVertex = vertices[index];
-            var endVertex = index == vertices.Count - 1 ? vertices[0] : vertices[index + 1];
-
-            return (startVertex.Position, endVertex.Position, startVertex.Bulge);
-        }
-
-        /// <summary>
-        /// Returns true if the segment at the specified index is an arc
-        /// </summary>
-        public bool IsSegmentArc(int index)
-        {
-            var segment = GetSegment(index);
-            return Math.Abs(segment.bulge) > 1e-10;
-        }
-
-        /// <summary>
-        /// Returns true if the segment at the specified index is a line
-        /// </summary>
-        public bool IsSegmentLine(int index)
-        {
-            return !IsSegmentArc(index);
-        }
-
-        /// <summary>
-        /// Gets the length of a specific segment
-        /// </summary>
-        public double GetSegmentLength(int index)
-        {
-            var (start, end, bulge) = GetSegment(index);
-
-            if (Math.Abs(bulge) < 1e-10)
-            {
-                // Line segment
-                return start.DistanceTo(end);
-            }
-            else
-            {
-                // Arc segment
-                double chordLength = start.DistanceTo(end);
-                double angle = GeometricCalculator.GetAngleFromBulge(bulge);
-                double radius = GeometricCalculator.GetRadiusFromBulge(start, end, bulge);
-
-                return Math.Abs(radius * angle);
-            }
-        }
-
-        #endregion
-
-        #region Editing
-
-        /// <summary>
-        /// Sets the position of a vertex at the specified index
-        /// </summary>
-        public void SetVertexPosition(int index, Point3D newPosition)
-        {
-            var vertex = GetVertex(index);
-            if (vertex != null)
-            {
-                vertex.Position = newPosition;
-            }
-        }
-
-        /// <summary>
-        /// Sets the bulge value of a vertex at the specified index
-        /// </summary>
-        public void SetVertexBulge(int index, double newBulge)
-        {
-            var vertex = GetVertex(index);
-            if (vertex != null)
-            {
-                vertex.Bulge = newBulge;
-            }
-        }
-
-        /// <summary>
-        /// Moves a vertex by the specified offset
-        /// </summary>
-        public bool MoveVertex(int index, Vector3D offset)
-        {
-            var vertex = GetVertex(index);
-            if (vertex == null)
-                return false;
-
-            vertex.Position = vertex.Position + offset;
-            return true;
-        }
-
-        /// <summary>
-        /// Reverses the direction of the polyline
-        /// </summary>
-        public void Reverse()
-        {
-            var vertices = GetOrderedVertices().ToList();
-            vertices.Reverse();
-
-            // Remove all vertices
-            foreach (var v in GetOrderedVertices().ToList())
-                Remove(v);
-
-            // Re-add in reversed order and fix bulges and Index
-            _nextIndex = 0;
-            for (int i = 0; i < vertices.Count; i++)
-            {
-                var v = vertices[i];
-
-                int prevIndex = (i - 1 + vertices.Count) % vertices.Count;
-                if (i == 0 && !IsClosed)
-                    v.Bulge = 0;
-                else
-                    v.Bulge = -vertices[prevIndex].Bulge;
-
-                v.Index = _nextIndex++;
-                Add(v);
-            }
-        }
-
-        /// <summary>
-        /// Closes the polyline (sets IsClosed = true)
-        /// </summary>
-        public void Close()
-        {
-            IsClosed = true;
-        }
-
-        /// <summary>
-        /// Opens the polyline (sets IsClosed = false)
-        /// </summary>
-        public void Open()
-        {
-            IsClosed = false;
-        }
+        public int VertexCount => _verticies.Count;
 
         #endregion
 
@@ -337,21 +69,7 @@ namespace OpenCAD.Geometry
         /// Total length of all segments
         /// </summary>
         [JsonIgnore, XmlIgnore]
-        public override double Length
-        {
-            get
-            {
-                double totalLength = 0;
-                int segmentCount = GetSegmentCount();
-
-                for (int i = 0; i < segmentCount; i++)
-                {
-                    totalLength += GetSegmentLength(i);
-                }
-
-                return totalLength;
-            }
-        }
+        public override double Length => GetLength();
 
         /// <summary>
         /// Angle of the first segment (or overall direction)
@@ -373,55 +91,17 @@ namespace OpenCAD.Geometry
 
         public override Extents GetExtents()
         {
-            var vertices = GetOrderedVertices().ToList();
-            if (vertices.Count == 0)
-            {
-                return new Extents
-                {
-                    Min = Point3D.Origin,
-                    Max = Point3D.Origin
-                };
-            }
+            var segments = _segments.Items;
 
-            double minX = double.MaxValue;
-            double minY = double.MaxValue;
-            double minZ = double.MaxValue;
-            double maxX = double.MinValue;
-            double maxY = double.MinValue;
-            double maxZ = double.MinValue;
+            if (segments.Count == 0)
+                return new Extents(Point3D.Origin, Point3D.Origin);
 
-            foreach (var vertex in vertices)
-            {
-                minX = Math.Min(minX, vertex.Position.X);
-                minY = Math.Min(minY, vertex.Position.Y);
-                minZ = Math.Min(minZ, vertex.Position.Z);
-                maxX = Math.Max(maxX, vertex.Position.X);
-                maxY = Math.Max(maxY, vertex.Position.Y);
-                maxZ = Math.Max(maxZ, vertex.Position.Z);
+            Extents ext = segments[0].GetExtents();
 
-                // TODO: For arc segments, we should also check the arc extents
-                // This is a simplified implementation that only checks vertices
-            }
+            for (int i = 1; i < segments.Count; i++)
+                ext.Union(segments[i].GetExtents());
 
-            return new Extents
-            {
-                Min = new Point3D(minX, minY, minZ),
-                Max = new Point3D(maxX, maxY, maxZ)
-            };
-        }
-
-        public override bool Transform(Matrix4D transformation)
-        {
-            var vertices = GetOrderedVertices().ToList();
-
-            foreach (var vertex in vertices)
-            {
-                var pos = vertex.Position;
-                var transformed = Vector3D.Transform(new Vector3D(pos.X, pos.Y, pos.Z), transformation);
-                vertex.Position = new Point3D(transformed.X, transformed.Y, transformed.Z);
-            }
-
-            return true;
+            return ext;
         }
 
         public override IEnumerable<GeoPoint> GetGeoPoints(Point3D referencePoint, GeoPointModes geoPointType)
@@ -431,137 +111,642 @@ namespace OpenCAD.Geometry
             if (IsPreviewGeometry)
                 return candidates;
 
-            // Add vertices as GeoPoints
-            if (geoPointType.HasFlag(GeoPointModes.Vertex))
+            var orderedVertices = GetOrderedVertices();
+            var previousVertex = orderedVertices.FirstOrDefault();
+            if (previousVertex == null || orderedVertices.Count() < 2)
             {
-                foreach (var vertex in GetOrderedVertices())
-                {
-                    candidates.Add(new GeoPoint(vertex.Position, GeoPointModes.Vertex) { RelatedGeometryId = ID });
-                }
+                return candidates;
             }
 
-            // Add midpoints of segments
-            if (geoPointType.HasFlag(GeoPointModes.Middle))
+            var verticiesList = orderedVertices.Skip(1).ToList();
+
+            // Handle closing segment if polyline is closed
+            if (IsClosed)
             {
-                int segmentCount = GetSegmentCount();
-                for (int i = 0; i < segmentCount; i++)
-                {
-                    var (start, end, bulge) = GetSegment(i);
-                    Point3D midpoint = GeometricCalculator.GetMidpointFromBulge(start, end, bulge);
-                    candidates.Add(new GeoPoint(midpoint, GeoPointModes.Middle) { RelatedGeometryId = ID });
-                }
+                verticiesList.Add(previousVertex);
             }
 
-            // TODO: Implement NearestPoint, Perpendicular, and other GeoPoint modes
-            // This requires finding the closest point on any segment, which is more complex
+            foreach (var vert in verticiesList)
+            {
+                var segmentGeoPoints = GeometricCalculator.GetSegmentGeoPoints(
+                    previousVertex.Position,
+                    vert.Position,
+                    previousVertex.Bulge,
+                    referencePoint,
+                    geoPointType);
+
+                // Set RelatedGeometryId for all segment geo points
+                foreach (var geoPoint in segmentGeoPoints)
+                {
+                    geoPoint.RelatedGeometryId = ID;
+                }
+
+                candidates.AddRange(segmentGeoPoints);
+                previousVertex = vert;
+            }
 
             return candidates;
         }
 
-        public override Point3D GetClosestPointTo(Point3D point, bool extend = false)
+        #endregion
+
+        #region ICurve Implementation
+
+        public bool IsPeriodic => false;
+
+        public double DomainStart => 0;
+
+        public double DomainEnd => IsClosed ? VertexCount : VertexCount - 1;
+
+        public Point3D StartPoint => GetVertex(0)?.Position ?? Point3D.NotAPoint;
+
+        public Point3D EndPoint => IsClosed ? StartPoint : GetOrderedVertices()?.LastOrDefault()?.Position ?? Point3D.NotAPoint;
+
+        public double GetParameterAtPoint(Point3D point)
         {
-            Point3D closestPoint = Point3D.Origin;
-            double minDistance = double.MaxValue;
+            var segments = _segments.Items;
 
-            int segmentCount = GetSegmentCount();
-            for (int i = 0; i < segmentCount; i++)
+            double bestParam = 0.0;
+            double minDistSq = double.MaxValue;
+
+            for (int i = 0; i < segments.Count; i++)
             {
-                var (start, end, bulge) = GetSegment(i);
+                var seg = segments[i];
 
-                Point3D segmentClosest;
-                if (Math.Abs(bulge) < 1e-10)
+                // 1. Check if point lies exactly on this segment
+                if (seg.IsPointOnSegment(point, tolerance: 1e-9))
                 {
-                    // Line segment - use line closest point logic
-                    var lineVec = end - start;
-                    var pointVec = point - start;
-                    double lineLenSq = lineVec.LengthSquared;
+                    double local = seg.GetClosestParameter(point, extend: false);
+                    return i + local;
+                }
 
-                    if (lineLenSq < double.Epsilon)
-                    {
-                        segmentClosest = start;
-                    }
-                    else
-                    {
-                        double t = Vector3D.Dot(pointVec, lineVec) / lineLenSq;
-                        if (!extend)
-                            t = Math.Max(0, Math.Min(1, t));
+                // 2. Otherwise compute closest point on this segment
+                double localParam = seg.GetClosestParameter(point, extend: false);
+                Point3D closest = seg.GetPointAt(localParam);
 
-                        segmentClosest = start + lineVec * t;
-                    }
+                double distSq = (closest - point).LengthSquared;
+                if (distSq < minDistSq)
+                {
+                    minDistSq = distSq;
+                    bestParam = i + localParam;
+                }
+            }
+
+            return bestParam;
+        }
+
+        public Point3D GetPointAtParameter(double t)
+        {
+            var (segment, _, localT) = _segments.GetSegmentT(t);
+
+            return segment.GetPointAt(localT);
+        }
+
+        public Vector3D GetFirstDerivativeAtParameter(double t)
+        {
+            var (seg, _, localT) = _segments.GetSegmentT(t);
+            return seg.GetFirstDerivative(localT);
+        }
+
+        public Vector3D GetSecondDerivativeAtParameter(double t)
+        {
+            var (seg, _, localT) = _segments.GetSegmentT(t);
+            return seg.GetSecondDerivative(localT);
+        }
+
+        public double GetClosestParameter(Point3D point, bool extend = false)
+        {
+            var segments = _segments.Items;
+
+            if (segments.Count == 0)
+                return 0;
+
+            double bestParam = 0.0;
+            double minDistSq = double.MaxValue;
+
+            for (int i = 0; i < segments.Count; i++)
+            {
+                var seg = segments[i];
+
+                // Local closest parameter on this segment
+                double localT = seg.GetClosestParameter(point, extend);
+
+                // Closest point on this segment
+                Point3D closest = seg.GetPointAt(localT);
+
+                // Distance to the query point
+                double distSq = (closest - point).LengthSquared;
+
+                if (distSq < minDistSq)
+                {
+                    minDistSq = distSq;
+                    bestParam = i + localT;
+                }
+            }
+
+            return bestParam;
+        }
+
+        public Point3D GetClosestPoint(Point3D point, bool extend = false)
+        {
+            var segments = _segments.Items;
+
+            if (segments.Count == 0)
+                return default;
+
+            double minDistSq = double.MaxValue;
+            Point3D bestPoint = default;
+
+            for (int i = 0; i < segments.Count; i++)
+            {
+                var seg = segments[i];
+
+                // Local closest parameter on this segment
+                double localT = seg.GetClosestParameter(point, extend);
+
+                // Closest point on this segment
+                Point3D candidate = seg.GetPointAt(localT);
+
+                // Compare distances
+                double distSq = (candidate - point).LengthSquared;
+                if (distSq < minDistSq)
+                {
+                    minDistSq = distSq;
+                    bestPoint = candidate;
+                }
+            }
+
+            return bestPoint;
+        }
+
+        public double GetLength()
+        {
+            double total = 0.0;
+            foreach (var seg in _segments.Items)
+                total += seg.GetLength();
+            return total;
+        }
+
+        public double GetLength(double t0, double t1)
+        {
+            var segments = _segments.Items;
+
+            if (segments.Count == 0)
+                return 0;
+
+            // Normalize order
+            if (t1 < t0)
+                (t0, t1) = (t1, t0);
+
+            // Clamp to valid domain
+            double maxT = segments.Count;
+            t0 = Math.Clamp(t0, 0, maxT);
+            t1 = Math.Clamp(t1, 0, maxT);
+
+            // If both parameters fall in the same segment
+            int i0 = (int)Math.Floor(t0);
+            int i1 = (int)Math.Floor(t1);
+
+            if (i0 == i1)
+            {
+                double local0 = t0 - i0;
+                double local1 = t1 - i1;
+                return segments[i0].GetLength(local0, local1);
+            }
+
+            double length = 0;
+
+            // --- 1. Partial length on first segment ---
+            {
+                double local0 = t0 - i0;
+                length += segments[i0].GetLength(local0, 1.0);
+            }
+
+            // --- 2. Full segments in between ---
+            for (int i = i0 + 1; i < i1; i++)
+                length += segments[i].GetLength();
+
+            // --- 3. Partial length on last segment ---
+            {
+                double local1 = t1 - i1;
+                length += segments[i1].GetLength(0.0, local1);
+            }
+
+            return length;
+        }
+
+        public ICurve Trim(double t0, double t1)
+        {
+            var segments = _segments.Items;
+
+            if (segments.Count == 0)
+                return null;
+
+            // Normalize order
+            if (t1 < t0)
+                (t0, t1) = (t1, t0);
+
+            double maxT = segments.Count;
+            t0 = Math.Clamp(t0, 0, maxT);
+            t1 = Math.Clamp(t1, 0, maxT);
+
+            int i0 = (int)Math.Floor(t0);
+            int i1 = (int)Math.Floor(t1);
+
+            double local0 = t0 - i0;
+            double local1 = t1 - i1;
+
+            List<PolylineSegment> newSegs = new();
+
+            if (i0 == i1)
+            {
+                // Entire trim lies within one segment
+                newSegs.Add(segments[i0].Trim(local0, local1));
+            }
+            else
+            {
+                // First partial segment
+                newSegs.Add(segments[i0].Trim(local0, 1.0));
+
+                // Middle full segments
+                for (int i = i0 + 1; i < i1; i++)
+                    newSegs.Add(segments[i]);
+
+                // Last partial segment
+                newSegs.Add(segments[i1].Trim(0.0, local1));
+            }
+
+            // Convert back to a polyline curve
+            return PolylineFromSegments(newSegs);
+        }
+
+        public ICurve Transform(Matrix4D transform)
+        {
+            var segments = _segments.Items;
+
+            List<Point3D> verts = new();
+            List<double> bulges = new();
+
+            foreach (var seg in segments)
+            {
+                var tseg = seg.Transform(transform);
+
+                verts.Add(tseg.Start);
+                bulges.Add(tseg.IsLine ? 0 : Math.Tan(tseg.Sweep / 4));
+            }
+
+            verts.Add(segments[^1].End.Transform(transform));
+
+            return PolylineFromVerticiesAndBulges(verts, bulges);
+        }
+
+        #endregion
+
+
+        #region Vertex Management
+
+        public IEnumerable<PolylineVertex> Vertices => GetOrderedVertices();
+
+        public IEnumerable<double> Bulges => GetOrderedVertices().Select(v => v.Bulge);
+
+        public void MarkDirty()
+        {
+            _segments.MarkDirty();
+            _verticies.MarkDirty();
+        }
+
+        /// <summary>
+        /// Adds a vertex to the end of the polyline
+        /// </summary>
+        public PolylineVertex AddVertex(Point3D position, double bulge = 0.0)
+        {
+            var vertex = new PolylineVertex(_document, position, bulge)
+            {
+                Index = (uint)_verticies.Count
+            };
+
+            if (Add(vertex))
+                MarkDirty();
+            return vertex;
+        }
+
+        public void AddVertex(PolylineVertex vertex)
+        {
+            vertex.Index = (uint)_verticies.Count;
+            if (Add(vertex))
+                MarkDirty();
+        }
+
+        /// <summary>
+        /// Inserts a vertex at the specified index
+        /// </summary>
+        public void InsertVertex(int index, Point3D position, double bulge = 0.0)
+        {
+            if (index < 0 || index > VertexCount)
+                throw new ArgumentOutOfRangeException(nameof(index));
+
+            var vertices = GetOrderedVertices();
+
+            // Create new vertex
+            var newVertex = new PolylineVertex(_document, position, bulge);
+
+            // Add the new vertex to the document update indices if successful
+            if (Add(newVertex))
+            {
+                for (int i = index; i < vertices.Count; i++)
+                    vertices[i].Index++;
+
+                MarkDirty();
+            }
+        }
+
+        /// <summary>
+        /// Removes the vertex at the specified index
+        /// </summary>
+        public bool RemoveVertex(int index)
+        {
+            var vertices = GetOrderedVertices();
+            if (index < 0 || index >= vertices.Count)
+                return false;
+
+            foreach (var v in vertices)
+            {
+                if (v.Index > index)
+                {
+                    v.Index--;
+                }
+            }
+
+            var result = Remove(vertices[index]);
+
+            if (result)
+            {
+                MarkDirty();
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Removes a vertex at the specified position (with tolerance)
+        /// </summary>
+        public bool RemoveVertexAt(Point3D position, double tolerance = 1e-6)
+        {
+            var vertex = GetOrderedVertices()
+                .FirstOrDefault(v => v.Position.DistanceTo(position) < tolerance);
+
+            var result = false;
+            if (vertex != null && (result = Remove(vertex)))
+            {
+                MarkDirty();
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Clears all vertices
+        /// </summary>
+        public void ClearVertices()
+        {
+            var vertices = GetOrderedVertices();
+            foreach (var vertex in vertices)
+            {
+                Remove(vertex);
+            }
+            MarkDirty();
+        }
+
+        /// <summary>
+        /// Gets all vertices in order (ordered by their addition Index, which is preserved in the children dictionary)
+        /// </summary>
+        public IReadOnlyList<PolylineVertex> GetVertices()
+        {
+            return GetOrderedVertices();
+        }
+
+        /// <summary>
+        /// Gets the vertex at the specified index
+        /// </summary>
+        public PolylineVertex? GetVertex(int index)
+        {
+            var vertices = GetOrderedVertices();
+            if (index < 0 || index >= vertices.Count)
+                return null;
+
+            return vertices[index];
+        }
+
+        /// <summary>
+        /// Helper to get vertices in deterministic order
+        /// </summary>
+        public IReadOnlyList<PolylineVertex> GetOrderedVertices()
+        {
+            return _verticies.Items
+                .Select(id => (PolylineVertex)children[id])
+                .ToList();
+        }
+
+        #endregion
+
+        #region Segment Queries
+
+        /// <summary>
+        /// Gets the number of segments (edges) in the polyline
+        /// </summary>
+        public int GetSegmentCount()
+        {
+            return _segments.Count;
+        }
+
+        /// <summary>
+        /// Gets segment information (start point, end point, bulge)
+        /// </summary>
+        public (Point3D start, Point3D end, double bulge) GetSegment(int index)
+        {
+            var segment = _segments[index];
+
+            return (segment.Start, segment.End, segment.Bulge);
+        }
+
+        #endregion
+
+        #region Editing
+
+        /// <summary>
+        /// Sets the position of a vertex at the specified index
+        /// </summary>
+        public void SetVertexPosition(int index, Point3D newPosition)
+        {
+            var vertex = GetVertex(index);
+            if (vertex != null)
+            {
+                vertex.Position = newPosition;
+                MarkDirty();
+            }
+        }
+
+        /// <summary>
+        /// Sets the bulge value of a vertex at the specified index
+        /// </summary>
+        public void SetVertexBulge(int index, double newBulge)
+        {
+            var vertex = GetVertex(index);
+            if (vertex != null)
+            {
+                vertex.Bulge = newBulge;
+                MarkDirty();
+            }
+        }
+
+        /// <summary>
+        /// Moves a vertex by the specified offset
+        /// </summary>
+        public bool MoveVertex(int index, Vector3D offset)
+        {
+            var vertex = GetVertex(index);
+            if (vertex == null)
+                return false;
+
+            vertex.Position = vertex.Position + offset;
+            _segments.MarkDirty();
+            return true;
+        }
+
+        /// <summary>
+        /// Reverses the direction of the polyline
+        /// </summary>
+        public void Reverse()
+        {
+            // Get a mutable list of vertices in order
+            var vertices = GetOrderedVertices().ToList();
+
+            // Reverse the order
+            vertices.Reverse();
+
+            // Fix bulges and indices
+            for (int i = 0; i < vertices.Count; i++)
+            {
+                var v = vertices[i];
+
+                // New index
+                v.Index = (uint)i;
+
+                // Bulge logic
+                if (i == 0 && !IsClosed)
+                {
+                    v.Bulge = 0;
                 }
                 else
                 {
-                    // Arc segment - simplified: just check start, end, and midpoint
-                    // TODO: Implement proper arc closest point calculation
-                    var midpoint = GeometricCalculator.GetMidpointFromBulge(start, end, bulge);
-
-                    double distStart = start.DistanceTo(point);
-                    double distEnd = end.DistanceTo(point);
-                    double distMid = midpoint.DistanceTo(point);
-
-                    if (distStart < distEnd && distStart < distMid)
-                        segmentClosest = start;
-                    else if (distEnd < distMid)
-                        segmentClosest = end;
-                    else
-                        segmentClosest = midpoint;
-                }
-
-                double distance = segmentClosest.DistanceTo(point);
-                if (distance < minDistance)
-                {
-                    minDistance = distance;
-                    closestPoint = segmentClosest;
+                    int prev = (i - 1 + vertices.Count) % vertices.Count;
+                    v.Bulge = -vertices[prev].Bulge;
                 }
             }
 
-            return closestPoint;
+            // Update the cached vertex order
+            MarkDirty();
         }
 
-        public override Vector3D? GetFirstDerivate(Point3D point)
+        /// <summary>
+        /// Closes the polyline (sets IsClosed = true)
+        /// </summary>
+        public void Close()
         {
-            // Find the segment containing the point and return its tangent
-            // This is simplified - proper implementation would interpolate along the segment
-            int segmentCount = GetSegmentCount();
+            if (IsClosed || VertexCount < 2)
+                return;
+            var firstVertex = GetVertex(0);
+            AddVertex(firstVertex);
+        }
 
-            for (int i = 0; i < segmentCount; i++)
+        /// <summary>
+        /// Opens the polyline (sets IsClosed = false)
+        /// </summary>
+        public void Open()
+        {
+            if (!IsClosed)
+                return;
+            RemoveVertex(VertexCount - 1);
+        }
+
+        #endregion
+
+        #region Internal Methods
+
+        internal List<Guid> BuildOrderedVertices()
+        {
+            return children.Values
+                .OfType<PolylineVertex>()
+                .OrderBy(v => v.Index)
+                .Select(v => v.ID)
+                .ToList();
+        }
+
+        #endregion
+
+        #region Private Methods
+
+        private Polyline PolylineFromSegments(List<PolylineSegment> segments)
+        {
+            var polyline = new Polyline(_document);
+            polyline.SetBasicPropertiesFrom(this);
+
+            // Add all segment starts
+            foreach (var seg in segments)
             {
-                var (start, end, bulge) = GetSegment(i);
-
-                if (Math.Abs(bulge) < 1e-10)
-                {
-                    // Line segment - constant derivative
-                    var dir = end - start;
-                    double len = dir.Length;
-                    if (len > double.Epsilon)
-                        return new Vector3D(dir.X / len, dir.Y / len, dir.Z / len);
-                }
+                double bulge = seg.IsLine ? 0.0 : Math.Tan(seg.Sweep / 4);
+                polyline.AddVertex(seg.Start, seg.Bulge);
             }
 
-            return null;
+            // Add final vertex
+            var lastSeg = segments[^1];
+            double lastBulge = IsClosed ? lastSeg.Bulge : 0.0;
+
+            polyline.AddVertex(lastSeg.End, lastBulge);
+
+            // Preserve closure explicitly
+            if (IsClosed)
+                polyline.Close();
+
+            return polyline;
         }
 
-        public override Vector3D? GetSecondDerivate(Point3D point)
+        private Polyline PolylineFromVerticiesAndBulges(List<Point3D> verticies, List<double> bulges)
         {
-            // Second derivative for polyline segments
-            // For lines: zero, For arcs: perpendicular to first derivative
-            var firstDeriv = GetFirstDerivate(point);
-            if (firstDeriv != null)
+            if (verticies.Count < 2)
+                return new Polyline(_document);
+
+            if (bulges.Count != verticies.Count - 1)
+                throw new ArgumentException("Bulge count must be vertexCount - 1");
+
+            var segments = new List<PolylineSegment>();
+
+            for (int i = 0; i < bulges.Count; i++)
             {
-                return firstDeriv.Rotate(Math.PI / 2, _normal);
+                var s = verticies[i];
+                var e = verticies[i + 1];
+                var bulge = bulges[i];
+
+                segments.Add(CreateSegmentFromVertices(s, e, bulge));
             }
 
-            return null;
+            return PolylineFromSegments(segments);
         }
 
-        public override double GetParameterAtPoint(Point3D point)
+        private PolylineSegment CreateSegmentFromVertices(Point3D previousVertex, Point3D currentVertex, double bulge)
         {
-            throw new NotImplementedException();
-        }
-
-        public override Point3D GetPointAtParameter(double parameter)
-        {
-            throw new NotImplementedException();
+            if (Math.Abs(bulge) < 1e-10)
+            {
+                // Line segment
+                return new PolylineSegment(previousVertex, currentVertex);
+            }
+            else
+            {
+                // Arc segment
+                var center = GeometricCalculator.GetCenterFromBulge(previousVertex, currentVertex, bulge);
+                double angle = GeometricCalculator.GetAngleFromBulge(bulge);
+                return new PolylineSegment(previousVertex, currentVertex, center, angle);
+            }
         }
 
         #endregion

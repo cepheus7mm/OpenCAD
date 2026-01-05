@@ -1,6 +1,7 @@
 ﻿using OpenCAD.Geometry.Helpers;
 using OpenCAD.Interfaces;
 using System.Drawing;
+using System.Numerics;
 using System.Text.Json.Serialization;
 using System.Xml.Serialization;
 
@@ -8,6 +9,7 @@ namespace OpenCAD.Geometry
 {
     public abstract class GeometryBase : OpenCADObject, IDrawable
     {
+        protected const double MIDPOINT_PARAMETER = 0.5;
         protected Vector3D _normal = new(0, 0, 1);
 
         /// <summary>
@@ -122,16 +124,6 @@ namespace OpenCAD.Geometry
 
         public abstract Extents GetExtents();
 
-        public abstract Vector3D? GetFirstDerivate(Point3D point);
-
-        public abstract Vector3D? GetSecondDerivate(Point3D point);
-
-        public abstract double GetParameterAtPoint(Point3D point);
-
-        public abstract Point3D GetPointAtParameter(double parameter);
-
-        public abstract Point3D GetClosestPointTo(Point3D point, bool extend = false);
-
         /// <summary>
         /// Retrieves a geographic point of the specified type relative to a given 3D reference point.
         /// </summary>
@@ -163,14 +155,23 @@ namespace OpenCAD.Geometry
             return true;
         }
 
-        #region Editing 
+        public virtual void SetBasicPropertiesFrom(GeometryBase sourceGeometry)
+        {
+            if (sourceGeometry == null)
+                return;
+            // Copy basic properties
+            this.Layer = sourceGeometry.Layer;
+            this.Color = sourceGeometry.Color;
+            this.LineType = sourceGeometry.LineType;
+            this.LineWeight = sourceGeometry.LineWeight;
+        }
 
-        /// <summary>
-        /// Apply a 4x4 homogeneous transform to this geometry.
-        /// Default throws — override in derived geometry classes.
-        /// Return true if transform applied successfully.
-        /// </summary>
-        public abstract bool Transform(Matrix4D transformation);
+        internal void SetNormal(Vector3D normal)
+        {
+            _normal = normal.Length > 1e-12 ? normal.Normalized : normal;
+        }
+
+        #region Editing 
 
         #endregion
 
@@ -197,10 +198,11 @@ namespace OpenCAD.Geometry
                 return null;
 
             return candidates
-                .Where(p => p.DistanceTo(referencePoint) <= aperture)
-                .OrderBy(p => p.DistanceTo(referencePoint))
+                .Where(p => p.Position.DistanceTo(referencePoint) <= aperture)
+                .OrderBy(p => p.Position.DistanceTo(referencePoint))
                 .FirstOrDefault();
         }
+
         #endregion
     }
 }

@@ -45,7 +45,7 @@ namespace UI.Commands.Drawing
                     return;
                 }
 
-                _basePoint = result.Point;
+                _basePoint = result.Point.Value;
 
                 Context?.OutputMessage(
                     string.Format(

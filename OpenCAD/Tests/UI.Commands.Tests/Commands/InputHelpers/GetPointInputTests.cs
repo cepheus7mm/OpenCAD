@@ -36,9 +36,9 @@ namespace UI.Commands.Tests
             Assert.IsNotNull(result, "Result should not be null.");
             Assert.AreEqual(UI.Commands.InputHelpers.InputResult.InputResultType.Point, result.ResultType, "Result type should be Point.");
             Assert.IsNotNull(result.Point, "Point payload should be set.");
-            Assert.AreEqual(picked.X, result.Point!.X, 1e-9);
-            Assert.AreEqual(picked.Y, result.Point!.Y, 1e-9);
-            Assert.AreEqual(picked.Z, result.Point!.Z, 1e-9);
+            Assert.AreEqual(picked.X, result.Point.Value.X, 1e-9);
+            Assert.AreEqual(picked.Y, result.Point.Value.Y, 1e-9);
+            Assert.AreEqual(picked.Z, result.Point.Value.Z, 1e-9);
 
             // Verify that last point was stored and output message was produced
             ContextMock.Verify(c => c.SetLastPoint(It.Is<Point3D>(p => Math.Abs(p.X - picked.X) < 1e-9 && Math.Abs(p.Y - picked.Y) < 1e-9 && Math.Abs(p.Z - picked.Z) < 1e-9)), Times.AtLeastOnce);
@@ -66,9 +66,9 @@ namespace UI.Commands.Tests
             var result = await getTask.WaitAsync(TimeSpan.FromSeconds(1));
             Assert.AreEqual(UI.Commands.InputHelpers.InputResult.InputResultType.Point, result.ResultType);
             Assert.IsNotNull(result.Point);
-            Assert.AreEqual(10.0, result.Point!.X, 1e-9);
-            Assert.AreEqual(20.0, result.Point!.Y, 1e-9);
-            Assert.AreEqual(30.0, result.Point!.Z, 1e-9);
+            Assert.AreEqual(10.0, result.Point.Value.X, 1e-9);
+            Assert.AreEqual(20.0, result.Point.Value.Y, 1e-9);
+            Assert.AreEqual(30.0, result.Point.Value.Z, 1e-9);
             
             // Verify last point was set
             ContextMock.Verify(c => c.SetLastPoint(It.Is<Point3D>(p => 
@@ -96,9 +96,9 @@ namespace UI.Commands.Tests
             var result = await getTask.WaitAsync(TimeSpan.FromSeconds(1));
             Assert.AreEqual(UI.Commands.InputHelpers.InputResult.InputResultType.Point, result.ResultType);
             Assert.IsNotNull(result.Point);
-            Assert.AreEqual(10.0, result.Point!.X, 1e-9);
-            Assert.AreEqual(20.0, result.Point!.Y, 1e-9);
-            Assert.AreEqual(30.0, result.Point!.Z, 1e-9);
+            Assert.AreEqual(10.0, result.Point.Value.X, 1e-9);
+            Assert.AreEqual(20.0, result.Point.Value.Y, 1e-9);
+            Assert.AreEqual(30.0, result.Point.Value.Z, 1e-9);
         }
 
         [TestMethod]
@@ -114,9 +114,9 @@ namespace UI.Commands.Tests
             // Assert
             var result = await getTask.WaitAsync(TimeSpan.FromSeconds(1));
             Assert.AreEqual(UI.Commands.InputHelpers.InputResult.InputResultType.Point, result.ResultType);
-            Assert.AreEqual(-10.0, result.Point!.X, 1e-9);
-            Assert.AreEqual(-20.0, result.Point!.Y, 1e-9);
-            Assert.AreEqual(-30.0, result.Point!.Z, 1e-9);
+            Assert.AreEqual(-10.0, result.Point.Value.X, 1e-9);
+            Assert.AreEqual(-20.0, result.Point.Value.Y, 1e-9);
+            Assert.AreEqual(-30.0, result.Point.Value.Z, 1e-9);
         }
 
         [TestMethod]
@@ -132,9 +132,9 @@ namespace UI.Commands.Tests
             // Assert
             var result = await getTask.WaitAsync(TimeSpan.FromSeconds(1));
             Assert.AreEqual(UI.Commands.InputHelpers.InputResult.InputResultType.Point, result.ResultType);
-            Assert.AreEqual(10.5, result.Point!.X, 1e-9);
-            Assert.AreEqual(20.75, result.Point!.Y, 1e-9);
-            Assert.AreEqual(30.125, result.Point!.Z, 1e-9);
+            Assert.AreEqual(10.500, result.Point.Value.X, 1e-9);
+            Assert.AreEqual(20.750, result.Point.Value.Y, 1e-9);
+            Assert.AreEqual(30.125, result.Point.Value.Z, 1e-9);
         }
 
         [TestMethod]
@@ -150,9 +150,9 @@ namespace UI.Commands.Tests
             // Assert
             var result = await getTask.WaitAsync(TimeSpan.FromSeconds(1));
             Assert.AreEqual(UI.Commands.InputHelpers.InputResult.InputResultType.Point, result.ResultType);
-            Assert.AreEqual(10.0, result.Point!.X, 1e-9);
-            Assert.AreEqual(20.0, result.Point!.Y, 1e-9);
-            Assert.AreEqual(30.0, result.Point!.Z, 1e-9);
+            Assert.AreEqual(10.0, result.Point.Value.X, 1e-9);
+            Assert.AreEqual(20.0, result.Point.Value.Y, 1e-9);
+            Assert.AreEqual(30.0, result.Point.Value.Z, 1e-9);
         }
 
         [TestMethod]
@@ -206,9 +206,9 @@ namespace UI.Commands.Tests
             Assert.IsTrue(processed, "Empty input with allowLastPoint should be processed");
             var result = await getTask.WaitAsync(TimeSpan.FromSeconds(1));
             Assert.AreEqual(UI.Commands.InputHelpers.InputResult.InputResultType.Point, result.ResultType);
-            Assert.AreEqual(lastPoint.X, result.Point!.X, 1e-9);
-            Assert.AreEqual(lastPoint.Y, result.Point!.Y, 1e-9);
-            Assert.AreEqual(lastPoint.Z, result.Point!.Z, 1e-9);
+            Assert.AreEqual(lastPoint.X, result.Point.Value.X, 1e-9);
+            Assert.AreEqual(lastPoint.Y, result.Point.Value.Y, 1e-9);
+            Assert.AreEqual(lastPoint.Z, result.Point.Value.Z, 1e-9);
             
             // Verify GetLastPoint was called
             ContextMock.Verify(c => c.GetLastPoint(), Times.AtLeastOnce);
@@ -276,9 +276,9 @@ namespace UI.Commands.Tests
             double expectedX = 10 + 10 * Math.Cos(angle45Rad);
             double expectedY = 10 + 10 * Math.Sin(angle45Rad);
             
-            Assert.AreEqual(expectedX, result.Point!.X, 1e-6);
-            Assert.AreEqual(expectedY, result.Point!.Y, 1e-6);
-            Assert.AreEqual(0.0, result.Point!.Z, 1e-9);
+            Assert.AreEqual(expectedX, result.Point.Value.X, 1e-6);
+            Assert.AreEqual(expectedY, result.Point.Value.Y, 1e-6);
+            Assert.AreEqual(0.0000000, result.Point.Value.Z, 1e-9);
         }
 
         [TestMethod]
@@ -299,9 +299,9 @@ namespace UI.Commands.Tests
             
             // 90 degrees = straight up (Y direction)
             // Expected: (5, 15, 0)
-            Assert.AreEqual(5.0, result.Point!.X, 1e-6);
-            Assert.AreEqual(15.0, result.Point!.Y, 1e-6);
-            Assert.AreEqual(0.0, result.Point!.Z, 1e-9);
+            Assert.AreEqual(5.00, result.Point.Value.X, 1e-6);
+            Assert.AreEqual(15.0, result.Point.Value.Y, 1e-6);
+            Assert.AreEqual(0.00, result.Point.Value.Z, 1e-9);
         }
 
         [TestMethod]
@@ -322,9 +322,9 @@ namespace UI.Commands.Tests
             
             // 0 degrees = positive X direction
             // Expected: (10, 0, 0)
-            Assert.AreEqual(10.0, result.Point!.X, 1e-6);
-            Assert.AreEqual(0.0, result.Point!.Y, 1e-9);
-            Assert.AreEqual(0.0, result.Point!.Z, 1e-9);
+            Assert.AreEqual(10.0, result.Point.Value.X, 1e-6);
+            Assert.AreEqual(0.00, result.Point.Value.Y, 1e-9);
+            Assert.AreEqual(0.00, result.Point.Value.Z, 1e-9);
         }
 
         [TestMethod]
@@ -346,8 +346,8 @@ namespace UI.Commands.Tests
             
             // -10 at 0° = move left instead of right
             // Expected: (0, 10, 0)
-            Assert.AreEqual(0.0, result.Point!.X, 1e-6);
-            Assert.AreEqual(10.0, result.Point!.Y, 1e-6);
+            Assert.AreEqual(0.00, result.Point.Value.X, 1e-6);
+            Assert.AreEqual(10.0, result.Point.Value.Y, 1e-6);
         }
 
         [TestMethod]
@@ -371,8 +371,8 @@ namespace UI.Commands.Tests
             double expectedX = 10 * Math.Cos(angle45Rad);
             double expectedY = 10 * Math.Sin(angle45Rad);
             
-            Assert.AreEqual(expectedX, result.Point!.X, 1e-6);
-            Assert.AreEqual(expectedY, result.Point!.Y, 1e-6);
+            Assert.AreEqual(expectedX, result.Point.Value.X, 1e-6);
+            Assert.AreEqual(expectedY, result.Point.Value.Y, 1e-6);
         }
 
         #endregion
@@ -481,7 +481,7 @@ namespace UI.Commands.Tests
             // Assert - should parse as point, not try keyword matching
             var result = await getTask.WaitAsync(TimeSpan.FromSeconds(1));
             Assert.AreEqual(UI.Commands.InputHelpers.InputResult.InputResultType.Point, result.ResultType);
-            Assert.AreEqual(10.0, result.Point!.X, 1e-9);
+            Assert.AreEqual(10.0, result.Point.Value.X, 1e-9);
         }
 
         #endregion

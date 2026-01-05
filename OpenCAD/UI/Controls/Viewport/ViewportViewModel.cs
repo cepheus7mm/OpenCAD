@@ -605,9 +605,9 @@ namespace UI.Controls.Viewport
         /// </summary>
         public void UpdateStatusBarWithWorldCoordinates(Vector3D? worldPos)
         {
-            if (worldPos is not null)
+            if (worldPos.HasValue)
             {
-                _statusBar?.UpdatePositionText(_document.VectorToString(worldPos));
+                _statusBar?.UpdatePositionText(_document.VectorToString(worldPos.Value));
             }
             else
             {
@@ -734,7 +734,7 @@ namespace UI.Controls.Viewport
                     var geoPoint = GetClosestGeoPoint(_geoPoints, point);
                     if (geoPoint != null)
                     {
-                        point = geoPoint;
+                        point = geoPoint.Position;
                       }
                 }
                 else if (SnappingEnabled)
@@ -786,9 +786,9 @@ namespace UI.Controls.Viewport
             double dy = currentPos.Y - _lastMousePos.Y;
 
             // Handle window selection mode
-            if (IsWindowSelectionMode && worldPos is not null)
+            if (IsWindowSelectionMode && worldPos.HasValue)
             {
-                return HandleMouseMoveWindowSelection(currentPos, worldPos);
+                return HandleMouseMoveWindowSelection(currentPos, worldPos.Value);
             }
 
             // Update status bar
@@ -797,7 +797,7 @@ namespace UI.Controls.Viewport
                 // If in point picking mode with snapping enabled, show snapped coordinates
                 if (CurrentInputMode == InputMode.PointPicking && SnappingEnabled)
                 {
-                    var rawPoint = new Point3D(worldPos.X, worldPos.Y, worldPos.Z);
+                    var rawPoint = new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z);
                     var snappedPoint = SnapToGrid(rawPoint);
 
                     // Update status bar with snapped coordinates
@@ -813,7 +813,7 @@ namespace UI.Controls.Viewport
                 // Call preview callback during point picking AND update preview point
                 if (CurrentInputMode == InputMode.PointPicking && _previewCallback != null)
                 {
-                    var previewPoint = new Point3D(worldPos.X, worldPos.Y, worldPos.Z);
+                    var previewPoint = new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z);
 
                     // Apply snapping if enabled
                     if (SnappingEnabled)
@@ -899,12 +899,12 @@ namespace UI.Controls.Viewport
             _windowSelectionPreviewObjects.Clear();
 
             // Calculate the selection rectangle bounds
-            if (_windowSelectionStartPoint?.IsValid() ?? false)
+            if (_windowSelectionStartPoint.HasValue)
             {
-                double minX = Math.Min(_windowSelectionStartPoint.X, _windowSelectionCurrentPoint.X);
-                double maxX = Math.Max(_windowSelectionStartPoint.X, _windowSelectionCurrentPoint.X);
-                double minY = Math.Min(_windowSelectionStartPoint.Y, _windowSelectionCurrentPoint.Y);
-                double maxY = Math.Max(_windowSelectionStartPoint.Y, _windowSelectionCurrentPoint.Y);
+                double minX = Math.Min(_windowSelectionStartPoint.Value.X, _windowSelectionCurrentPoint.Value.X);
+                double maxX = Math.Max(_windowSelectionStartPoint.Value.X, _windowSelectionCurrentPoint.Value.X);
+                double minY = Math.Min(_windowSelectionStartPoint.Value.Y, _windowSelectionCurrentPoint.Value.Y);
+                double maxY = Math.Max(_windowSelectionStartPoint.Value.Y, _windowSelectionCurrentPoint.Value.Y);
 
                 // Collect all drawable objects
                 var drawableObjects = new List<OpenCADObject>();
@@ -954,11 +954,11 @@ namespace UI.Controls.Viewport
         public IEnumerable<OpenCADObject> HitTest(Point screenPos, Func<Point, Vector3?> screenToWorld, double boxSize)
         {
             // Collect all drawable objects
-            var drawableObjects = new List<OpenCADObject>();
-            CollectDrawableObjects(ObjectToDisplay, drawableObjects);
+            var curveObjects = new List<OpenCADObject>();
+            CollectCurveObjects(ObjectToDisplay, curveObjects);
             List<OpenCADObject> hitObjects = new List<OpenCADObject>();
             var worldPos = screenToWorld(screenPos);
-            if (worldPos is null || drawableObjects.Count < 1)
+            if (worldPos is null || curveObjects.Count < 1)
                 return hitObjects;
 
             var c1 = screenToWorld(new Point(screenPos.X - boxSize, screenPos.Y - boxSize));
@@ -968,12 +968,12 @@ namespace UI.Controls.Viewport
                 return hitObjects;
 
             // Test each object against the pickbox
-            foreach (var obj in drawableObjects)
+            foreach (var obj in curveObjects)
             {
-                if (obj is IDrawable drawable)
+                if (obj is ICurve curve)
                 {
-                    var pt = drawable.GetClosestPointTo(new Point3D(worldPos.Value.X, worldPos.Value.Y, 0));
-                    if (pt is not null)
+                    var pt = curve.GetClosestPoint(new Point3D(worldPos.Value.X, worldPos.Value.Y, 0));
+                    if (pt.IsValid)
                     {
                         if (pt.X >= c1.Value.X && pt.X <= c2.Value.X &&
                             pt.Y <= c1.Value.Y && pt.Y >= c2.Value.Y)
@@ -1002,6 +1002,21 @@ namespace UI.Controls.Viewport
             }
         }
 
+        /// <summary>
+        /// Recursively collect all drawable objects from the scene
+        /// </summary>
+        private void CollectCurveObjects(OpenCADObject parent, List<OpenCADObject> list)
+        {
+            var children = parent.GetChildren();
+            foreach (var child in children)
+            {
+                if (child is ICurve)
+                    list.Add(child);
+
+                CollectCurveObjects(child, list);
+            }
+        }
+
         #endregion
 
         #region Private Methods
@@ -1027,16 +1042,13 @@ namespace UI.Controls.Viewport
         /// </summary>
         private bool IsObjectInsideRectangle(OpenCADObject obj, double minX, double maxX, double minY, double maxY)
         {
-            if (obj is IDrawable drawable)
+            if (obj is GeometryBase geometry)
             {
                 // For other drawable objects, try to get their bounds
                 // This is a simplified check - you may need to implement proper bounds checking
-                var extents = drawable.GetExtents();
-                if (extents != null)
-                {
-                    return extents.Min.X >= minX && extents.Max.X <= maxX &&
-                           extents.Min.Y >= minY && extents.Max.Y <= maxY;
-                }
+                var extents = geometry.GetExtents();
+                return extents.Min.X >= minX && extents.Max.X <= maxX &&
+                        extents.Min.Y >= minY && extents.Max.Y <= maxY;
             }
 
             return false;
@@ -1142,7 +1154,7 @@ namespace UI.Controls.Viewport
 
         internal GeoPoint? GetClosestGeoPoint(IEnumerable<GeoPoint> geoPoints, Point3D referencePoint)
         {
-            return geoPoints.OrderBy(x => referencePoint.DistanceTo(x)).FirstOrDefault();
+            return geoPoints.OrderBy(x => referencePoint.DistanceTo(x.Position)).FirstOrDefault();
         }
 
         internal IEnumerable<OpenCADObject> CreateGeoPointGlyphs(IEnumerable<GeoPoint> geoPoints, double scaleFactor)
@@ -1159,7 +1171,7 @@ namespace UI.Controls.Viewport
 
         private OpenCADObject CreateGlyph(GeoPoint geoPoint, double scaleFactor)
         {
-            if (geoPoint == null || !geoPoint.IsValid())
+            if (geoPoint == null || !geoPoint.Position.IsValid)
                 return null;
 
             try

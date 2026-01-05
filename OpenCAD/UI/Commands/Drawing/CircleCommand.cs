@@ -64,31 +64,31 @@ namespace UI.Commands.Drawing
             {
                 _step = CircleInputStep.CenterPoint;
                 var result = await GetInitialInput();
-                if (result == null)
+                if (result.HasValue)
                 {
                     Cancel();
                     return;
                 }
-                SetCirclePoint(result);
+                SetCirclePoint(result.Value);
 
                 // Normal flow for non-Last modes
                 result = await GetSecondInput();
-                if (result == null)
+                if (result.HasValue)
                 {
                     Cancel();
                     return;
                 }
-                SetCirclePoint(result);
+                SetCirclePoint(result.Value);
 
                 if (_circleInputMode == CircleInputMode.PT3)
                 {
                     result = await GetLastInput();
-                    if (result == null)
+                    if (result.HasValue)
                     {
                         Cancel();
                         return;
                     }
-                    SetCirclePoint(result);
+                    SetCirclePoint(result.Value);
 
                     if (!GeometricCalculator.TryGetCircleThroughThreePoints(_start, _second, _end, out var c, out var r))
                     {
@@ -113,7 +113,7 @@ namespace UI.Commands.Drawing
             }
         }
 
-        private async Task<Point3D> GetSecondInput()
+        private async Task<Point3D?> GetSecondInput()
         {
             // Determine next step based on input mode
             _step = _circleInputMode switch
@@ -215,9 +215,9 @@ namespace UI.Commands.Drawing
             };
         }
 
-        private async Task<Point3D> GetInitialInput()
+        private async Task<Point3D?> GetInitialInput()
         {
-            BasePoint = null;
+            BasePoint = Point3D.NotAPoint;
             var step = _step switch
             {
                 CircleInputStep.CenterPoint => OpenCADStrings.Center,
@@ -311,7 +311,7 @@ namespace UI.Commands.Drawing
             if (d < 1e-12)
             {
                 Context?.OutputMessage(OpenCADStrings.InvalidPointInput);
-                return _start.Clone();
+                return _start;
             }
 
             double absRadius = Math.Abs(radius);
@@ -368,7 +368,7 @@ namespace UI.Commands.Drawing
             };
             if (basePoint != null)
             {
-                BasePoint = basePoint;
+                BasePoint = Point3D.NotAPoint;
             }
             var prompt = string.Format(OpenCADStrings.CirclePointPrompt, step);
             var result = await GetPoint(prompt);
@@ -428,7 +428,7 @@ namespace UI.Commands.Drawing
 
             // Get the document to apply current properties
             var document = Context?.GetDocument();
-            if (document != null && _center.IsValid() && _radius > (0 + 1e-12))
+            if (document != null && _center.IsValid && _radius > (0 + 1e-12))
             {
                 Circle = new Circle(_center, _radius, document);
             }
@@ -486,7 +486,7 @@ namespace UI.Commands.Drawing
                     _previewCircle = null;
                 }
 
-                if (previewPoint != null && viewport != null && Context != null)
+                if (previewPoint.HasValue && viewport != null && Context != null)
                 {
                     // Two possible preview computations:
                     // - non-PT3: center & start already known -> radius from start, angles from center
@@ -500,7 +500,7 @@ namespace UI.Commands.Drawing
                     if (_circleInputMode == CircleInputMode.PT3)
                     {
                         // compute circle from three points: _start, _second, previewPoint
-                        if (GeometricCalculator.TryGetCircleThroughThreePoints(_start, _second, previewPoint, out var c, out var r))
+                        if (GeometricCalculator.TryGetCircleThroughThreePoints(_start, _second, previewPoint.Value, out var c, out var r))
                         {
                             previewCenter = c;
                             radius = r;
@@ -516,7 +516,7 @@ namespace UI.Commands.Drawing
                     {
                         // existing behavior (covers Last as well since center is precomputed)
                         previewCenter = _center;
-                        radius = CalculateDistance(_center, previewPoint);
+                        radius = CalculateDistance(_center, previewPoint.Value);
                         if (_circleInputMode == CircleInputMode.DIA)
                         {
                             radius /= 2.0;

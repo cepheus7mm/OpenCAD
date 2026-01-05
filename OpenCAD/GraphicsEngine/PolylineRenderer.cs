@@ -14,6 +14,7 @@ namespace GraphicsEngine
         private readonly PolylineShaderProgram _shaderProgram;
         private int _vao;
         private int _vbo;
+        private bool closed = false;
 
         private Vector2 _viewport = new Vector2(800, 600);
         private const float THIN_LINE_THRESHOLD = 2.5f;
@@ -76,6 +77,8 @@ namespace GraphicsEngine
         public void Render(OpenCADObject obj, RenderContext context)
         {
             if (obj is not Polyline polyline) return;
+
+            closed = polyline.IsClosed;
 
             // Resolve style from polyline properties (by-layer defaults handled by GeometryBase)
             var effectiveColor = polyline.Color;
@@ -319,15 +322,58 @@ namespace GraphicsEngine
                 distances.Add(distances[i - 1] + d);
             }
 
+            // Helper: find a distinct neighbor in direction dir (-1 or +1). If closed, wrap around.
+            int FindDistinctIndex(int start, int dir)
+            {
+                int maxSteps = n; // limit steps to avoid infinite loop
+                int idx = start;
+                for (int step = 0; step < maxSteps; step++)
+                {
+                    idx += dir;
+                    if (closed)
+                    {
+                        idx = (idx % n + n) % n;
+                    }
+                    else
+                    {
+                        if (idx < 0 || idx >= n) break;
+                    }
+
+                    if (!ApproximatelyEqual(points[idx], points[start])) return idx;
+                }
+                return -1;
+            }
+
             // Build interleaved buffer: two verts per point
             var vb = new List<float>(n * 2 * 12);
             for (int i = 0; i < n; i++)
             {
-                Point3D prev = points[Math.Max(0, i - 1)];
+                int prevIndex = (i == 0) ? (closed ? n - 1 : 0) : i - 1;
+                int nextIndex = (i == n - 1) ? (closed ? 0 : n - 1) : i + 1;
+
+                Point3D prev = points[prevIndex];
+                Point3D next = points[nextIndex];
                 Point3D cur = points[i];
-                Point3D next = points[Math.Min(n - 1, i + 1)];
                 float dist = distances[i];
                 float width = hasVariableWidth ? widths[i] : 0f; // 0 signals shader to use uniform width
+
+                // Detect degenerate neighbor case where prev==cur==next (or nearly so) and attempt to recover.
+                if (ApproximatelyEqual(prev, cur) && ApproximatelyEqual(next, cur))
+                {
+                    int distinctPrev = FindDistinctIndex(i, -1);
+                    int distinctNext = FindDistinctIndex(i, 1);
+
+                    if (distinctPrev != -1) prev = points[distinctPrev];
+                    if (distinctNext != -1) next = points[distinctNext];
+
+                    // If still degenerate, fabricate a tiny symmetric offset along X to produce a stable tangent.
+                    if (ApproximatelyEqual(prev, cur) && ApproximatelyEqual(next, cur))
+                    {
+                        const double EPS_FALLBACK = 1e-6;
+                        prev = new Point3D(cur.X + EPS_FALLBACK, cur.Y, cur.Z);
+                        next = new Point3D(cur.X - EPS_FALLBACK, cur.Y, cur.Z);
+                    }
+                }
 
                 // left side (-1)
                 vb.Add((float)prev.X); vb.Add((float)prev.Y); vb.Add((float)prev.Z);

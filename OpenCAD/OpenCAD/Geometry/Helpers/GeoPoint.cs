@@ -6,21 +6,25 @@ using System.Threading.Tasks;
 
 namespace OpenCAD.Geometry.Helpers
 {
-    public class GeoPoint : Point3D
+    public class GeoPoint
     {
+        public Point3D Position { get; private set; }
+
         public GeoPointModes PointType { get; set; } = GeoPointModes.None;
         public Guid RelatedGeometryId { get; set; } = Guid.Empty;
         public bool IsDelayed { get; set; } = false;
-        public GeoPoint() : base() { }
+
+        public GeoPoint(Point3D position, GeoPointModes pointType = GeoPointModes.None)
+        {
+            Position = position;
+            PointType = pointType;
+        }
+
         public GeoPoint(double x, double y, double z, GeoPointModes pointType = GeoPointModes.None)
-            : base(x, y, z)
+            : this(new Point3D(x, y, z), pointType)
         {
-            PointType = pointType;
         }
-        public GeoPoint(Point3D point, GeoPointModes pointType = GeoPointModes.None)
-            : base(point.X, point.Y, point.Z)
-        {
-            PointType = pointType;
-        }
+
+        public override string ToString() => $"{Position} [{PointType}]";
     }
 }

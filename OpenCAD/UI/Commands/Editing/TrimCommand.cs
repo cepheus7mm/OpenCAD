@@ -83,7 +83,7 @@ namespace UI.Commands.Editing
 
         private void OnObjectClicked(object? sender, ObjectClickedEventArgs e)
         {
-            if (e == null || e.Object == null || e.PickedPoint == null || !e.PickedPoint.IsValid())
+            if (e == null || e.Object == null || !e.PickedPoint.IsValid)
                 return;
 
             if (_currentPhase == TrimPhase.SelectCuttingEdge)
@@ -129,7 +129,7 @@ namespace UI.Commands.Editing
 
             var (pt1, pt2) = GeometricCalculator.Intersection(_cuttingEdge, objectToTrim);
 
-            if (pt1.IsNotAPoint())
+            if (!pt1.IsValid)
             {
                 Context?.OutputMessage("Objects do not intersect.");
                 return;
@@ -178,7 +178,7 @@ namespace UI.Commands.Editing
             if (objectToTrim is Arc arc)
             {
                 bool pt1OnArc = GeometricCalculator.IsPointOnArc(pt1, arc);
-                bool pt2Valid = pt2.IsValid();
+                bool pt2Valid = pt2.IsValid;
                 bool pt2OnArc = pt2Valid && GeometricCalculator.IsPointOnArc(pt2, arc);
 
                 Point3D? validPt1 = pt1OnArc ? pt1 : null;
@@ -197,7 +197,7 @@ namespace UI.Commands.Editing
 
             if (objectToTrim is Circle circle)
             {
-                if (!pt2.IsValid())
+                if (!pt2.IsValid)
                 {
                     Context?.OutputMessage("Circle requires two intersection points to trim.");
                     return null;
@@ -218,7 +218,7 @@ namespace UI.Commands.Editing
         {
             var results = new List<Line>();
 
-            if (pt2.IsNotAPoint())
+            if (!pt2.IsValid)
             {
                 double distToStart = pickPoint.DistanceTo(line.StartPoint);
                 double distToEnd = pickPoint.DistanceTo(line.EndPoint);
@@ -279,11 +279,11 @@ namespace UI.Commands.Editing
             double angle1 = Math.Atan2(pt1.Y - circle.Center.Y, pt1.X - circle.Center.X);
             double angle2 = Math.Atan2(pt2.Y - circle.Center.Y, pt2.X - circle.Center.X);
 
-            angle1 = GeometricCalculator.NormalizeAngle(angle1);
-            angle2 = GeometricCalculator.NormalizeAngle(angle2);
+            angle1 = GeometricCalculator.NormalizeUnsigned(angle1);
+            angle2 = GeometricCalculator.NormalizeUnsigned(angle2);
 
             double pickAngle = Math.Atan2(pickPoint.Y - circle.Center.Y, pickPoint.X - circle.Center.X);
-            pickAngle = GeometricCalculator.NormalizeAngle(pickAngle);
+            pickAngle = GeometricCalculator.NormalizeUnsigned(pickAngle);
 
             Context?.OutputMessage("Circle trimming not yet implemented.");
             return null;
@@ -293,12 +293,12 @@ namespace UI.Commands.Editing
         {
             _currentIntersectionPoints.Clear();
 
-            if (pt1.IsValid())
+            if (pt1.IsValid)
             {
                 _currentIntersectionPoints.Add(new GeoPoint(pt1, GeoPointModes.Intersection));
             }
 
-            if (pt2.IsValid())
+            if (pt2.IsValid)
             {
                 _currentIntersectionPoints.Add(new GeoPoint(pt2, GeoPointModes.Intersection));
             }

@@ -1013,5 +1013,24 @@
         public const string CommandInitialized = "{0}Command initialized";
 
         #endregion
+
+        #region Donut Command Messages
+
+        /// <summary>
+        /// Prompt for inner diameter of donut
+        /// </summary>
+        public const string DonutInnerDiameterPrompt = "Specify inner diameter";
+
+        /// <summary>
+        /// Prompt for outer diameter of donut
+        /// </summary>
+        public const string DonutOuterDiameterPrompt = "Specify outer diameter";
+
+        /// <summary>
+        /// Prompt for center point of donut
+        /// </summary>
+        public const string DonutCenterPointPrompt = "Specify center point (or press Enter/ESC to exit)";
+
+        #endregion
     }
 }

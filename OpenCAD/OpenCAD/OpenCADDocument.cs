@@ -306,7 +306,7 @@ namespace OpenCAD
         public override bool Add(OpenCADObject obj)
         {
             var added = base.Add(obj);
-            if (added && obj is IDrawable)
+            if (added && obj is ICurve)
             {
                 LastGeometricChild = obj.ID;
 
@@ -357,12 +357,12 @@ namespace OpenCAD
 
         public event EventHandler<DocumentObjectEventArgs>? ObjectChanged;
 
-        public IDrawable? GetLastGeometricChild()
+        public ICurve? GetLastGeometricChild()
         {
             if (LastGeometricChild.HasValue && LastGeometricChild != Guid.Empty)
             {
                 var obj = GetChild(LastGeometricChild.Value);
-                return obj as IDrawable;
+                return obj as ICurve;
             }
             return null;
         }
@@ -707,11 +707,6 @@ namespace OpenCAD
 
         public string VectorToString(Vector3D vector)
         {
-            if (vector is null)
-            {
-                return OpenCADStrings.NullValue;
-            }
-
             var unitSettings = GetViewportSettings()?.Unit;
             if (unitSettings != null)
             {
@@ -726,15 +721,14 @@ namespace OpenCAD
 
         public Vector3D StringToVector(string str)
         {
-            return Vector3D.ParseFromPropertyString(str);
+            // Example input: "X:1.23, Y:4.56, Z:7.89"
+            (double x, double y, double z) = ParsePointComponents(str);
+
+            return new Vector3D(x, y, z);
         }
 
         public string PointToString(Point3D point)
         {
-            if (point is null)
-            {
-                return OpenCADStrings.NullValue;
-            }
 
             var unitSettings = GetViewportSettings()?.Unit;
             if (unitSettings != null)
@@ -747,7 +741,28 @@ namespace OpenCAD
 
         public Point3D StringToPoint(string str)
         {
-            return Point3D.ParseFromPropertyString(str);
+            // Example input: "X:1.23, Y:4.56, Z:7.89"
+            (double x, double y, double z) = ParsePointComponents(str);
+
+            return new Point3D(x, y, z);
+        }
+
+        private (double x, double y, double z) ParsePointComponents(string strValue)
+        {
+            var components = strValue.Split(',');
+            if (components.Length != 3)
+                throw new FormatException("Invalid point format. Expected format: \"X:{x}, Y:{y}, Z:{z}\"");
+            try
+            {
+                double x = double.Parse(components[0].Substring(2).Trim());
+                double y = double.Parse(components[1].Substring(2).Trim());
+                double z = double.Parse(components[2].Substring(2).Trim());
+                return (x, y, z);
+            }
+            catch (Exception ex)
+            {
+                throw new FormatException("Invalid point format.", ex);
+            }
         }
 
         public string ColorToString(Color value)
