@@ -53,7 +53,7 @@ namespace OpenCAD.Geometry.Calculator
             double ap = Math.Atan2(projected.Y - center.Y, projected.X - center.X);
 
             // Directed angle from start → projected
-            double delta = AngleUtils.NormalizeSigned(ap - a0);
+            double delta = AngleUtils.NormalizeUnsigned(ap - a0);
 
             // Parameter along arc
             double t = delta / sweep;

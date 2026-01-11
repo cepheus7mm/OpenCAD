@@ -128,11 +128,13 @@ namespace OpenCAD.Geometry
                 return candidates;
             }
 
-            // Calculate bulge from arc parameters
-            double bulge = Math.Tan(Angle / 4.0);
+            //// Calculate bulge from arc parameters
+            //double bulge = Math.Tan(Angle / 4.0);
+
+            var segment = PolylineSegment.FromArc(this);
 
             // Use unified segment calculation
-            candidates.AddRange(GeometricCalculator.GetSegmentGeoPoints(StartPoint, EndPoint, bulge, referencePoint, geoPointType));
+            candidates.AddRange(segment.GetGeoPoints(referencePoint, geoPointType));
 
             // Set the RelatedGeometryId for all candidates
             foreach (var geoPoint in candidates)
@@ -140,19 +142,19 @@ namespace OpenCAD.Geometry
                 geoPoint.RelatedGeometryId = ID;
             }
 
-            // Arc-specific: Perpendicular point (requires document preview point)
-            if (geoPointType.HasFlag(GeoPointModes.Perpendicular) && _document.PreviewPoint.HasValue)
-            {
-                candidates.Add(GeometricCalculator.Perpendicular(_document.PreviewPoint.Value, this));
-            }
+            //// Arc-specific: Perpendicular point (requires document preview point)
+            //if (geoPointType.HasFlag(GeoPointModes.Perpendicular) && _document.PreviewPoint.HasValue)
+            //{
+            //    candidates.Add(GeometricCalculator.Perpendicular(_document.PreviewPoint.Value, this));
+            //}
 
-            // Arc-specific: Tangent point (requires document preview point)
-            if (geoPointType.HasFlag(GeoPointModes.Tangent) && _document.PreviewPoint.HasValue)
-            {
-                var geoPoint = GeometricCalculator.GetClosestTangent(Center, Radius, _document.PreviewPoint.Value, referencePoint);
-                geoPoint.RelatedGeometryId = ID;
-                candidates.Add(geoPoint);
-            }
+            //// Arc-specific: Tangent point (requires document preview point)
+            //if (geoPointType.HasFlag(GeoPointModes.Tangent) && _document.PreviewPoint.HasValue)
+            //{
+            //    var geoPoint = GeometricCalculator.GetClosestTangent(Center, Radius, _document.PreviewPoint.Value, referencePoint);
+            //    geoPoint.RelatedGeometryId = ID;
+            //    candidates.Add(geoPoint);
+            //}
 
             return candidates;
         }

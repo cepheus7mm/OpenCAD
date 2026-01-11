@@ -1,4 +1,4 @@
-using OpenCAD.Geometry;
+ï»¿using OpenCAD.Geometry;
 using OpenCAD;
 using System.Numerics;
 using OpenTK.Graphics.OpenGL;
@@ -62,19 +62,6 @@ namespace GraphicsEngine
         public bool CanRender(OpenCADObject obj)
         {
             return obj is Line;
-        }
-
-        public void Render(OpenCADObject obj, Matrix4x4 viewMatrix, Matrix4x4 projectionMatrix)
-        {
-            // Use default render context (not highlighted or selected)
-            var context = new RenderContext
-            {
-                ViewMatrix = viewMatrix,
-                ProjectionMatrix = projectionMatrix,
-                IsHighlighted = false,
-                IsSelected = false
-            };
-            Render(obj, context);
         }
 
         public void Render(OpenCADObject obj, RenderContext context)
@@ -144,7 +131,7 @@ namespace GraphicsEngine
 
                 if (isOrtho)
                 {
-                    RenderOrthographic(start, end, context.ProjectionMatrix, color, lineWidth, lineTypePattern, useThinLineRendering, glowRadius, line.LinetypeScale);
+                    RenderOrthographic(start, end, context.ViewMatrix, context.ProjectionMatrix, color, lineWidth, lineTypePattern, useThinLineRendering, glowRadius, line.LinetypeScale);
                 }
                 else
                 {
@@ -231,16 +218,9 @@ namespace GraphicsEngine
             };
         }
 
-        private void RenderOrthographic(Point3D start, Point3D end, Matrix4x4 projectionMatrix, 
+        private void RenderOrthographic(Point3D start, Point3D end, Matrix4x4 viewMatrix, Matrix4x4 projectionMatrix,
             Vector4 color, float lineWidth, int lineTypePattern, bool useThinLineRendering, float glowRadius = 0.0f, double linetypeScale = 1.0)
         {
-            // CPU path: derive ortho window from projection (row-major)
-            float sx = projectionMatrix.M11;
-            float sy = projectionMatrix.M22;
-            float txRow = projectionMatrix.M41;
-            float tyRow = projectionMatrix.M42;
-
-            if (MathF.Abs(sx) > 1e-12f && MathF.Abs(sy) > 1e-12f)
             {
                 // Get viewport dimensions
                 int[] viewport = new int[4];
@@ -255,21 +235,25 @@ namespace GraphicsEngine
 
                 _viewport = new Vector2(viewport[2], viewport[3]);
 
-                float halfW = 1.0f / sx;
-                float halfH = 1.0f / sy;
-                float centerX = -txRow / sx;
-                float centerY = -tyRow / sy;
-
                 float ax = (float)start.X;
                 float ay = (float)start.Y;
                 float bx = (float)end.X;
                 float by = (float)end.Y;
 
-                // World XY -> NDC XY
-                float ndcAx = (ax - centerX) / halfW;
-                float ndcAy = (ay - centerY) / halfH;
-                float ndcBx = (bx - centerX) / halfW;
-                float ndcBy = (by - centerY) / halfH;
+                Vector4 worldA = new Vector4((float)start.X, (float)start.Y, (float)start.Z, 1f);
+                Vector4 worldB = new Vector4((float)end.X, (float)end.Y, (float)end.Z, 1f);
+
+                Matrix4x4 vp = viewMatrix * projectionMatrix;
+
+                Vector4 clipA = Vector4.Transform(worldA, vp);
+                Vector4 clipB = Vector4.Transform(worldB, vp);
+
+                // Homogeneous divide to NDC
+                float ndcAx = clipA.X / clipA.W;
+                float ndcAy = clipA.Y / clipA.W;
+                float ndcBx = clipB.X / clipB.W;
+                float ndcBy = clipB.Y / clipB.W;
+
 
                 // Validate NDC coordinates
                 if (!IsValidFloat(ndcAx) || !IsValidFloat(ndcAy) || !IsValidFloat(ndcBx) || !IsValidFloat(ndcBy))
@@ -356,7 +340,7 @@ namespace GraphicsEngine
                 {
                     if (useThinLineRendering)
                     {
-                        // Simple line rendering for thin lines — upload interleaved pos+distance for two verts (world distance)
+                        // Simple line rendering for thin lines â€” upload interleaved pos+distance for two verts (world distance)
                         float[] interleaved =
                         {
                             ndcAx, ndcAy, 0f, 0f,                  // start, distance=0 (distance stored in attribute but position is NDC)
@@ -453,7 +437,7 @@ namespace GraphicsEngine
 
             _viewport = new Vector2(viewport[2], viewport[3]);
 
-            // Row-vector semantics: MVP = M • V • P (GL will transpose on upload)
+            // Row-vector semantics: MVP = M â€¢ V â€¢ P (GL will transpose on upload)
             var model = Matrix4x4.Identity;
             var mvpRow = model;
             mvpRow = Matrix4x4.Multiply(mvpRow, viewMatrix);
@@ -513,7 +497,7 @@ namespace GraphicsEngine
 
             if (useThinLineRendering)
             {
-                // Simple line rendering for thin lines — upload interleaved pos (world) + distance (world units)
+                // Simple line rendering for thin lines â€” upload interleaved pos (world) + distance (world units)
                 float[] interleaved =
                 {
                     (float)start.X, (float)start.Y, (float)start.Z, 0f,

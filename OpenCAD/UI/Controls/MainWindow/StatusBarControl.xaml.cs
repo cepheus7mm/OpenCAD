@@ -1,3 +1,4 @@
+﻿using System.Numerics;
 using System.Windows;
 using System.Windows.Controls;
 using OpenCAD.Geometry.Helpers;
@@ -43,6 +44,17 @@ namespace UI.Controls.MainWindow
         public void UpdatePositionText(string positionText)
         {
             positionTextBlock.Text = positionText;
+        }
+
+        /// <summary>
+        /// Updates the camera position and target displayed in the status bar
+        /// </summary>
+        /// <param name="cameraPosition">The camera position</param>
+        /// <param name="cameraTarget">The camera target</param>
+        public void UpdateCameraInfo(Vector3 cameraPosition, Vector3 cameraTarget)
+        {
+            string cameraInfo = $"Cam: ({cameraPosition.X:F2}, {cameraPosition.Y:F2}, {cameraPosition.Z:F2}) → Target: ({cameraTarget.X:F2}, {cameraTarget.Y:F2}, {cameraTarget.Z:F2})";
+            statusTextBlock.Text = cameraInfo;
         }
 
         /// <summary>

@@ -11,9 +11,24 @@ namespace GraphicsEngine
         public Vector3 Target { get; set; } = Vector3.Zero;
         public Vector3 Up { get; set; } = Vector3.UnitY;
 
+        public float FieldOfView = MathF.PI / 4f; // 45 degrees
+        public float NearPlane = 0.1f;
+        public float FarPlane = 1000f;
+
         public Matrix4x4 GetViewMatrix()
         {
             return Matrix4x4.CreateLookAt(Position, Target, Up);
+        }
+
+        public Matrix4x4 GetProjectionMatrix(float aspect)
+        {
+            return Matrix4x4.CreatePerspectiveFieldOfView(
+                FieldOfView,
+                aspect,
+                NearPlane,
+                FarPlane
+            );
+
         }
 
         public void Orbit(float deltaX, float deltaY)

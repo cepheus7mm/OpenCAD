@@ -15,6 +15,29 @@ namespace OpenCAD.Geometry.Helpers
         public Point3D Start { get; }
         public Point3D End { get; }
 
+        public double StartAngle
+        {
+            get
+            {
+                if (IsLine)
+                    return double.NaN;
+
+                return AngleUtils.NormalizeUnsigned(
+                    Math.Atan2(Start.Y - Center.Y, Start.X - Center.X));
+            }
+        }
+
+        public double EndAngle
+        {
+            get
+            {
+                if (IsLine)
+                    return double.NaN;
+
+                return AngleUtils.NormalizeUnsigned(StartAngle + Sweep);
+            }
+        }
+
         public double Bulge => IsLine ? 0.0 : Math.Tan(Sweep / 4.0);
 
         // Arc-only fields
@@ -23,7 +46,7 @@ namespace OpenCAD.Geometry.Helpers
         public double Radius { get; }
 
         // -------------------------
-        // Constructor
+        // Constructors
         // -------------------------
 
         public PolylineSegment(Point3D start, Point3D end, Point3D? center = null, double sweep = 0)
@@ -49,6 +72,40 @@ namespace OpenCAD.Geometry.Helpers
             }
         }
 
+        public static PolylineSegment FromLine(Line line)
+        {
+            return new PolylineSegment(
+                start: line.StartPoint,
+                end: line.EndPoint
+            );
+        }
+
+        public static PolylineSegment FromArc(Arc arc)
+        {
+            return new PolylineSegment(
+                start: arc.StartPoint,
+                end: arc.EndPoint,
+                center: arc.Center,
+                sweep: arc.Angle
+            );
+        }
+
+        public static PolylineSegment FromCircle(Circle circle)
+        {
+            // Pick angle 0 as the canonical start point
+            var start = new Point3D(
+                circle.Center.X + circle.Radius,
+                circle.Center.Y,
+                circle.Center.Z
+            );
+
+            return new PolylineSegment(
+                start: start,
+                end: start,               // same point, but sweep defines full circle
+                center: circle.Center,
+                sweep: AngleUtils.TwoPi   // full 360° arc
+            );
+        }
 
         // -------------------------
         // Derived geometry
@@ -167,6 +224,264 @@ namespace OpenCAD.Geometry.Helpers
             return IsLine
                 ? new Extents(Start, End)
                 : Extents.FromArc(Start, End, Center, Sweep);
+        }
+
+        //
+        // GeoPoint Helpers
+        //
+
+        public IEnumerable<GeoPoint> GetGeoPoints(Point3D referencePoint, GeoPointModes modes)
+        {
+            var list = new List<GeoPoint>();
+
+            // -----------------------------
+            // 1. Vertex snaps
+            // -----------------------------
+            if (modes.HasFlag(GeoPointModes.Vertex))
+            {
+                list.Add(new GeoPoint(Start, GeoPointModes.Vertex));
+                list.Add(new GeoPoint(End, GeoPointModes.Vertex));
+            }
+
+            // -----------------------------
+            // 2. Midpoint snap
+            // -----------------------------
+            if (modes.HasFlag(GeoPointModes.Middle))
+            {
+                var mid = GetPointAt(0.5);
+                list.Add(new GeoPoint(mid, GeoPointModes.Middle));
+            }
+
+            // -----------------------------
+            // 3. Perpendicular snap
+            // -----------------------------
+            if (modes.HasFlag(GeoPointModes.Perpendicular))
+            {
+                var perp = GetPerpendicularPoint(referencePoint);
+                if (perp != null)
+                    list.Add(new GeoPoint(perp.Value, GeoPointModes.Perpendicular));
+            }
+
+            // -----------------------------
+            // 4. Nearest point snap
+            // -----------------------------
+            if (modes.HasFlag(GeoPointModes.NearestPoint))
+            {
+                var nearest = GetNearestPoint(referencePoint);
+                list.Add(new GeoPoint(nearest, GeoPointModes.NearestPoint));
+            }
+
+            // -----------------------------
+            // 5. Line-only snaps end here
+            // -----------------------------
+            if (IsLine)
+                return list;
+
+            // -----------------------------
+            // 6. Arc-only snaps
+            // -----------------------------
+            if (modes.HasFlag(GeoPointModes.Center))
+            {
+                list.Add(new GeoPoint(Center, GeoPointModes.Center));
+            }
+
+            if (modes.HasFlag(GeoPointModes.Quadrant))
+            {
+                foreach (var q in GetArcQuadrants())
+                    list.Add(new GeoPoint(q, GeoPointModes.Quadrant));
+            }
+
+            if (modes.HasFlag(GeoPointModes.Tangent))
+            {
+                foreach (var t in GetArcTangents(referencePoint))
+                    list.Add(new GeoPoint(t, GeoPointModes.Tangent));
+            }
+
+            return list;
+        }
+
+        public Point3D? GetPerpendicularPoint(Point3D referencePoint)
+        {
+            return IsLine
+                ? GetPerpendicularPointLine(referencePoint)
+                : GetPerpendicularPointArc(referencePoint);
+        }
+
+        private Point3D? GetPerpendicularPointLine(Point3D referencePoint)
+        {
+            var s = Start;
+            var e = End;
+
+            var seg = e - s;
+            var v = referencePoint - s;
+
+            double lenSq = seg.LengthSquared;
+            if (lenSq < double.Epsilon)
+                return null; // degenerate segment
+
+            double t = Vector3D.Dot(v, seg) / lenSq;
+
+            if (t < 0.0 || t > 1.0)
+                return null;
+
+            return s + seg * t;
+        }
+
+        private Point3D? GetPerpendicularPointArc(Point3D referencePoint)
+        {
+            // Vector from center to reference point
+            var v = referencePoint - Center;
+
+            if (v.LengthSquared < double.Epsilon)
+                return null; // reference point is at center
+
+            // Angle of reference point relative to arc center
+            double angle = Math.Atan2(v.Y, v.X);
+
+            // Clamp to arc sweep
+            angle = AngleUtils.ClampAngleToSweep(StartAngle, Sweep, angle);
+
+            // Return point on arc
+            return new Point3D(
+                Center.X + Radius * Math.Cos(angle),
+                Center.Y + Radius * Math.Sin(angle),
+                Start.Z);
+        }
+
+        public Point3D GetNearestPoint(Point3D referencePoint)
+        {
+            return IsLine
+                ? GetNearestPointLine(referencePoint)
+                : GetNearestPointArc(referencePoint);
+        }
+
+        private Point3D GetNearestPointLine(Point3D referencePoint)
+        {
+            var s = Start;
+            var e = End;
+
+            var seg = e - s;
+            var v = referencePoint - s;
+
+            double lenSq = seg.LengthSquared;
+            if (lenSq < double.Epsilon)
+                return s; // degenerate segment
+
+            double t = Vector3D.Dot(v, seg) / lenSq;
+            t = Math.Clamp(t, 0.0, 1.0);
+
+            return s + seg * t;
+        }
+
+        private Point3D GetNearestPointArc(Point3D referencePoint)
+        {
+            // Vector from center to reference point
+            var v = referencePoint - Center;
+
+            // If reference point is at center, nearest point is arc start
+            if (v.LengthSquared < double.Epsilon)
+                return Start;
+
+            // Angle of reference point relative to arc center
+            double angle = Math.Atan2(v.Y, v.X);
+
+            // Clamp to arc sweep
+            angle = AngleUtils.ClampAngleToSweep(StartAngle, Sweep, angle);
+
+            // Return point on arc
+            return new Point3D(
+                Center.X + Radius * Math.Cos(angle),
+                Center.Y + Radius * Math.Sin(angle),
+                Start.Z);
+        }
+
+        public IEnumerable<Point3D> GetArcQuadrants()
+        {
+            if (IsLine)
+                yield break;
+
+            foreach (double qAngle in AngleUtils.Cardinals)
+            {
+                if (AngleUtils.SweepContains(StartAngle, Sweep, qAngle))
+                {
+                    yield return new Point3D(
+                        Center.X + Radius * Math.Cos(qAngle),
+                        Center.Y + Radius * Math.Sin(qAngle),
+                        Start.Z
+                    );
+                }
+            }
+        }
+
+        public IEnumerable<Point3D> GetArcTangents(Point3D referencePoint)
+        {
+            if (IsLine)
+                yield break;
+
+            var C = Center;
+            var P = referencePoint;
+
+            var v = P - C;
+            double d2 = v.LengthSquared;
+            double R = Radius;
+            double R2 = R * R;
+
+            // No tangents if reference point is inside the circle
+            if (d2 < R2 - 1e-12)
+                yield break;
+
+            double d = Math.Sqrt(d2);
+
+            // Angle from center to reference point
+            double baseAngle = Math.Atan2(v.Y, v.X);
+
+            // If point is exactly on the circle → one tangent (degenerate)
+            if (Math.Abs(d - R) < 1e-12)
+            {
+                double angle = AngleUtils.ClampAngleToSweep(StartAngle, Sweep, baseAngle);
+                if (AngleUtils.SweepContains(StartAngle, Sweep, angle))
+                {
+                    yield return new Point3D(
+                        C.X + R * Math.Cos(angle),
+                        C.Y + R * Math.Sin(angle),
+                        Start.Z
+                    );
+                }
+                yield break;
+            }
+
+            // General case: two tangents
+            double alpha = Math.Acos(R / d); // tangent offset angle
+
+            double t1 = baseAngle + alpha;
+            double t2 = baseAngle - alpha;
+
+            // Normalize
+            t1 = AngleUtils.NormalizeUnsigned(t1);
+            t2 = AngleUtils.NormalizeUnsigned(t2);
+
+            // Clamp to arc sweep
+            t1 = AngleUtils.ClampAngleToSweep(StartAngle, Sweep, t1);
+            t2 = AngleUtils.ClampAngleToSweep(StartAngle, Sweep, t2);
+
+            // Emit only those that lie on the arc
+            if (AngleUtils.SweepContains(StartAngle, Sweep, t1))
+            {
+                yield return new Point3D(
+                    C.X + R * Math.Cos(t1),
+                    C.Y + R * Math.Sin(t1),
+                    Start.Z
+                );
+            }
+
+            if (AngleUtils.SweepContains(StartAngle, Sweep, t2))
+            {
+                yield return new Point3D(
+                    C.X + R * Math.Cos(t2),
+                    C.Y + R * Math.Sin(t2),
+                    Start.Z
+                );
+            }
         }
     }
 }

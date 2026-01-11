@@ -79,8 +79,7 @@ namespace GraphicsEngine
             if (obj is not Polyline polyline) return;
 
             closed = polyline.IsClosed;
-
-            var points = polyline.GetOrderedVertices().Select(v => v.Position).ToList();
+            var points = polyline.Vertices.Select(x => x.Position).ToArray();
             for (int i = 0; i < points.Count; i++)
                 Debug.WriteLine($"pt[{i}] = {points[i].X}, {points[i].Y}, {points[i].Z}");
 
@@ -133,25 +132,25 @@ namespace GraphicsEngine
                            MathF.Abs(context.ProjectionMatrix.M44 - 1f) < 1e-6f;
 
             // Save GL state for blending/depth so we can enable blending for glow and restore afterwards
-            bool blendWasEnabled = GL.IsEnabled(EnableCap.Blend);
-            bool depthWasEnabled = GL.IsEnabled(EnableCap.DepthTest);
-            // Save depth write mask so we can restore it after the glow pass
-            bool depthWriteWasEnabled = true;
-            GL.GetBoolean(GetPName.DepthWritemask, out depthWriteWasEnabled);
+            //bool blendWasEnabled = GL.IsEnabled(EnableCap.Blend);
+            //bool depthWasEnabled = GL.IsEnabled(EnableCap.DepthTest);
+            //// Save depth write mask so we can restore it after the glow pass
+            //bool depthWriteWasEnabled = true;
+            //GL.GetBoolean(GetPName.DepthWritemask, out depthWriteWasEnabled);
 
-            // If we have glow, enable alpha blending so semi-transparent halo composites correctly.
-            if (glowRadius > 0.0f)
-            {
-                GL.Enable(EnableCap.Blend);
-                GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
+            //// If we have glow, enable alpha blending so semi-transparent halo composites correctly.
+            //if (glowRadius > 0.0f)
+            //{
+            //    GL.Enable(EnableCap.Blend);
+            //    GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
 
-                // Optionally: to prevent the glow halo from being clipped by depth,
-                // you can disable depth test while drawing highlighted geometry.
-                // Disable depth test and depth writes for the glow pass so the halo is not occluded
-                // by nearby geometry. We keep the full polyline rendering afterwards with depth test/writes.
-                GL.Disable(EnableCap.DepthTest);
-                GL.DepthMask(false);
-            }
+            //    // Optionally: to prevent the glow halo from being clipped by depth,
+            //    // you can disable depth test while drawing highlighted geometry.
+            //    // Disable depth test and depth writes for the glow pass so the halo is not occluded
+            //    // by nearby geometry. We keep the full polyline rendering afterwards with depth test/writes.
+            //    GL.Disable(EnableCap.DepthTest);
+            //    GL.DepthMask(false);
+            //}
 
             GL.BindVertexArray(_vao);
             _shaderProgram.Use();
@@ -170,7 +169,7 @@ namespace GraphicsEngine
             if (isOrtho)
             {
                 // For orthographic we still supply the projection as the MVP (no camera transform)
-                RenderOrthographic(polyline, context.ViewMatrix, context.ProjectionMatrix, lineWidth, glowRadius);
+                RenderOrthographic(polyline, context.ProjectionMatrix * context.ViewMatrix, lineWidth, glowRadius);
             }
             else
             {
@@ -179,23 +178,24 @@ namespace GraphicsEngine
 
             GL.BindVertexArray(0);
 
-            // Restore saved GL state
-            if (!blendWasEnabled) GL.Disable(EnableCap.Blend);
-            // Restore depth test and depth write mask
-            if (depthWasEnabled) GL.Enable(EnableCap.DepthTest);
-            else GL.Disable(EnableCap.DepthTest);
-            GL.DepthMask(depthWriteWasEnabled);
+            //// Restore saved GL state
+            //if (!blendWasEnabled) GL.Disable(EnableCap.Blend);
+            //// Restore depth test and depth write mask
+            //if (depthWasEnabled) GL.Enable(EnableCap.DepthTest);
+            //else GL.Disable(EnableCap.DepthTest);
+            //GL.DepthMask(depthWriteWasEnabled);
 
             GLDiag.Check("PolylineRenderer draw end");
         }
 
-        private void RenderOrthographic(Polyline polyline, Matrix4x4 viewMatrix, Matrix4x4 projectionMatrix, float lineWidth, float glowRadius)
+        private void RenderOrthographic(Polyline polyline, Matrix4x4 projectionMatrix, float lineWidth, float glowRadius)
         {
             // Build world-space point sequence for the polyline (including arc tessellation and widths)
             var (points, widths) = GatherPolylinePointsWithWidths(polyline);
             if (points.Count < 2) return;
 
-            Matrix4x4 mvp = viewMatrix * projectionMatrix;
+            // MVP for ortho: projection only (world -> clip)
+            Matrix4x4 mvp = projectionMatrix;
             DrawPolyline(points, widths, mvp, lineWidth, glowRadius);
         }
 
@@ -354,52 +354,45 @@ namespace GraphicsEngine
                 int prevIndex = (i == 0) ? (closed ? n - 1 : 0) : i - 1;
                 int nextIndex = (i == n - 1) ? (closed ? 0 : n - 1) : i + 1;
 
-                Point3D prevWorld = points[prevIndex];
-                Point3D nextWorld = points[nextIndex];
-                Point3D curWorld = points[i];
-
+                Point3D prev = points[prevIndex];
+                Point3D next = points[nextIndex];
+                Point3D cur = points[i];
                 float dist = distances[i];
-                float width = hasVariableWidth ? widths[i] : 0f; // 0 -> use uniform width in shader
+                float width = hasVariableWidth ? widths[i] : 0f; // 0 signals shader to use uniform width
 
                 // Detect degenerate neighbor case where prev==cur==next (or nearly so) and attempt to recover.
-                if (ApproximatelyEqual(prevWorld, curWorld) && ApproximatelyEqual(nextWorld, curWorld))
+                if (ApproximatelyEqual(prev, cur) && ApproximatelyEqual(next, cur))
                 {
                     int distinctPrev = FindDistinctIndex(i, -1);
                     int distinctNext = FindDistinctIndex(i, 1);
 
-                    if (distinctPrev != -1) prevWorld = points[distinctPrev];
-                    if (distinctNext != -1) nextWorld = points[distinctNext];
+                    if (distinctPrev != -1) prev = points[distinctPrev];
+                    if (distinctNext != -1) next = points[distinctNext];
 
                     // If still degenerate, fabricate a tiny symmetric offset along X to produce a stable tangent.
-                    if (ApproximatelyEqual(prevWorld, curWorld) && ApproximatelyEqual(nextWorld, curWorld))
+                    if (ApproximatelyEqual(prev, cur) && ApproximatelyEqual(next, cur))
                     {
                         const double EPS_FALLBACK = 1e-6;
-                        prevWorld = new Point3D(curWorld.X + EPS_FALLBACK, curWorld.Y, curWorld.Z);
-                        nextWorld = new Point3D(curWorld.X - EPS_FALLBACK, curWorld.Y, curWorld.Z);
+                        prev = new Point3D(cur.X + EPS_FALLBACK, cur.Y, cur.Z);
+                        next = new Point3D(cur.X - EPS_FALLBACK, cur.Y, cur.Z);
                     }
                 }
 
-                // Transform prev/cur/next to NDC
-                Vector3 prevNdc = WorldToNdc(prevWorld, mvp);
-                Vector3 curNdc = WorldToNdc(curWorld, mvp);
-                Vector3 nextNdc = WorldToNdc(nextWorld, mvp);
-
                 // left side (-1)
-                vb.Add(prevNdc.X); vb.Add(prevNdc.Y); vb.Add(prevNdc.Z);
-                vb.Add(curNdc.X); vb.Add(curNdc.Y); vb.Add(curNdc.Z);
-                vb.Add(nextNdc.X); vb.Add(nextNdc.Y); vb.Add(nextNdc.Z);
+                vb.Add((float)prev.X); vb.Add((float)prev.Y); vb.Add((float)prev.Z);
+                vb.Add((float)cur.X); vb.Add((float)cur.Y); vb.Add((float)cur.Z);
+                vb.Add((float)next.X); vb.Add((float)next.Y); vb.Add((float)next.Z);
                 vb.Add(dist);
                 vb.Add(-1.0f);
                 vb.Add(width);
 
                 // right side (+1)
-                vb.Add(prevNdc.X); vb.Add(prevNdc.Y); vb.Add(prevNdc.Z);
-                vb.Add(curNdc.X); vb.Add(curNdc.Y); vb.Add(curNdc.Z);
-                vb.Add(nextNdc.X); vb.Add(nextNdc.Y); vb.Add(nextNdc.Z);
+                vb.Add((float)prev.X); vb.Add((float)prev.Y); vb.Add((float)prev.Z);
+                vb.Add((float)cur.X); vb.Add((float)cur.Y); vb.Add((float)cur.Z);
+                vb.Add((float)next.X); vb.Add((float)next.Y); vb.Add((float)next.Z);
                 vb.Add(dist);
                 vb.Add(1.0f);
                 vb.Add(width);
-
             }
 
             float[] data = vb.ToArray();
@@ -408,26 +401,13 @@ namespace GraphicsEngine
             GL.BufferData(BufferTarget.ArrayBuffer, data.Length * sizeof(float), data, BufferUsageHint.DynamicDraw);
 
             // Set MVP for shader
-            _shaderProgram.SetMatrix4("mvp", Matrix4x4.Identity);
+            _shaderProgram.SetMatrix4("mvp", mvp);
             _shaderProgram.SetInt("hasVariableWidth", hasVariableWidth ? 1 : 0);
 
             // Draw triangle strip - vertex count is points.Count * 2
             GL.DrawArrays(PrimitiveType.TriangleStrip, 0, n * 2);
 
             GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
-        }
-
-        private static Vector3 WorldToNdc(Point3D p, Matrix4x4 vp)
-        {
-            var world = new Vector4((float)p.X, (float)p.Y, (float)p.Z, 1f);
-            var clip = Vector4.Transform(world, vp);
-
-            if (Math.Abs(clip.W) < 1e-6f)
-                return new Vector3(clip.X, clip.Y, clip.Z); // or return zero/guard
-
-            return new Vector3(clip.X / clip.W,
-                               clip.Y / clip.W,
-                               clip.Z / clip.W);
         }
 
         private int GetLineTypePattern(LineType lineType)

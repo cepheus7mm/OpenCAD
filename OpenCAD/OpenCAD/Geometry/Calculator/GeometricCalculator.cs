@@ -22,13 +22,6 @@ namespace OpenCAD.Geometry.Calculator
             );
         }
 
-        public static GeoPoint MidPoint(Line line)
-        {
-            var geoPoint = new GeoPoint(MidPoint(line.StartPoint, line.EndPoint), GeoPointModes.Middle);
-            geoPoint.RelatedGeometryId = line.ID;
-            return geoPoint;
-        }
-
         public static double GetParameterAtPoint(Point3D point, Point3D a, Point3D b)
             => LineUtils.GetParameterAtPoint(point, a, b);
 
@@ -51,7 +44,7 @@ namespace OpenCAD.Geometry.Calculator
             => LineUtils.GetSecondDerivative(t, start, end);
 
         public static bool IsPointOnLine(Point3D point, Point3D start, Point3D end, double tolerance = 1e-9)
-            => LineUtils.IsPointOnLine(point, start, end, tolerance);
+            => LineUtils.IsPointOnSegment(point, start, end, tolerance);
 
         // ---------------------------------------------------------------------
         // Circular / Arc Geometry
@@ -280,8 +273,7 @@ namespace OpenCAD.Geometry.Calculator
                 double startAngle = Math.Atan2(position1.Y - center.Y, position1.X - center.X);
                 double endAngle = Math.Atan2(position2.Y - center.Y, position2.X - center.X);
 
-                double[] quadrantAngles = { 0, Math.PI / 2, Math.PI, 3 * Math.PI / 2 };
-                foreach (var angle in quadrantAngles)
+                foreach (var angle in AngleUtils.Cardinals)
                 {
                     if (IsAngleInArcSegment(angle, startAngle, endAngle, bulge))
                     {
@@ -296,6 +288,80 @@ namespace OpenCAD.Geometry.Calculator
             }
 
             return candidates;
+        }
+
+        public static IEnumerable<GeoPoint> GetSegmentGeoPoints(
+            PolylineSegment seg,
+            Point3D referencePoint,
+            GeoPointModes modes)
+        {
+            var list = new List<GeoPoint>();
+
+            // -----------------------------
+            // 1. Vertex snaps
+            // -----------------------------
+            if (modes.HasFlag(GeoPointModes.Vertex))
+            {
+                list.Add(new GeoPoint(seg.Start, GeoPointModes.Vertex));
+                list.Add(new GeoPoint(seg.End, GeoPointModes.Vertex));
+            }
+
+            // -----------------------------
+            // 2. Midpoint snap
+            // -----------------------------
+            if (modes.HasFlag(GeoPointModes.Middle))
+            {
+                var mid = seg.GetPointAt(0.5);
+                list.Add(new GeoPoint(mid, GeoPointModes.Middle));
+            }
+
+            // Perpendicular snap
+            if (modes.HasFlag(GeoPointModes.Perpendicular))
+            {
+                var perp = seg.GetPerpendicularPoint(referencePoint);
+                if (perp != null)
+                    list.Add(new GeoPoint(perp.Value, GeoPointModes.Perpendicular));
+            }
+
+            // Nearest point snap
+            if (modes.HasFlag(GeoPointModes.NearestPoint))
+            {
+                var nearest = seg.GetNearestPoint(referencePoint);
+                list.Add(new GeoPoint(nearest, GeoPointModes.NearestPoint));
+            }
+
+            // -----------------------------
+            // 3. Line-only snaps
+            // -----------------------------
+            if (seg.IsLine)
+            {
+                return list;
+            }
+
+            // -----------------------------
+            // 4. Arc-only snaps
+            // -----------------------------
+            // Center snap
+            if (modes.HasFlag(GeoPointModes.Center))
+            {
+                list.Add(new GeoPoint(seg.Center, GeoPointModes.Center));
+            }
+
+            // Quadrant snaps
+            if (modes.HasFlag(GeoPointModes.Quadrant))
+            {
+                foreach (var q in seg.GetArcQuadrants())
+                    list.Add(new GeoPoint(q, GeoPointModes.Quadrant));
+            }
+
+            // Tangent snap
+            if (modes.HasFlag(GeoPointModes.Tangent))
+            {
+                foreach (var t in seg.GetArcTangents(referencePoint))
+                    list.Add(new GeoPoint(t, GeoPointModes.Tangent));
+            }
+
+            return list;
         }
 
         // Internal helper used only by GetSegmentGeoPoints (keeps quadrant logic local).

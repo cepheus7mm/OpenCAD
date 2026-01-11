@@ -113,45 +113,58 @@ namespace OpenCAD.Geometry
                 // Preview geometries do not provide geo points
                 return candidates;
             }
-            if (geoPointType.HasFlag(GeoPointModes.Center))
+
+            var segment = PolylineSegment.FromCircle(this);
+
+
+            // Use unified segment calculation
+            candidates.AddRange(segment.GetGeoPoints(referencePoint, geoPointType));
+
+            // Set the RelatedGeometryId for all candidates
+            foreach (var geoPoint in candidates)
             {
-                candidates.Add(new GeoPoint(Center, GeoPointModes.Center) { RelatedGeometryId = ID });
-            }
-            if (geoPointType.HasFlag(GeoPointModes.NearestPoint))
-            {
-                var geoPoint = new GeoPoint(GetClosestPoint(referencePoint, false), GeoPointModes.NearestPoint);
                 geoPoint.RelatedGeometryId = ID;
-                candidates.Add(geoPoint);
-            }
-            if (geoPointType.HasFlag(GeoPointModes.Quadrant))
-            {
-                // Quadrant points at 0°, 90°, 180°, 270°
-                double[] quadrantAngles = { 0, Math.PI / 2, Math.PI, 3 * Math.PI / 2 };
-                foreach (var angle in quadrantAngles)
-                {
-                    var qPoint = new Point3D(
-                        Center.X + Radius * Math.Cos(angle),
-                        Center.Y + Radius * Math.Sin(angle),
-                        Center.Z
-                    );
-                    var geoPoint = new GeoPoint(qPoint, GeoPointModes.Quadrant);
-                    geoPoint.RelatedGeometryId = ID;
-                    candidates.Add(geoPoint);
-                }
-            }
-            if (geoPointType.HasFlag(GeoPointModes.Perpendicular) && _document.PreviewPoint.HasValue)
-            {
-                var geoPoint = new GeoPoint(GetClosestPoint(_document.PreviewPoint.Value, false), GeoPointModes.NearestPoint);
-                geoPoint.RelatedGeometryId = ID;
-                candidates.Add(geoPoint);
             }
 
-            if (geoPointType.HasFlag(GeoPointModes.Tangent) && _document.PreviewPoint.HasValue)
-            {
-                var geoPoint = GeometricCalculator.GetClosestTangent(Center, Radius, _document.PreviewPoint.Value, referencePoint);
-                geoPoint.RelatedGeometryId = ID;
-                candidates.Add(geoPoint);
-            }
+            //if (geoPointType.HasFlag(GeoPointModes.Center))
+            //{
+            //    candidates.Add(new GeoPoint(Center, GeoPointModes.Center) { RelatedGeometryId = ID });
+            //}
+            //if (geoPointType.HasFlag(GeoPointModes.NearestPoint))
+            //{
+            //    var geoPoint = new GeoPoint(GetClosestPoint(referencePoint, false), GeoPointModes.NearestPoint);
+            //    geoPoint.RelatedGeometryId = ID;
+            //    candidates.Add(geoPoint);
+            //}
+            //if (geoPointType.HasFlag(GeoPointModes.Quadrant))
+            //{
+            //    // Quadrant points at 0°, 90°, 180°, 270°
+            //    double[] quadrantAngles = { 0, Math.PI / 2, Math.PI, 3 * Math.PI / 2 };
+            //    foreach (var angle in quadrantAngles)
+            //    {
+            //        var qPoint = new Point3D(
+            //            Center.X + Radius * Math.Cos(angle),
+            //            Center.Y + Radius * Math.Sin(angle),
+            //            Center.Z
+            //        );
+            //        var geoPoint = new GeoPoint(qPoint, GeoPointModes.Quadrant);
+            //        geoPoint.RelatedGeometryId = ID;
+            //        candidates.Add(geoPoint);
+            //    }
+            //}
+            //if (geoPointType.HasFlag(GeoPointModes.Perpendicular) && _document.PreviewPoint.HasValue)
+            //{
+            //    var geoPoint = new GeoPoint(GetClosestPoint(_document.PreviewPoint.Value, false), GeoPointModes.NearestPoint);
+            //    geoPoint.RelatedGeometryId = ID;
+            //    candidates.Add(geoPoint);
+            //}
+
+            //if (geoPointType.HasFlag(GeoPointModes.Tangent) && _document.PreviewPoint.HasValue)
+            //{
+            //    var geoPoint = GeometricCalculator.GetClosestTangent(Center, Radius, _document.PreviewPoint.Value, referencePoint);
+            //    geoPoint.RelatedGeometryId = ID;
+            //    candidates.Add(geoPoint);
+            //}
 
             return candidates;
         }

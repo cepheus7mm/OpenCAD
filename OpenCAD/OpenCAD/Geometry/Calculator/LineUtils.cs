@@ -106,9 +106,30 @@ namespace OpenCAD.Geometry.Calculator
             return new Vector3D(0, 0, 0);
         }
 
-        internal static bool IsPointOnLine(Point3D point, Point3D start, Point3D end, double tolerance)
+        internal static bool IsPointOnSegment(Point3D point, Point3D start, Point3D end, double tolerance)
         {
-            throw new NotImplementedException();
+            // Degenerate segment (start == end)
+            if ((end - start).LengthSquared < double.Epsilon)
+                return point.DistanceTo(start) <= tolerance;
+
+            // Vector from start to end
+            var seg = end - start;
+            var v = point - start;
+
+            double segLenSq = seg.LengthSquared;
+
+            // Projection parameter t = (v·seg) / |seg|²
+            double t = Vector3D.Dot(v, seg) / segLenSq;
+
+            // Clamp to segment domain
+            if (t < 0.0 || t > 1.0)
+                return false;
+
+            // Closest point on the segment
+            Point3D closest = start + seg * t;
+
+            // Check perpendicular distance
+            return point.DistanceTo(closest) <= tolerance;
         }
     }
 }

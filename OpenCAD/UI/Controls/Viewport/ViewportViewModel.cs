@@ -1,15 +1,17 @@
+using GraphicsEngine;
+using OpenCAD;
+using OpenCAD.Geometry;
+using OpenCAD.Geometry.Helpers;
+using OpenCAD.Interfaces;
+using OpenCAD.Settings;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Windows;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
-using OpenCAD;
-using OpenCAD.Geometry;
-using OpenCAD.Geometry.Helpers;
-using OpenCAD.Interfaces;
-using OpenCAD.Settings;
 using UI.Controls.MainWindow;
 
 namespace UI.Controls.Viewport
@@ -1196,6 +1198,11 @@ namespace UI.Controls.Viewport
         }
 
         #endregion
+
+        public void UpdateCameraStatus(Vector3 camPos, Vector3 tarPos)
+        {
+            _statusBar?.UpdateCameraInfo(camPos, tarPos);
+        }
     }
 
     #region Helper Classes

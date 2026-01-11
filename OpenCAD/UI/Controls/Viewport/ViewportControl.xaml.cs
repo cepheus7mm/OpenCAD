@@ -287,7 +287,6 @@ namespace UI.Controls.Viewport
                 }
 
                 _isInitialized = true;
-                Refresh();
             }
             catch (Exception)
             {
@@ -451,7 +450,7 @@ namespace UI.Controls.Viewport
         {
             if (_renderEngine == null) return;
 
-            var frameSw = Stopwatch.StartNew();
+            //var frameSw = Stopwatch.StartNew();
             var overlayObjects = new List<OpenCADObject>();
 
             // Add preview line if available (for point picking)
@@ -466,7 +465,7 @@ namespace UI.Controls.Viewport
             }
 
             // Window selection rectangle timings
-            var windowSelSw = Stopwatch.StartNew();
+            //var windowSelSw = Stopwatch.StartNew();
             if (_viewModel.CurrentInputMode == ViewportViewModel.InputMode.WindowSelection &&
                 _viewModel.WindowSelectionStartPoint != null &&
                 _viewModel.WindowSelectionCurrentPoint != null)
@@ -480,10 +479,10 @@ namespace UI.Controls.Viewport
                     _viewModel.WindowSelectionCurrentPoint.Value);
                 overlayObjects.AddRange(selectionRectLines);
             }
-            windowSelSw.Stop();
+            //windowSelSw.Stop();
 
             // GeoPoint glyph timings
-            var geoGlyphSw = Stopwatch.StartNew();
+            //var geoGlyphSw = Stopwatch.StartNew();
             if (_viewModel.CurrentInputMode == ViewportViewModel.InputMode.PointPicking &&
                 _viewModel.GeoPointModes != GeoPointModes.None &&
                 _currentMousePosDip.HasValue)
@@ -506,7 +505,7 @@ namespace UI.Controls.Viewport
                     }
                 }
             }
-            geoGlyphSw.Stop();
+            //geoGlyphSw.Stop();
 
             // Crosshair timings
             var crosshairSw = Stopwatch.StartNew();
@@ -515,7 +514,7 @@ namespace UI.Controls.Viewport
                 var crosshairLines = CreateCrosshairLines(_currentMousePosDip.Value);
                 overlayObjects.AddRange(crosshairLines);
             }
-            crosshairSw.Stop();
+            //crosshairSw.Stop();
 
             // RenderOverlay timings
             var overlayRenderSw = Stopwatch.StartNew();
@@ -523,11 +522,11 @@ namespace UI.Controls.Viewport
             {
                 _renderEngine.RenderOverlay(overlayObjects);
             }
-            overlayRenderSw.Stop();
-            frameSw.Stop();
+            //overlayRenderSw.Stop();
+            //frameSw.Stop();
 
             // Emit per-frame timing logs (ms) for diagnostics
-            Debug.WriteLine($"[Overlay] frame={frameSw.Elapsed.TotalMilliseconds:F2}ms, windowSel={windowSelSw.Elapsed.TotalMilliseconds:F2}ms, geoGlyphs={geoGlyphSw.Elapsed.TotalMilliseconds:F2}ms, crosshair={crosshairSw.Elapsed.TotalMilliseconds:F2}ms, render={overlayRenderSw.Elapsed.TotalMilliseconds:F2}ms, count={overlayObjects.Count}");
+            //Debug.WriteLine($"[Overlay] frame={frameSw.Elapsed.TotalMilliseconds:F2}ms, windowSel={windowSelSw.Elapsed.TotalMilliseconds:F2}ms, geoGlyphs={geoGlyphSw.Elapsed.TotalMilliseconds:F2}ms, crosshair={crosshairSw.Elapsed.TotalMilliseconds:F2}ms, render={overlayRenderSw.Elapsed.TotalMilliseconds:F2}ms, count={overlayObjects.Count}");
         }
 
         /// <summary>
@@ -641,8 +640,8 @@ namespace UI.Controls.Viewport
                 ? _viewModel.SnapToGrid(new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z))
                 : new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z);
 
-            // Use cached viewport world bounds if available to avoid multiple ScreenToWorld calls
-            var bounds = _cachedWorldBounds ?? ComputeViewportWorldBounds();
+            var bounds = ComputeViewportWorldBounds();
+            
             if (bounds.HasValue)
             {
                 var tl = bounds.Value.topLeft;
@@ -831,7 +830,7 @@ namespace UI.Controls.Viewport
             int pixelWidth = Math.Max(1, (int)Math.Round(e.NewSize.Width * dpi.DpiScaleX));
             int pixelHeight = Math.Max(1, (int)Math.Round(e.NewSize.Height * dpi.DpiScaleY));
 
-            _renderEngine.UpdateProjection(pixelWidth, pixelHeight);
+            _renderEngine.ResizeViewport(pixelWidth, pixelHeight);
 
             Refresh();
         }
@@ -873,9 +872,10 @@ namespace UI.Controls.Viewport
 
             bool isShiftPressed = Keyboard.IsKeyDown(Key.LeftShift) || Keyboard.IsKeyDown(Key.RightShift);
 
-            float panScale = (_renderEngine.ProjectionMode == GraphicsEngine.ProjectionMode.Orthographic)
-                ? _renderEngine.OrthographicScale * 0.02f
-                : (_renderEngine.Camera.Position - _renderEngine.Camera.Target).Length() * 0.002f;
+            float panScale =
+                (_renderEngine.ProjectionMode == GraphicsEngine.ProjectionMode.Orthographic)
+                    ? _renderEngine.OrthoCamera.OrthoWidth
+                    : (_renderEngine.Camera.Position - _renderEngine.Camera.Target).Length();
 
             // Only perform hit testing if in selection mode, NOT in point picking or window selection mode, and not dragging
             bool shouldHitTest = (_viewModel.CurrentInputMode == ViewportViewModel.InputMode.Selection ||
@@ -926,10 +926,22 @@ namespace UI.Controls.Viewport
                 // Preferred path: VM asked to pan -> use pixel-based ortho pan
                 if (cameraOp?.Type == CameraOperationType.Pan)
                 {
-                    if (_renderEngine.ProjectionMode == GraphicsEngine.ProjectionMode.Orthographic)
+                    if (_renderEngine.ProjectionMode == ProjectionMode.Orthographic &&
+                        e.MiddleButton == MouseButtonState.Pressed)
                     {
-                        _renderEngine.PanOrthoPixels(dxPx, dyPx);
-                        didPan = true;
+                        var worldBefore = ScreenToWorld(_lastMousePosDip.Value);
+                        var worldAfter = ScreenToWorld(currentPosDip);
+
+                        if (worldBefore.HasValue && worldAfter.HasValue)
+                        {
+                            Vector3 delta = new Vector3(
+                                worldBefore.Value.X - worldAfter.Value.X,
+                                worldBefore.Value.Y - worldAfter.Value.Y,
+                                0f);
+
+                            _renderEngine.OrthoCamera.PanWorld(delta);
+                            didPan = true;
+                        }
                     }
                     else
                     {
@@ -938,15 +950,32 @@ namespace UI.Controls.Viewport
                     }
                 }
                 // Fallback: if VM didn't emit a pan op but the user is dragging with middle/right in ortho, pan anyway
-                else if (_renderEngine.ProjectionMode == GraphicsEngine.ProjectionMode.Orthographic &&
-                         (e.MiddleButton == MouseButtonState.Pressed || e.RightButton == MouseButtonState.Pressed))
+                if (_renderEngine.ProjectionMode == ProjectionMode.Orthographic &&
+                    e.MiddleButton == MouseButtonState.Pressed)
                 {
-                    _renderEngine.PanOrthoPixels(dxPx, dyPx);
-                    didPan = true;
+                    var worldBefore = ScreenToWorld(_lastMousePosDip.Value);
+                    var worldAfter = ScreenToWorld(currentPosDip);
+
+                    if (worldBefore.HasValue && worldAfter.HasValue)
+                    {
+                        Vector3 delta = new Vector3(
+                            worldBefore.Value.X - worldAfter.Value.X,
+                            worldBefore.Value.Y - worldAfter.Value.Y,
+                            0f);
+
+                        _renderEngine.OrthoCamera.PanWorld(delta);
+                        didPan = true;
+                    }
                 }
             }
 
             _lastMousePosDip = currentPosDip;
+
+            // Update camera info in status bar when panning
+            if (didPan)
+            {
+                UpdateCameraInfoInStatusBar();
+            }
 
             // Always refresh to update crosshair position and window selection rectangle
             Refresh();
@@ -954,22 +983,39 @@ namespace UI.Controls.Viewport
 
         private void OnMouseWheel(object sender, MouseWheelEventArgs e)
         {
-            if (_renderEngine == null) return;
+            if (_renderEngine == null)
+                return;
 
-            // Handle zoom based on projection mode
-            if (_renderEngine.ProjectionMode == GraphicsEngine.ProjectionMode.Orthographic)
+            // Convert WPF mouse position to world BEFORE zoom
+            Point mousePos = e.GetPosition(GlWPFControl);
+            var worldBefore = ScreenToWorld(mousePos);
+
+            if (_renderEngine.ProjectionMode == ProjectionMode.Orthographic)
             {
-                // Orthographic zoom adjusts the scale
-                float scaleDelta = e.Delta > 0 ? -0.5f : 0.5f;
-                _renderEngine.ZoomOrthographic(scaleDelta);
+                // Zoom factor: wheel up = zoom in, wheel down = zoom out
+                float zoomFactor = e.Delta > 0 ? 0.9f : 1.1f;
+
+                // Apply zoom
+                _renderEngine.OrthoCamera.Zoom(zoomFactor);
+
+                // Convert mouse position to world AFTER zoom
+                var worldAfter = ScreenToWorld(mousePos);
+
+                if (worldBefore.HasValue && worldAfter.HasValue)
+                {
+                    // Pan camera so the point under the mouse stays fixed
+                    Vector3 delta = worldBefore.Value - worldAfter.Value;
+                    _renderEngine.OrthoCamera.PanWorld(delta);
+                }
             }
             else
             {
-                // Perspective zoom moves camera position
-                float zoomDelta = e.Delta > 0 ? 0.5f : -0.5f;
+                // Perspective zoom = dolly
+                float zoomDelta = e.Delta > 0 ? -1f : 1f;
                 _renderEngine.Camera.Zoom(zoomDelta);
             }
-
+            _renderEngine.UpdateViewAndProjection();
+            UpdateCameraInfoInStatusBar();
             Refresh();
         }
 
@@ -1047,66 +1093,88 @@ namespace UI.Controls.Viewport
                 // Update status bar when Shift is released
                 _viewModel.IsShiftKeyPressed = false;
             }
-        }   
+        }
 
         #endregion
 
         #region Coordinate Conversion
 
-        public Vector3? ScreenToWorld(Point screenPos)
+        public Vector3? ScreenToWorld(Point screenPosDip)
         {
-            if (_renderEngine == null) return null;
+            if (_renderEngine == null)
+                return null;
 
             try
             {
+                // Convert DIPs → pixels
                 var dpi = VisualTreeHelper.GetDpi(GlWPFControl);
-                float widthPx  = (float)Math.Max(1, Math.Round(GlWPFControl.ActualWidth  * dpi.DpiScaleX));
+                float widthPx = (float)Math.Max(1, Math.Round(GlWPFControl.ActualWidth * dpi.DpiScaleX));
                 float heightPx = (float)Math.Max(1, Math.Round(GlWPFControl.ActualHeight * dpi.DpiScaleY));
-                float mouseXpx = (float)(screenPos.X * dpi.DpiScaleX);
-                float mouseYpx = (float)(screenPos.Y * dpi.DpiScaleY);
+                float mouseXpx = (float)(screenPosDip.X * dpi.DpiScaleX);
+                float mouseYpx = (float)(screenPosDip.Y * dpi.DpiScaleY);
 
-                // Fast, exact path for orthographic top view: no matrix inversion, no ambiguity
+                // Screen → NDC
+                float ndcX = (mouseXpx / widthPx) * 2f - 1f;
+                float ndcY = 1f - (mouseYpx / heightPx) * 2f;
+
+                // Get camera matrices fresh every time
+                float aspect = widthPx / heightPx;
+
+                Matrix4x4 viewMatrix;
+                Matrix4x4 projMatrix;
+
                 if (_renderEngine.ProjectionMode == GraphicsEngine.ProjectionMode.Orthographic)
                 {
-                    return _renderEngine.ScreenToWorldOrthoPixels(mouseXpx, mouseYpx, worldZ: 0f);
+                    var cam = _renderEngine.OrthoCamera;
+
+                    // Your camera defines width in world units
+                    float halfWidth = cam.OrthoWidth * 0.5f;
+                    float halfHeight = halfWidth / aspect;
+
+                    float cx = cam.Target.X;
+                    float cy = cam.Target.Y;
+
+                    float worldX = cx + ndcX * halfWidth;
+                    float worldY = cy + ndcY * halfHeight;
+                    float worldZ = 0f; // your drawing plane
+
+                    return new Vector3(worldX, worldY, worldZ);
                 }
-
-                // Perspective fallback: invert PV (column-major) -> use transpose for System.Numerics.row-vector Transform
-                float ndcX = (mouseXpx / widthPx) * 2.0f - 1.0f;
-                float ndcY = 1.0f - (mouseYpx / heightPx) * 2.0f;
-
-                var viewMatrix = _renderEngine.Camera.GetViewMatrix();
-                var projectionMatrix = _renderEngine.GetProjectionMatrix();
-
-                Matrix4x4 pv = Matrix4x4.Multiply(projectionMatrix, viewMatrix);
-                if (!Matrix4x4.Invert(pv, out var invPv))
-                    return null;
-
-                var invRow = Matrix4x4.Transpose(invPv);
-
-                var nearClip = new Vector4(ndcX, ndcY, -1, 1);
-                var farClip  = new Vector4(ndcX, ndcY,  1, 1);
-
-                var nearPoint = Vector4.Transform(nearClip, invRow);
-                var farPoint  = Vector4.Transform(farClip,  invRow);
-
-                nearPoint /= nearPoint.W;
-                farPoint  /= farPoint.W;
-
-                var rayOrigin = new Vector3(nearPoint.X, nearPoint.Y, nearPoint.Z);
-                var rayEnd    = new Vector3(farPoint.X,  farPoint.Y,  farPoint.Z);
-                var rayDir    = Vector3.Normalize(rayEnd - rayOrigin);
-
-                if (Math.Abs(rayDir.Z) > 0.0001f)
+                else
                 {
-                    float t = -rayOrigin.Z / rayDir.Z;
-                    if (t >= 0)
-                        return rayOrigin + t * rayDir;
-                }
+                    // Perspective path
+                    viewMatrix = _renderEngine.Camera.GetViewMatrix();
+                    projMatrix = _renderEngine.Camera.GetProjectionMatrix(aspect);
 
-                return null;
+                    Matrix4x4 pv = projMatrix * viewMatrix;
+                    if (!Matrix4x4.Invert(pv, out var invPv))
+                        return null;
+
+                    // System.Numerics uses row vectors → transpose
+                    Matrix4x4 invRow = Matrix4x4.Transpose(invPv);
+
+                    Vector4 nearClip = new Vector4(ndcX, ndcY, -1f, 1f);
+                    Vector4 farClip = new Vector4(ndcX, ndcY, 1f, 1f);
+
+                    Vector4 nearWorld = Vector4.Transform(nearClip, invRow);
+                    Vector4 farWorld = Vector4.Transform(farClip, invRow);
+
+                    nearWorld /= nearWorld.W;
+                    farWorld /= farWorld.W;
+
+                    Vector3 rayOrigin = new Vector3(nearWorld.X, nearWorld.Y, nearWorld.Z);
+                    Vector3 rayEnd = new Vector3(farWorld.X, farWorld.Y, farWorld.Z);
+                    Vector3 rayDir = Vector3.Normalize(rayEnd - rayOrigin);
+
+                    // Intersect with Z=0 plane
+                    if (Math.Abs(rayDir.Z) < 1e-6f)
+                        return rayOrigin;
+
+                    float t = -rayOrigin.Z / rayDir.Z;
+                    return rayOrigin + t * rayDir;
+                }
             }
-            catch (Exception)
+            catch
             {
                 return null;
             }
@@ -1217,5 +1285,20 @@ namespace UI.Controls.Viewport
         {
             _viewModel.IsShiftKeyPressed = isShiftPressed;
         }
+
+        /// <summary>
+        /// Updates the camera position and target information in the status bar
+        /// </summary>
+        private void UpdateCameraInfoInStatusBar()
+        {
+            if (_renderEngine?.Camera != null)
+            {
+                _viewModel.UpdateCameraStatus(
+                    _renderEngine.OrthoCamera.Position,
+                    _renderEngine.OrthoCamera.Target
+                );
+            }
+        }
+
     }
 }

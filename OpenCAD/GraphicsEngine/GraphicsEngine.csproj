@@ -7,6 +7,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="PolylineRendererCPU.cs" />
+    <Compile Remove="PolylineShaderProgramCPU.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="OpenTK" Version="4.9.4" />
     <PackageReference Include="OpenTK.GLWpfControl" Version="4.3.4" />
     <PackageReference Include="Poly2Tri" Version="1.0.1" />

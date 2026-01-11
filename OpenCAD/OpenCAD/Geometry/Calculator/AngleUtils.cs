@@ -4,8 +4,8 @@ namespace OpenCAD.Geometry.Calculator
 {
     internal static class AngleUtils
     {
-        private const double Pi = Math.PI;
-        private const double TwoPi = 2.0 * Pi;
+        public const double Pi = Math.PI;
+        public const double TwoPi = 2.0 * Pi;
 
         public static double[] Cardinals = {0.0, Pi / 2.0, Pi, 3.0 * Pi / 2.0};
 
@@ -61,6 +61,65 @@ namespace OpenCAD.Geometry.Calculator
                     a += 2.0 * Math.PI;
 
                 return a <= startAngle && a >= endAngle;
+            }
+        }
+
+        public static double ClampAngleToSweep(double startAngle, double sweep, double angle)
+        {
+            // Normalize everything to [0, 2π)
+            startAngle = NormalizeUnsigned(startAngle);
+            angle = NormalizeUnsigned(angle);
+
+            double endAngle = NormalizeUnsigned(startAngle + sweep);
+
+            // Degenerate sweep → clamp to start
+            if (Math.Abs(sweep) < 1e-12)
+                return startAngle;
+
+            // -----------------------------
+            // CCW sweep (positive)
+            // -----------------------------
+            if (sweep > 0)
+            {
+                double a = angle;
+
+                // Handle wrap-around
+                if (endAngle < startAngle)
+                    endAngle += TwoPi;
+
+                if (a < startAngle)
+                    a += TwoPi;
+
+                if (a < startAngle)
+                    return startAngle;
+
+                if (a > endAngle)
+                    return endAngle;
+
+                return NormalizeUnsigned(a);
+            }
+
+            // -----------------------------
+            // CW sweep (negative)
+            // -----------------------------
+            else
+            {
+                double a = angle;
+
+                // Handle wrap-around
+                if (startAngle < endAngle)
+                    startAngle += TwoPi;
+
+                if (a < endAngle)
+                    a += TwoPi;
+
+                if (a > startAngle)
+                    return startAngle;
+
+                if (a < endAngle)
+                    return endAngle;
+
+                return NormalizeUnsigned(a);
             }
         }
     }

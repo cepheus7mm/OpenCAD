@@ -73,8 +73,10 @@ namespace OpenCAD.Geometry
                 return candidates;
             }
 
+            var segment = PolylineSegment.FromLine(this);
+
             // Use unified segment calculation with bulge = 0 for line
-            candidates.AddRange(GeometricCalculator.GetSegmentGeoPoints(StartPoint, EndPoint, 0.0, referencePoint, geoPointType));
+            candidates.AddRange(segment.GetGeoPoints(referencePoint, geoPointType));
 
             // Set the RelatedGeometryId for all candidates
             foreach (var geoPoint in candidates)
@@ -82,11 +84,11 @@ namespace OpenCAD.Geometry
                 geoPoint.RelatedGeometryId = ID;
             }
 
-            // Line-specific: Perpendicular point (requires document preview point)
-            if (geoPointType.HasFlag(GeoPointModes.Perpendicular) && _document.PreviewPoint.HasValue)
-            {
-                candidates.Add(GeometricCalculator.Perpendicular(_document.PreviewPoint.Value, this));
-            }
+            //// Line-specific: Perpendicular point (requires document preview point)
+            //if (geoPointType.HasFlag(GeoPointModes.Perpendicular) && _document.PreviewPoint.HasValue)
+            //{
+            //    candidates.Add(GeometricCalculator.Perpendicular(_document.PreviewPoint.Value, this));
+            //}
 
             return candidates;
         }

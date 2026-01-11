@@ -96,8 +96,10 @@ namespace GraphicsEngine
                 mvp.M31, mvp.M32, mvp.M33, mvp.M34,
                 mvp.M41, mvp.M42, mvp.M43, mvp.M44
             };
+
             GL.UniformMatrix4(_mvpLoc, 1, true, m);
         }
+
 
         public void SetColor(Vector4 rgba) => GL.Uniform4(_colorLoc, rgba.X, rgba.Y, rgba.Z, rgba.W);
         

@@ -111,42 +111,37 @@ namespace OpenCAD.Geometry
             if (IsPreviewGeometry)
                 return candidates;
 
-            var orderedVertices = GetOrderedVertices();
-            var previousVertex = orderedVertices.FirstOrDefault();
-            if (previousVertex == null || orderedVertices.Count() < 2)
-            {
+            var segments = _segments.Items;
+            if (segments.Count == 0)
                 return candidates;
-            }
 
-            var verticiesList = orderedVertices.Skip(1).ToList();
+            // Deduplicate vertex snaps only
+            var seenVertices = new HashSet<Point3D>(Point3DComparer.Instance);
 
-            // Handle closing segment if polyline is closed
-            if (IsClosed)
+            foreach (var seg in segments)
             {
-                verticiesList.Add(previousVertex);
-            }
+                var segGeoPoints = seg.GetGeoPoints(referencePoint, geoPointType);
 
-            foreach (var vert in verticiesList)
-            {
-                var segmentGeoPoints = GeometricCalculator.GetSegmentGeoPoints(
-                    previousVertex.Position,
-                    vert.Position,
-                    previousVertex.Bulge,
-                    referencePoint,
-                    geoPointType);
-
-                // Set RelatedGeometryId for all segment geo points
-                foreach (var geoPoint in segmentGeoPoints)
+                foreach (var gp in segGeoPoints)
                 {
-                    geoPoint.RelatedGeometryId = ID;
-                }
+                    gp.RelatedGeometryId = ID;
 
-                candidates.AddRange(segmentGeoPoints);
-                previousVertex = vert;
+                    if (gp.PointType == GeoPointModes.Vertex)
+                    {
+                        if (seenVertices.Add(gp.Position))
+                            candidates.Add(gp);
+                    }
+                    else
+                    {
+                        candidates.Add(gp);
+                    }
+                }
             }
 
             return candidates;
         }
+
+
 
         #endregion
 
@@ -205,7 +200,14 @@ namespace OpenCAD.Geometry
         public Vector3D GetFirstDerivativeAtParameter(double t)
         {
             var (seg, _, localT) = _segments.GetSegmentT(t);
-            return seg.GetFirstDerivative(localT);
+            var derivative = seg.GetFirstDerivative(localT);
+            if (!double.IsNaN(derivative.X) && !double.IsNaN(derivative.Y) && !double.IsNaN(derivative.Z))
+            {
+                return derivative;
+            }
+            // try previous
+            (seg, _, localT) = _segments.GetSegmentT(t - 1);
+            return seg.GetFirstDerivative(localT + 1);
         }
 
         public Vector3D GetSecondDerivativeAtParameter(double t)
