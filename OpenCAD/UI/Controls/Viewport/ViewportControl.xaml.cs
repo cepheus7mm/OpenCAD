@@ -334,6 +334,20 @@ namespace UI.Controls.Viewport
             try
             {
                 GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+                
+                // Update mouse position at render time to avoid event/render timing drift (crosshair lag)
+                var mousePosDip = Mouse.GetPosition(GlWPFControl);
+                if (mousePosDip.X >= 0 &&
+                    mousePosDip.Y >= 0 &&
+                    mousePosDip.X <= GlWPFControl.ActualWidth &&
+                    mousePosDip.Y <= GlWPFControl.ActualHeight)
+                {
+                    _currentMousePosDip = mousePosDip;
+                }
+                else
+                {
+                    _currentMousePosDip = null;
+                }
 
                 // Cache viewport bounds in world coords once per frame for overlay use
                 _cachedWorldBounds = ComputeViewportWorldBounds();
@@ -489,19 +503,20 @@ namespace UI.Controls.Viewport
             {
                 EnsureTextMetricsInitialized();
 
-                var geoPoints = _viewModel.GetGeoPointsAtCurrentMousePosition(_currentMousePosDip.Value, ScreenToWorld);
-                if (geoPoints.Any())
+                var geoPoint = _viewModel.GetGeoPointAtCurrentMousePosition(_currentMousePosDip.Value, ScreenToWorld);
+                if (geoPoint != null)
                 {
                     var worldPos = ScreenToWorld(_currentMousePosDip.Value);
                     var worldPos1 = ScreenToWorld(new Point(_currentMousePosDip.Value.X + 1, _currentMousePosDip.Value.Y));
                     if (worldPos.HasValue && worldPos1.HasValue)
                     {
                         double screenToWorldScale = Math.Abs(worldPos1.Value.X - worldPos.Value.X);
-                        var geoGlyphs = _viewModel.CreateGeoPointGlyphs(geoPoints, screenToWorldScale);
-                        foreach (var glyph in geoGlyphs)
-                        {
-                            CollectGlyphChildren(glyph, overlayObjects);
-                        }
+                        var geoGlyph = _viewModel.CreateGlyph(geoPoint, screenToWorldScale);
+                        //foreach (var glyph in geoGlyphs)
+                        //{
+                            CollectGlyphChildren(geoGlyph, overlayObjects);
+                        //}
+                        //overlayObjects.Add(geoGlyph);
                     }
                 }
             }
@@ -640,7 +655,7 @@ namespace UI.Controls.Viewport
                 ? _viewModel.SnapToGrid(new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z))
                 : new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z);
 
-            var bounds = ComputeViewportWorldBounds();
+            var bounds = _cachedWorldBounds.HasValue ? _cachedWorldBounds : ComputeViewportWorldBounds();
             
             if (bounds.HasValue)
             {

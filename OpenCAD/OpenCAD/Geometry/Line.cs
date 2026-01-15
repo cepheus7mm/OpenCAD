@@ -7,7 +7,7 @@ using OpenCAD.Interfaces;
 
 namespace OpenCAD.Geometry
 {
-    public class Line : GeometryBase, ICurve
+    public class Line : GeometryBase, ICurve, IGeoPointProvider
     {
         // ---------------------------------------------------------------------
         // Private fields
@@ -64,34 +64,10 @@ namespace OpenCAD.Geometry
             return new Extents(StartPoint, EndPoint);
         }
 
-        public override IEnumerable<GeoPoint> GetGeoPoints(Point3D referencePoint, GeoPointModes geoPointType)
-        {
-            var candidates = new List<GeoPoint>();
-            if (IsPreviewGeometry)
-            {
-                // Preview geometries do not provide geo points
-                return candidates;
-            }
+        //public IEnumerable<GeoPoint> GetGeoPoints(Point3D referencePoint, GeoPointModes geoPointType)
+        //{
 
-            var segment = PolylineSegment.FromLine(this);
-
-            // Use unified segment calculation with bulge = 0 for line
-            candidates.AddRange(segment.GetGeoPoints(referencePoint, geoPointType));
-
-            // Set the RelatedGeometryId for all candidates
-            foreach (var geoPoint in candidates)
-            {
-                geoPoint.RelatedGeometryId = ID;
-            }
-
-            //// Line-specific: Perpendicular point (requires document preview point)
-            //if (geoPointType.HasFlag(GeoPointModes.Perpendicular) && _document.PreviewPoint.HasValue)
-            //{
-            //    candidates.Add(GeometricCalculator.Perpendicular(_document.PreviewPoint.Value, this));
-            //}
-
-            return candidates;
-        }
+        //}
 
         // ---------------------------------------------------------------------
         // ICurve implementation
@@ -185,6 +161,35 @@ namespace OpenCAD.Geometry
             newLine._normal = tn;
 
             return newLine;
+        }
+
+        public IEnumerable<GeoPoint> GetGeoPoints(GeoPointModes modes, Point3D referencePoint)
+        {
+            var candidates = new List<GeoPoint>();
+            if (IsPreviewGeometry)
+            {
+                // Preview geometries do not provide geo points
+                return candidates;
+            }
+
+            var segment = PolylineSegment.FromLine(this);
+
+            // Use unified segment calculation with bulge = 0 for line
+            candidates.AddRange(segment.GetGeoPoints(referencePoint, modes));
+
+            // Set the RelatedGeometryId for all candidates
+            foreach (var geoPoint in candidates)
+            {
+                geoPoint.RelatedGeometryId = ID;
+            }
+
+            //// Line-specific: Perpendicular point (requires document preview point)
+            //if (geoPointType.HasFlag(GeoPointModes.Perpendicular) && _document.PreviewPoint.HasValue)
+            //{
+            //    candidates.Add(GeometricCalculator.Perpendicular(_document.PreviewPoint.Value, this));
+            //}
+
+            return candidates;
         }
 
         // ---------------------------------------------------------------------

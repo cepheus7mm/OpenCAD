@@ -337,6 +337,13 @@ namespace OpenCAD
             return removed;
         }
 
+        public void ReplaceObject(OpenCADObject oldObj, OpenCADObject newObj)
+        {
+            Remove(oldObj);
+            Add(newObj);
+            NotifyObjectChanged(newObj);
+        }
+
         /// <summary>
         /// Notify listeners that an object changed in-place.
         /// Call this after mutating an existing object's properties.

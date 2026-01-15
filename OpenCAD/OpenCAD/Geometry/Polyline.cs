@@ -9,7 +9,7 @@ namespace OpenCAD.Geometry
     /// <summary>
     /// Represents a polyline - a Index of connected line and arc segments defined by vertices
     /// </summary>
-    public class Polyline : GeometryBase, ICurve
+    public class Polyline : GeometryBase, ICurve, IGeoPointProvider
     {
         #region Private Fields
 
@@ -104,7 +104,7 @@ namespace OpenCAD.Geometry
             return ext;
         }
 
-        public override IEnumerable<GeoPoint> GetGeoPoints(Point3D referencePoint, GeoPointModes geoPointType)
+        public IEnumerable<GeoPoint> GetGeoPoints(GeoPointModes geoPointType, Point3D referencePoint)
         {
             var candidates = new List<GeoPoint>();
 

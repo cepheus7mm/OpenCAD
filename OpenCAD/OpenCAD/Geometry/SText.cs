@@ -10,7 +10,7 @@ using System.Xml.Serialization;
 
 namespace OpenCAD.Geometry
 {
-    public class SText : GeometryBase
+    public class SText : GeometryBase, IGeoPointProvider
     {
         // Thread-safe cache access
         private readonly object _cacheLock = new object();
@@ -393,7 +393,7 @@ namespace OpenCAD.Geometry
             return clone;
         }
 
-        public override IEnumerable<GeoPoint> GetGeoPoints(Point3D referencePoint, GeoPointModes geoPointType)
+        public IEnumerable<GeoPoint> GetGeoPoints(GeoPointModes geoPointType, Point3D referencePoint)
         {
             var candidates = new List<GeoPoint>();
             if (geoPointType.HasFlag(GeoPointModes.Anchor))

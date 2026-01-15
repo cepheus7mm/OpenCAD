@@ -1,4 +1,4 @@
-using GraphicsEngine;
+﻿using GraphicsEngine;
 using OpenCAD;
 using OpenCAD.Geometry;
 using OpenCAD.Geometry.Helpers;
@@ -62,7 +62,7 @@ namespace UI.Controls.Viewport
         private Point3D? _windowSelectionCurrentPoint;
         private readonly List<OpenCADObject> _windowSelectionPreviewObjects = new();
 
-        private readonly List<GeoPoint> _geoPoints = new();
+        private GeoPointManager _geoPointManager = new GeoPointManager();
 
         #endregion
 
@@ -404,6 +404,7 @@ namespace UI.Controls.Viewport
             //_previousSelectionMode = IsSelectionMode;
             //IsPointPickingMode = true;
             CurrentInputMode = InputMode.PointPicking;
+            _geoPointManager.Clear();
             //System.Diagnostics.Debug.WriteLine($"  Point picking mode ENABLED, _tempPoints.Count={_tempPoints.Count}");
         }
 
@@ -419,7 +420,7 @@ namespace UI.Controls.Viewport
             //_previewCallback = null;
             //IsSelectionMode = _previousSelectionMode;
             CurrentInputMode = InputMode.Selection;
-            _geoPoints.Clear();
+            _geoPointManager.Clear();
             //System.Diagnostics.Debug.WriteLine("  Point picking mode DISABLED, temp points cleared");
         }
 
@@ -484,7 +485,7 @@ namespace UI.Controls.Viewport
             // Raise the cancelled event BEFORE disabling the mode
             // This allows commands to clean up properly
             PointPickingCancelled?.Invoke(this, EventArgs.Empty);
-            _geoPoints.Clear();
+            _geoPointManager.Clear();
             // Now disable the mode
             DisablePointPickingMode();
         }
@@ -528,7 +529,7 @@ namespace UI.Controls.Viewport
         public void AddObject(OpenCADObject obj)
         {
             ObjectToDisplay?.Add(obj);
-            // Do not raise ObjectAdded/Refresh here � document event handler will do it.
+            // Do not raise ObjectAdded/Refresh here — document event handler will do it.
         }
 
         /// <summary>
@@ -538,7 +539,7 @@ namespace UI.Controls.Viewport
         public void RemoveObject(OpenCADObject obj)
         {
             ObjectToDisplay?.Remove(obj);
-            // Do not raise Refresh here � document event handler will do it.
+            // Do not raise Refresh here — document event handler will do it.
         }
 
         /// <summary>
@@ -731,13 +732,10 @@ namespace UI.Controls.Viewport
             {
                 var point = new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z);
 
-                if (_viewportSettings?.GeoPointModes != GeoPointModes.None && _geoPoints.Any())
+                if (_viewportSettings?.GeoPointModes != GeoPointModes.None && _geoPointManager.CurrentSnap != null)
                 {
-                    var geoPoint = GetClosestGeoPoint(_geoPoints, point);
-                    if (geoPoint != null)
-                    {
-                        point = geoPoint.Position;
-                      }
+                    point = _geoPointManager.CurrentSnap.Position;// GetClosestGeoPoint(_geoPoints, point);
+                    _geoPointManager.Clear();  // Clear after use to avoid stale snaps
                 }
                 else if (SnappingEnabled)
                 {
@@ -1128,30 +1126,37 @@ namespace UI.Controls.Viewport
             return new MouseHandlingResult { Handled = false, NeedsRefresh = false, CaptureMouse = false };
         }
 
-        internal IEnumerable<GeoPoint> GetGeoPointsAtCurrentMousePosition(Point screenPos, Func<Point, Vector3?> screenToWorld)
+        internal GeoPoint? GetGeoPointAtCurrentMousePosition(Point screenPos, Func<Point, Vector3?> screenToWorld)
         {
-            _geoPoints.Clear();
-            if (screenToWorld == null)
-                return _geoPoints;
+            if (screenToWorld == null || _viewportSettings == null)
+                return null;
 
             var worldPos = screenToWorld(screenPos);
             if (!worldPos.HasValue)
-                return _geoPoints;
+                return null;
 
             var aperture = _viewportSettings?.ApertureSize ?? 15.0;
             var hitObjects = HitTest(screenPos, screenToWorld, aperture);
 
             var point = SnapToGrid(new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z));
 
-            foreach (var hitObject in hitObjects)
-            {
-                if (hitObject is GeometryBase geometry)
-                {
-                    _geoPoints.AddRange(geometry.GetGeoPoints(point, _viewportSettings?.GeoPointModes ?? GeoPointModes.None));
-                }
-            }
+            if (!hitObjects.Any() || _viewportSettings == null || _viewportSettings.GeoPointModes == GeoPointModes.None)
+                return null;
+            var gp = _geoPointManager.GetBestGeoPoint(point, hitObjects, _viewportSettings.GeoPointModes, aperture * ScreenToWorldScaleX(screenToWorld, screenPos));
+            //_geoPointManager.Clear();
 
-            return _geoPoints;
+            return gp;
+        }
+
+        double ScreenToWorldScaleX(Func<Point, Vector3?> screenToWorld, Point screenPoint)
+        {
+            var w0 = screenToWorld(screenPoint);
+            var w1 = screenToWorld(new Point(screenPoint.X + 1, screenPoint.Y));
+
+            if (!w0.HasValue || !w1.HasValue)
+                return 1;
+
+            return Math.Abs((w1.Value - w0.Value).Length()); // or |ΔX| if strictly axis-aligned
         }
 
         internal GeoPoint? GetClosestGeoPoint(IEnumerable<GeoPoint> geoPoints, Point3D referencePoint)
@@ -1171,7 +1176,7 @@ namespace UI.Controls.Viewport
             }
         }
 
-        private OpenCADObject CreateGlyph(GeoPoint geoPoint, double scaleFactor)
+        internal OpenCADObject CreateGlyph(GeoPoint geoPoint, double scaleFactor)
         {
             if (geoPoint == null || !geoPoint.Position.IsValid)
                 return null;

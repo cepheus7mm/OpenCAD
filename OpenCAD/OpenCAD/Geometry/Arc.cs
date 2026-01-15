@@ -11,7 +11,7 @@ namespace OpenCAD.Geometry
     /// Represents a circular arc defined by center point, radius, start angle, and end angle.
     /// Angles are in radians, measured counter-clockwise from the positive X-axis.
     /// </summary>
-    public class Arc : GeometryBase, IDrawable, ICurve, ICircularGeometry
+    public class Arc : GeometryBase, IDrawable, ICurve, ICircularGeometry, IGeoPointProvider
     {
         // ---------------------------------------------------------------------
         // Private fields
@@ -119,7 +119,7 @@ namespace OpenCAD.Geometry
             return Extents.FromArc(StartPoint, EndPoint, Center, Angle);
         }
 
-        public override IEnumerable<GeoPoint> GetGeoPoints(Point3D referencePoint, GeoPointModes geoPointType)
+        public IEnumerable<GeoPoint> GetGeoPoints(GeoPointModes geoPointType, Point3D referencePoint)
         {
             var candidates = new List<GeoPoint>();
             if (IsPreviewGeometry)

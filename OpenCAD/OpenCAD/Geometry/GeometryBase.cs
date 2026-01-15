@@ -131,7 +131,7 @@ namespace OpenCAD.Geometry
         /// <param name="geoPointType">The type of geographic point to retrieve relative to the reference point.</param>
         /// <returns>A <see cref="GeoPoint"/> representing the requested geographic point if found; otherwise, <see
         /// langword="null"/>.</returns>
-        public abstract IEnumerable<GeoPoint> GetGeoPoints(Point3D referencePoint, GeoPointModes geoPointType);
+        //public abstract IEnumerable<GeoPoint> GetGeoPoints(Point3D referencePoint, GeoPointModes geoPointType);
 
         public bool ToStringLength(out string length)
         {
