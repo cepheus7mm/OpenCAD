@@ -14,68 +14,71 @@ namespace UI.Commands.Undo
     /// </summary>
     public class TransformGeometryAction : IUndoableAction
     {
-        private readonly List<OpenCADObject> _objects;
-        private readonly Matrix4D _matrix;
-        private readonly Matrix4D _inverse;
+        private readonly List<OpenCADObject> _before;
+        private readonly List<OpenCADObject> _after;
         public string Description { get; }
 
         public TransformGeometryAction(IEnumerable<OpenCADObject> objects, Matrix4D matrix, string description)
         {
-            _objects = new List<OpenCADObject>(objects ?? throw new ArgumentNullException(nameof(objects)));
-            _matrix = matrix;
-            if (!Matrix4D.TryInvert(matrix, out _inverse))
-                throw new InvalidOperationException("Transform matrix is not invertible.");
+            if (objects == null)
+                throw new ArgumentNullException(nameof(objects));
+
+            _before = new List<OpenCADObject>();
+            _after = new List<OpenCADObject>();
+
+            foreach (var obj in objects)
+            {
+                if (obj is not ICurve)
+                    continue; // Only transform curves for now
+
+                // Transform returns a NEW object
+                var transformed = ((ICurve)obj).Transform(matrix) as OpenCADObject;
+
+                if (transformed == null)
+                    continue; // Skip if transformation failed
+                _before.Add(obj);
+
+                // Preserve ID
+                transformed.ID = obj.ID;
+
+                _after.Add(transformed);
+            }
+
             Description = description;
         }
 
         public void Execute(ICommandContext context)
         {
             var doc = context?.GetDocument();
+            if (doc == null) return;
 
-            foreach (var obj in _objects)
+            for (int i = 0; i < _before.Count; i++)
             {
-                if (obj is ICurve curve)
-                {
-                    try { curve.Transform(_matrix); }
-                    catch (NotImplementedException) { }
-                }
+                var oldObj = _before[i];
+                var newObj = _after[i];
 
-                // Notify document (if available) that object changed
-                doc?.NotifyObjectChanged(obj);
+                doc.ReplaceObject(oldObj, newObj);
             }
 
-            doc?.MarkAsModified();
-
-            // Best-effort UI refresh
-            try
-            {
-                context?.PostToUI(() => context?.GetActiveViewport()?.Refresh());
-            }
-            catch { }
+            doc.MarkAsModified();
+            context?.PostToUI(() => context?.GetActiveViewport()?.Refresh());
         }
 
         public void Undo(ICommandContext context)
         {
             var doc = context?.GetDocument();
+            if (doc == null) return;
 
-            foreach (var obj in _objects)
+            for (int i = 0; i < _before.Count; i++)
             {
-                if (obj is ICurve curve)
-                {
-                    try { curve.Transform(_inverse); }
-                    catch (NotImplementedException) { }
-                }
+                var oldObj = _before[i];
+                var newObj = _after[i];
 
-                doc?.NotifyObjectChanged(obj);
+                doc.ReplaceObject(newObj, oldObj);
             }
 
-            doc?.MarkAsModified();
-
-            try
-            {
-                context?.PostToUI(() => context?.GetActiveViewport()?.Refresh());
-            }
-            catch { }
+            doc.MarkAsModified();
+            context?.PostToUI(() => context?.GetActiveViewport()?.Refresh());
         }
     }
 }
