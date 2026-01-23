@@ -64,7 +64,7 @@ namespace UI.Commands.Drawing
             {
                 _step = CircleInputStep.CenterPoint;
                 var result = await GetInitialInput();
-                if (result.HasValue)
+                if (!result.HasValue)  // Changed: should cancel if NO result
                 {
                     Cancel();
                     return;
@@ -73,7 +73,7 @@ namespace UI.Commands.Drawing
 
                 // Normal flow for non-Last modes
                 result = await GetSecondInput();
-                if (result.HasValue)
+                if (!result.HasValue)  // Changed: should cancel if NO result
                 {
                     Cancel();
                     return;
@@ -83,7 +83,7 @@ namespace UI.Commands.Drawing
                 if (_circleInputMode == CircleInputMode.PT3)
                 {
                     result = await GetLastInput();
-                    if (result.HasValue)
+                    if (!result.HasValue)  // Changed: should cancel if NO result
                     {
                         Cancel();
                         return;
@@ -476,64 +476,72 @@ namespace UI.Commands.Drawing
                 return;
 
             var previewPoint = CachedViewModel?.PreviewPoint;
-            try
+            
+            // Marshal all viewport access to the UI thread
+            Context?.PostToUI(() =>
             {
-                // remove previous preview Circle
-                if (_previewCircle != null && viewport != null)
+                try
                 {
-                    try { viewport.RemoveObject(_previewCircle); } 
-                    catch { }
-                    _previewCircle = null;
-                }
-
-                if (previewPoint.HasValue && viewport != null && Context != null)
-                {
-                    // Two possible preview computations:
-                    // - non-PT3: center & start already known -> radius from start, angles from center
-                    // - PT3: start, second are known and previewPoint is the end -> compute circle through three points
-                    Point3D previewCenter = Point3D.NotAPoint;
-                    double radius = 0.0;
-                    double startAngle = 0.0;
-                    double endAngle = 0.0;
-                    bool haveCircle = false;
-
-                    if (_circleInputMode == CircleInputMode.PT3)
+                    // remove previous preview Circle
+                    if (_previewCircle != null && viewport != null)
                     {
-                        // compute circle from three points: _start, _second, previewPoint
-                        if (GeometricCalculator.TryGetCircleThroughThreePoints(_start, _second, previewPoint.Value, out var c, out var r))
+                        try { viewport.RemoveObject(_previewCircle); } 
+                        catch { }
+                        _previewCircle = null;
+                    }
+
+                    if (previewPoint.HasValue && viewport != null && Context != null)
+                    {
+                        // Two possible preview computations:
+                        // - non-PT3: center & start already known -> radius from start, angles from center
+                        // - PT3: start, second are known and previewPoint is the end -> compute circle through three points
+                        Point3D previewCenter = Point3D.NotAPoint;
+                        double radius = 0.0;
+                        bool haveCircle = false;
+
+                        if (_circleInputMode == CircleInputMode.PT3)
                         {
-                            previewCenter = c;
-                            radius = r;
-                            haveCircle = true;
+                            // compute circle from three points: _start, _second, previewPoint
+                            if (GeometricCalculator.TryGetCircleThroughThreePoints(_start, _second, previewPoint.Value, out var c, out var r))
+                            {
+                                previewCenter = c;
+                                radius = r;
+                                haveCircle = true;
+                            }
+                            else
+                            {
+                                // cannot form circle (colinear) -> skip preview Circle
+                                haveCircle = false;
+                            }
                         }
                         else
                         {
-                            // cannot form circle (colinear) -> skip preview Circle
-                            haveCircle = false;
+                            // existing behavior (covers Last as well since center is precomputed)
+                            previewCenter = _center;
+                            radius = CalculateDistance(_center, previewPoint.Value);
+                            if (_circleInputMode == CircleInputMode.DIA)
+                            {
+                                radius /= 2.0;
+                            }
+                            haveCircle = true;
                         }
-                    }
-                    else
-                    {
-                        // existing behavior (covers Last as well since center is precomputed)
-                        previewCenter = _center;
-                        radius = CalculateDistance(_center, previewPoint.Value);
-                        if (_circleInputMode == CircleInputMode.DIA)
-                        {
-                            radius /= 2.0;
-                        }
-                        haveCircle = true;
-                    }
 
-                    if (haveCircle)
-                    {
-                        var doc = Context.GetDocument();
-                        if (doc != null)
+                        if (haveCircle)
                         {
-                            var circle = new Circle(previewCenter, radius, doc);
-                            circle.IsPreviewGeometry = true;
-                            viewport.AddObject(circle);
-                            _previewCircle = circle;
-                            viewport.Refresh();
+                            var doc = Context.GetDocument();
+                            if (doc != null)
+                            {
+                                var circle = new Circle(previewCenter, radius, doc);
+                                circle.IsPreviewGeometry = true;
+                                viewport.AddObject(circle);
+                                _previewCircle = circle;
+                                viewport.Refresh();
+                            }
+                        }
+                        else
+                        {
+                            if (viewport != null)
+                                viewport.Refresh();
                         }
                     }
                     else
@@ -542,16 +550,11 @@ namespace UI.Commands.Drawing
                             viewport.Refresh();
                     }
                 }
-                else
+                catch
                 {
-                    if (viewport != null)
-                        viewport.Refresh();
+                    // ignore preview errors
                 }
-            }
-            catch
-            {
-                // ignore preview errors
-            }
+            });
         }
     }
 }

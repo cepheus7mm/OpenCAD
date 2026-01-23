@@ -1,7 +1,7 @@
 using System.Drawing;
 using System.Text.Json.Serialization;
 using System.Xml.Serialization;
-using OpenCAD;
+using OpenCAD.Styles.LineTypes;
 
 namespace OpenCAD.Settings // CHANGED
 {
@@ -10,6 +10,8 @@ namespace OpenCAD.Settings // CHANGED
     /// </summary>
     public class CrosshairSettings : OpenCADObject
     {
+        private const uint DefaultPickboxSize = 5;
+
         public CrosshairSettings() : this(null!)
         {
         }
@@ -18,9 +20,9 @@ namespace OpenCAD.Settings // CHANGED
         {
             // Initialize default crosshair values using properties
             Color = Color.LightBlue;
-            LineType = LineType.Continuous;
+            LineTypeID = OpenCADDocument.ContinuousLineTypeID;
             LineWeight = LineWeight.Hairline;
-            PickboxSize = 5;
+            PickboxSize = DefaultPickboxSize;
             _document = document;
         }
 
@@ -40,10 +42,10 @@ namespace OpenCAD.Settings // CHANGED
         /// Default: Continuous
         /// </summary>
         [JsonIgnore, XmlIgnore]
-        public LineType LineType
+        public uint LineTypeID
         {
-            get => GetPropertyValue<LineType>(PropertyType.LineType, nameof(LineType));
-            set => SetPropertyValue(PropertyType.LineType, nameof(LineType), OpenCADStrings.LineType, value);
+            get => GetPropertyValue<uint>(PropertyType.UInt, nameof(LineTypeID));
+            set => SetPropertyValue(PropertyType.UInt, nameof(LineTypeID), OpenCADStrings.LineType, value);
         }
 
         /// <summary>

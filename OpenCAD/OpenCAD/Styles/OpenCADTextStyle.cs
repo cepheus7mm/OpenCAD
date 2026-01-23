@@ -6,7 +6,7 @@ using System.Xml.Serialization;
 namespace OpenCAD
 {
     /// <summary>
-    /// Represents a text stle in the CAD document.
+    /// Represents a text style in the CAD document.
     /// </summary>
     public class OpenCADTextStyle : OpenCADObject
     {

@@ -1,5 +1,7 @@
 ﻿using OpenCAD.Geometry.Helpers;
 using OpenCAD.Interfaces;
+using OpenCAD.SegmentSource;
+using OpenCAD.Styles.LineTypes;
 using System.Drawing;
 using System.Numerics;
 using System.Text.Json.Serialization;
@@ -23,7 +25,6 @@ namespace OpenCAD.Geometry
         public GeometryBase(OpenCADDocument? doc) : base(doc)
         {
             _isDrawable = true;
-            _document = doc;
             _parent = doc;
 
             // Assign to the document's current layer if document exists
@@ -31,7 +32,7 @@ namespace OpenCAD.Geometry
             {
                 Layer = _document.CurrentLayer;
                 Color = _document.CurrentColor;
-                LineType = _document.CurrentLineType ?? LineType.Continuous;
+                LineTypeID = _document.CurrentLineTypeID ?? OpenCADDocument.ContinuousLineTypeID;
                 LineWeight = _document.CurrentLineWeight ?? LineWeight.Default;
             }
         }
@@ -57,31 +58,34 @@ namespace OpenCAD.Geometry
         }
 
         [JsonIgnore]
-        public LineType LineType
+        public Vector4 ColorVector => new Vector4(Color.R / 255f, Color.G / 255f, Color.B / 255f, Color.A / 255f);
+
+        [JsonIgnore]
+        public uint LineTypeID
         {
             get
             {
                 // Try to get the object's own line type property
-                var lineType = GetPropertyValue<LineType?>(PropertyType.LineType, nameof(LineType));
-                if (lineType.HasValue && lineType.Value != LineType.ByLayer)
+                var lineType = GetPropertyValue<uint?>(PropertyType.UInt, nameof(LineTypeID));
+                if (lineType.HasValue && lineType.Value != uint.MaxValue)
                     return lineType.Value;
 
                 // If not set or ByLayer, try to get the layer's line type
                 if (Layer != null)
-                    return Layer.LineType;
+                    return Layer.LineTypeID;
 
                 if (Document != null)
                 {
                     // If the document has a default line type, use it
-                    var docDefaultLineType = Document.CurrentLineType;
-                    if (docDefaultLineType != null && docDefaultLineType != LineType.ByLayer)
-                        return (LineType)docDefaultLineType;
+                    var docDefaultLineType = Document.CurrentLineTypeID;
+                    if (docDefaultLineType.HasValue && docDefaultLineType != OpenCADDocument.LineTypeByLayer)
+                        return docDefaultLineType.Value;
                 }
 
                 // Fallback to Continuous
-                return LineType.Continuous;
+                return OpenCADDocument.ContinuousLineTypeID;
             }
-            set => SetPropertyValue<LineType?>(PropertyType.LineType, nameof(LineType), OpenCADStrings.LineType, value);
+            set => SetPropertyValue<uint?>(PropertyType.UInt, nameof(LineTypeID), OpenCADStrings.LineType, value);
         }
 
         [JsonIgnore]
@@ -162,8 +166,19 @@ namespace OpenCAD.Geometry
             // Copy basic properties
             this.Layer = sourceGeometry.Layer;
             this.Color = sourceGeometry.Color;
-            this.LineType = sourceGeometry.LineType;
+            this.LineTypeID = sourceGeometry.LineTypeID;
             this.LineWeight = sourceGeometry.LineWeight;
+        }
+
+        public unsafe virtual LinetypeGpuData GetLinetypeGpuData()
+        {
+            var continuousLineType = new LinetypeGpuData();
+            continuousLineType.Pattern[0] = 1.0f;
+            continuousLineType.PatternCount = 1;
+            continuousLineType.PatternLength = 1.0f;
+
+            var lineTypes = Document?.GetLineTypesContainer();
+            return lineTypes?.GetScaledLineType(LineTypeID, (float)LinetypeScale) ?? continuousLineType;
         }
 
         internal void SetNormal(Vector3D normal)

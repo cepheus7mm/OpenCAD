@@ -1,6 +1,6 @@
 using System;
 
-namespace OpenCAD
+namespace OpenCAD.Styles.LineTypes
 {
     /// <summary>
     /// Defines the line type (pattern) for drawing lines.

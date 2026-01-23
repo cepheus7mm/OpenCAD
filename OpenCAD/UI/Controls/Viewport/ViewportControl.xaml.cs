@@ -14,6 +14,7 @@ using Microsoft.Extensions.DependencyInjection;
 using OpenCAD.TextRendering;
 using OpenCAD.Geometry.Helpers;
 using System.Diagnostics;
+using OpenCAD.Styles.LineTypes;
 
 namespace UI.Controls.Viewport
 {
@@ -268,13 +269,7 @@ namespace UI.Controls.Viewport
                 // Defer text metrics creation: do not resolve at startup
                 _renderEngine = new RenderEngine();
 
-                var dpi = VisualTreeHelper.GetDpi(GlWPFControl);
-                int pixelWidth = Math.Max(1, (int)Math.Round(GlWPFControl.ActualWidth * dpi.DpiScaleX));
-                int pixelHeight = Math.Max(1, (int)Math.Round(GlWPFControl.ActualHeight * dpi.DpiScaleY));
-                if (pixelWidth <= 0) pixelWidth = 800;
-                if (pixelHeight <= 0) pixelHeight = 600;
-
-                _renderEngine.Initialize(pixelWidth, pixelHeight);
+                _renderEngine.Initialize(GlWPFControl);
 
                 GL.Disable(EnableCap.DepthTest);
                 GL.Enable(EnableCap.Blend);
@@ -601,7 +596,7 @@ namespace UI.Controls.Viewport
             if (crosshairSettings != null)
             {
                 line.Color = crosshairSettings.Color;
-                line.LineType = crosshairSettings.LineType;
+                line.LineTypeID = crosshairSettings.LineTypeID;
                 line.LineWeight = crosshairSettings.LineWeight;
             }
 
@@ -716,7 +711,7 @@ namespace UI.Controls.Viewport
             if (crosshairSettings != null)
             {
                 line.Color = crosshairSettings.Color;
-                line.LineType = crosshairSettings.LineType;
+                line.LineTypeID = crosshairSettings.LineTypeID;
                 line.LineWeight = crosshairSettings.LineWeight;
             }
             
@@ -825,8 +820,8 @@ namespace UI.Controls.Viewport
                 }
 
                 line.Color = color;
-                line.LineType = LineType.Continuous;
-                line.LineWeight = isMajor ? LineWeight.LineWeight015 : LineWeight.Hairline;
+                line.LineTypeID = OpenCADDocument.ContinuousLineTypeID;
+                line.LineWeight = isMajor ? LineWeight.LineWeight053 : LineWeight.Hairline;
             }
 
             return line;
@@ -887,10 +882,7 @@ namespace UI.Controls.Viewport
 
             bool isShiftPressed = Keyboard.IsKeyDown(Key.LeftShift) || Keyboard.IsKeyDown(Key.RightShift);
 
-            float panScale =
-                (_renderEngine.ProjectionMode == GraphicsEngine.ProjectionMode.Orthographic)
-                    ? _renderEngine.OrthoCamera.OrthoWidth
-                    : (_renderEngine.Camera.Position - _renderEngine.Camera.Target).Length();
+            float panScale = _renderEngine.Camera.PanScale;
 
             // Only perform hit testing if in selection mode, NOT in point picking or window selection mode, and not dragging
             bool shouldHitTest = (_viewModel.CurrentInputMode == ViewportViewModel.InputMode.Selection ||
@@ -949,18 +941,17 @@ namespace UI.Controls.Viewport
 
                         if (worldBefore.HasValue && worldAfter.HasValue)
                         {
-                            Vector3 delta = new Vector3(
+                            Vector2 delta = new Vector2(
                                 worldBefore.Value.X - worldAfter.Value.X,
-                                worldBefore.Value.Y - worldAfter.Value.Y,
-                                0f);
+                                worldBefore.Value.Y - worldAfter.Value.Y);
 
-                            _renderEngine.OrthoCamera.PanWorld(delta);
+                            _renderEngine.Camera.Pan(delta);
                             didPan = true;
                         }
                     }
                     else
                     {
-                        _renderEngine.Camera.Pan(cameraOp.DeltaX, cameraOp.DeltaY);
+                        _renderEngine.Camera.Pan(new Vector2(cameraOp.DeltaX, cameraOp.DeltaY));
                         didPan = true;
                     }
                 }
@@ -973,12 +964,11 @@ namespace UI.Controls.Viewport
 
                     if (worldBefore.HasValue && worldAfter.HasValue)
                     {
-                        Vector3 delta = new Vector3(
+                        Vector2 delta = new Vector2(
                             worldBefore.Value.X - worldAfter.Value.X,
-                            worldBefore.Value.Y - worldAfter.Value.Y,
-                            0f);
+                            worldBefore.Value.Y - worldAfter.Value.Y);
 
-                        _renderEngine.OrthoCamera.PanWorld(delta);
+                        _renderEngine.Camera.Pan(delta);
                         didPan = true;
                     }
                 }
@@ -1011,7 +1001,7 @@ namespace UI.Controls.Viewport
                 float zoomFactor = e.Delta > 0 ? 0.9f : 1.1f;
 
                 // Apply zoom
-                _renderEngine.OrthoCamera.Zoom(zoomFactor);
+                _renderEngine.Camera.Zoom(zoomFactor);
 
                 // Convert mouse position to world AFTER zoom
                 var worldAfter = ScreenToWorld(mousePos);
@@ -1020,7 +1010,7 @@ namespace UI.Controls.Viewport
                 {
                     // Pan camera so the point under the mouse stays fixed
                     Vector3 delta = worldBefore.Value - worldAfter.Value;
-                    _renderEngine.OrthoCamera.PanWorld(delta);
+                    _renderEngine.Camera.Pan(new Vector2(delta.X, delta.Y));
                 }
             }
             else
@@ -1140,10 +1130,10 @@ namespace UI.Controls.Viewport
 
                 if (_renderEngine.ProjectionMode == GraphicsEngine.ProjectionMode.Orthographic)
                 {
-                    var cam = _renderEngine.OrthoCamera;
+                    var cam = _renderEngine.Camera;
 
                     // Your camera defines width in world units
-                    float halfWidth = cam.OrthoWidth * 0.5f;
+                    float halfWidth = cam.PanScale * 0.5f;
                     float halfHeight = halfWidth / aspect;
 
                     float cx = cam.Target.X;
@@ -1158,8 +1148,8 @@ namespace UI.Controls.Viewport
                 else
                 {
                     // Perspective path
-                    viewMatrix = _renderEngine.Camera.GetViewMatrix();
-                    projMatrix = _renderEngine.Camera.GetProjectionMatrix(aspect);
+                    viewMatrix = _renderEngine.Camera.ViewMatrix;
+                    projMatrix = _renderEngine.Camera.ProjectionMatrix;
 
                     Matrix4x4 pv = projMatrix * viewMatrix;
                     if (!Matrix4x4.Invert(pv, out var invPv))
@@ -1206,8 +1196,8 @@ namespace UI.Controls.Viewport
                 float heightPx = Math.Max(1, (float)Math.Round(GlWPFControl.ActualHeight * dpi.DpiScaleY));
 
                 // Build PV as in ScreenToWorld (projection * view)
-                var viewMatrix = _renderEngine.Camera.GetViewMatrix();
-                var projectionMatrix = _renderEngine.GetProjectionMatrix();
+                var viewMatrix = _renderEngine.Camera.ViewMatrix;
+                var projectionMatrix = _renderEngine.Camera.ProjectionMatrix;
 
                 Matrix4x4 pv = Matrix4x4.Multiply(projectionMatrix, viewMatrix);
 
@@ -1309,8 +1299,8 @@ namespace UI.Controls.Viewport
             if (_renderEngine?.Camera != null)
             {
                 _viewModel.UpdateCameraStatus(
-                    _renderEngine.OrthoCamera.Position,
-                    _renderEngine.OrthoCamera.Target
+                    _renderEngine.Camera.Position,
+                    _renderEngine.Camera.Target
                 );
             }
         }

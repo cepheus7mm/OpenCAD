@@ -1,7 +1,7 @@
 using OpenCAD;
 using System.Numerics;
 
-namespace GraphicsEngine
+namespace GraphicsEngine.Interfaces
 {
     /// <summary>
     /// Rendering context containing view/projection matrices and state flags

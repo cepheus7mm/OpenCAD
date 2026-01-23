@@ -3,6 +3,8 @@ using OpenCAD;
 using System.Numerics;
 using OpenTK.Graphics.OpenGL;
 using System.Diagnostics;
+using GraphicsEngine.Interfaces;
+using OpenCAD.Styles.LineTypes;
 
 namespace GraphicsEngine
 {
@@ -91,7 +93,7 @@ namespace GraphicsEngine
                 // These properties automatically resolve to layer values if not overridden
                 var effectiveColor = line.Color;
                 var effectiveLineWeight = line.LineWeight;
-                var effectiveLineType = line.LineType;
+                var effectiveLineType = line.LineTypeID;
 
                 // Convert System.Drawing.Color to Vector4 (normalized RGBA with alpha)
                 Vector4 color = new Vector4(
@@ -105,7 +107,7 @@ namespace GraphicsEngine
                 float lineWidth = effectiveLineWeight.ToOpenGLWidth();
 
                 // Convert LineType to pattern index for shader
-                int lineTypePattern = GetLineTypePattern(effectiveLineType);
+                int lineTypePattern = 0;// GetLineTypePattern(effectiveLineType);
 
                 // Override for highlighted/selected objects
                 if (context.IsSelected)

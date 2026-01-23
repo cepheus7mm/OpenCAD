@@ -1,7 +1,9 @@
 ﻿using OpenCAD.Geometry.Calculator;
 using OpenCAD.Geometry.Helpers;
 using OpenCAD.Interfaces;
+using OpenCAD.SegmentSource;
 using System.Drawing;
+using System.Numerics;
 using System.Text.Json.Serialization;
 using System.Xml.Serialization;
 
@@ -11,7 +13,7 @@ namespace OpenCAD.Geometry
     /// Represents a circular arc defined by center point, radius, start angle, and end angle.
     /// Angles are in radians, measured counter-clockwise from the positive X-axis.
     /// </summary>
-    public class Arc : GeometryBase, IDrawable, ICurve, ICircularGeometry, IGeoPointProvider
+    public class Arc : GeometryBase, IDrawable, ICurve, ICircularGeometry, IGeoPointProvider, ISegmentSource
     {
         // ---------------------------------------------------------------------
         // Private fields
@@ -322,6 +324,41 @@ namespace OpenCAD.Geometry
             {
                 // Wrap-around case: arc crosses 0°
                 return angle >= start || angle <= end;
+            }
+        }
+
+        public IEnumerable<Segment> GetSegments(float maxSagitta)
+        {
+            var geo = new List<GeoSegment>();
+            
+            CurveTessellator.TessellateArc(
+                new Vector2((float)Center.X, (float)Center.Y),
+                (float)Radius,
+                (float)StartAngle,
+                (float)EndAngle,
+                maxSagitta,
+                geo
+            );
+
+            float cumulative = 0f;
+            float widthMm = LineWeight.ToMillimeters();
+
+            foreach (var g in geo)
+            {
+                float len = Vector2.Distance(g.A, g.B);
+
+                yield return new Segment(
+                    g.A,
+                    g.B,
+                    widthMm,
+                    widthMm,
+                    cumulative,
+                    cumulative + len,
+                    0,
+                    ColorVector
+                );
+
+                cumulative += len;
             }
         }
     }

@@ -1,5 +1,6 @@
 using OpenCAD.Geometry;
 using OpenCAD.Geometry.Helpers;
+using OpenCAD.Styles.LineTypes;
 using System.Drawing;
 
 namespace OpenCAD.Interfaces
@@ -27,7 +28,7 @@ namespace OpenCAD.Interfaces
         /// If the object has a line type override, returns it; otherwise returns the layer's line type.
         /// </summary>
         /// <param name="layer">The layer to use for ByLayer resolution.</param>
-        LineType LineType { get; set; }
+        uint LineTypeID { get; set; }
 
         /// <summary>
         /// Gets the effective line weight for rendering this object.

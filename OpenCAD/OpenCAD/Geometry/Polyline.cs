@@ -1,6 +1,8 @@
 ﻿using OpenCAD.Geometry.Calculator;
 using OpenCAD.Geometry.Helpers;
 using OpenCAD.Interfaces;
+using OpenCAD.SegmentSource;
+using System.Numerics;
 using System.Text.Json.Serialization;
 using System.Xml.Serialization;
 
@@ -9,7 +11,7 @@ namespace OpenCAD.Geometry
     /// <summary>
     /// Represents a polyline - a Index of connected line and arc segments defined by vertices
     /// </summary>
-    public class Polyline : GeometryBase, ICurve, IGeoPointProvider
+    public class Polyline : GeometryBase, ICurve, IGeoPointProvider, ISegmentSource
     {
         #region Private Fields
 
@@ -427,13 +429,17 @@ namespace OpenCAD.Geometry
                 Index = (uint)_verticies.Count
             };
 
-            if (Add(vertex))
-                MarkDirty();
+            AddVertex(vertex);
+
             return vertex;
         }
 
         public void AddVertex(PolylineVertex vertex)
         {
+            if (vertex == null)
+                throw new ArgumentNullException(nameof(vertex));
+            if (vertex.Position == Point3D.NotAPoint)
+                return;
             vertex.Index = (uint)_verticies.Count;
             if (Add(vertex))
                 MarkDirty();
@@ -749,6 +755,70 @@ namespace OpenCAD.Geometry
                 double angle = GeometricCalculator.GetAngleFromBulge(bulge);
                 return new PolylineSegment(previousVertex, currentVertex, center, angle);
             }
+        }
+
+        public IEnumerable<Segment> GetSegments(float maxSagitta = 0)
+        {
+            float widthMm = LineWeight.ToMillimeters();
+            var geo = new List<GeoSegment>();
+            var v1 = children[_verticies[0]] as PolylineVertex;
+            var cumulative = 0f;
+            for (int i = 1; i < _verticies.Count; i++)
+            {
+                var v2 = children[_verticies[i]] as PolylineVertex;
+                var widthA = MathF.Max((float)v1.StartWidth, widthMm);
+                var widthB = MathF.Max((float)v2.EndWidth, widthMm);
+                if (Math.Abs(v1.Bulge) <= 1e-12)
+                {
+                    // Line segment
+                    var a = new Vector2((float)v1.Position.X, (float)v1.Position.Y);
+                    var b = new Vector2((float)v2.Position.X, (float)v2.Position.Y);
+                    float len = Vector2.Distance(a, b);
+                    yield return new Segment
+                    (
+                        a: a,
+                        b: b,
+                        widthA: widthA,
+                        widthB: widthB,
+                        d0: cumulative,
+                        d1: cumulative + len,
+                        lineTypeId: 0,
+                        color: ColorVector
+                    );
+                    cumulative += len;
+                    v1 = v2;
+                    continue;
+                }
+                // Arc segement
+                var pSegment = BulgeUtils.GetPolylineSegment(v1.Position, v2.Position, v1.Bulge);
+                CurveTessellator.TessellateArc(
+                    new Vector2((float)pSegment.Center.X, (float)pSegment.Center.Y),
+                    (float)pSegment.Radius,
+                    (float)pSegment.StartAngle,
+                    (float)pSegment.EndAngle,
+                    maxSagitta,
+                    geo
+                );
+                foreach (var g in geo)
+                {
+                    float len = Vector2.Distance(g.A, g.B);
+
+                    yield return new Segment(
+                        g.A,
+                        g.B,
+                        widthA,
+                        widthB,
+                        cumulative,
+                        cumulative + len,
+                        0,
+                        ColorVector
+                    );
+
+                    cumulative += len;
+                }
+                v1 = v2;
+            }
+
         }
 
         #endregion

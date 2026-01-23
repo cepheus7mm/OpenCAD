@@ -39,4 +39,10 @@
     <Resource Include="Themes\WindowChrome.xaml" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="Support\OpenCAD.lin">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

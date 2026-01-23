@@ -1,3 +1,4 @@
+using OpenCAD.Styles.LineTypes;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -51,14 +52,14 @@ namespace OpenCAD.Containers
         /// <param name="lineType">The default line type for the layer.</param>
         /// <param name="lineWeight">The default line weight for the layer.</param>
         /// <returns>The newly created layer, or null if a layer with the same name already exists.</returns>
-        public OpenCADLayer? CreateLayer(string name, Color? color = null, LineType? lineType = null, LineWeight? lineWeight = null)
+        public OpenCADLayer? CreateLayer(string name, Color? color = null, uint? lineType = null, LineWeight? lineWeight = null)
         {
             var layer = new OpenCADLayer(
                 name,
                 color ?? Color.White,
-                lineType ?? LineType.Continuous,
+                lineType ?? OpenCADDocument.ContinuousLineTypeID,
                 lineWeight ?? LineWeight.Default,
-                _document as OpenCADDocument
+                _document!
             );
 
             if (AddLayer(layer))

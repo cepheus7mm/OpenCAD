@@ -6,6 +6,8 @@ using System.Numerics;
 using System.Diagnostics;
 using System;
 using System.Collections.Generic;
+using GraphicsEngine.Interfaces;
+using OpenCAD.Styles.LineTypes;
 
 namespace GraphicsEngine
 {
@@ -87,7 +89,7 @@ namespace GraphicsEngine
             // Resolve style from polyline properties (by-layer defaults handled by GeometryBase)
             var effectiveColor = polyline.Color;
             var effectiveLineWeight = polyline.LineWeight;
-            var effectiveLineType = polyline.LineType;
+            var effectiveLineType = polyline.LineTypeID;
 
             Vector4 color = new Vector4(
                 effectiveColor.R / 255f,
@@ -97,7 +99,7 @@ namespace GraphicsEngine
             );
 
             float lineWidth = effectiveLineWeight.ToOpenGLWidth();
-            int lineTypePattern = GetLineTypePattern(effectiveLineType);
+            int lineTypePattern = 0;// GetLineTypePattern(effectiveLineType);
             double linetypeScale = polyline.LinetypeScale;
 
             // Selection/highlight overrides

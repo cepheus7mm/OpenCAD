@@ -1,10 +1,15 @@
-﻿using OpenCAD;
+﻿using GraphicsEngine.Interfaces;
+using OpenCAD;
 using OpenCAD.Geometry;
+using OpenCAD.Interfaces;
+using OpenCAD.SegmentSource;
 using OpenCAD.TextRendering;
 using OpenTK.Graphics.OpenGL;
+using OpenTK.Wpf;
 using System.Diagnostics;
 using System.Drawing;
 using System.Numerics;
+using System.Windows.Controls;
 
 namespace GraphicsEngine
 {
@@ -14,8 +19,8 @@ namespace GraphicsEngine
     public class RenderEngine
     {
         private readonly List<IRenderer> _renderers = new();
-        private Camera _camera;
-        private OrthoCamera _orthoCamera;
+        //private ICamera _camera;
+        private ICamera _camera;
         private Matrix4x4 _projectionMatrix;
         private Matrix4x4 _viewMatrix;
         private ShaderProgram? _shaderProgram;
@@ -27,22 +32,26 @@ namespace GraphicsEngine
         private int _viewportWidth;
         private int _viewportHeight;
 
+        private Shader? _shader;
+        private readonly SegmentRenderer _segmentRenderer = new SegmentRenderer(new Shader(UnifiedSegmentShaders.VertexShader, UnifiedSegmentShaders.FragmentShader));
+        private Viewport _viewport;
+
         // Optional injected font provider (from UI host)
         private readonly ITextMetricsProvider? _textMetrics;
 
         public RenderEngine(ITextMetricsProvider? textMetrics = null)
         {
-            _camera = new Camera();
-            _orthoCamera = new OrthoCamera();
+            //_camera = new Camera();
+            _camera = new OrthoCamera(40f);
             _textMetrics = textMetrics;
         }
 
         public Matrix4x4 ViewMatrix => _viewMatrix;
         public Matrix4x4 ProjectionMatrix => _projectionMatrix;
 
-        public Camera Camera => _camera;
+        //public ICamera Camera => _camera;
 
-        public OrthoCamera OrthoCamera => _orthoCamera;
+        public ICamera Camera => _camera;
 
         public float AspectRatio => _viewportHeight > 0 ? (float)_viewportWidth / _viewportHeight : 1f;
 
@@ -59,19 +68,24 @@ namespace GraphicsEngine
                     _projectionMode = value;
 
                     // Lock axes when entering orthographic
-                    if (_projectionMode == ProjectionMode.Orthographic)
-                        AlignCameraForOrthographic();
+                    //if (_projectionMode == ProjectionMode.Orthographic)
+                    //    AlignCameraForOrthographic();
 
                     UpdateProjection(_viewportWidth, _viewportHeight);
                     //System.Diagnostics.Debug.WriteLine($"Projection mode changed to: {_projectionMode}");
                 }
             }
         }
+        public static Vector2 WorldToNdc(Vector2 p, Matrix4x4 viewProj)
+        {
+            Vector4 v = Vector4.Transform(new Vector4(p, 0, 1), viewProj);
+            return new Vector2(v.X / v.W, v.Y / v.W);
+        }
 
         /// <summary>
         /// Initialize the rendering engine
         /// </summary>
-        public void Initialize(int width, int height)
+        public void Initialize(GLWpfControl glWPFControl)
         {
             // Make sure a valid and current GL context exists before this point.
 
@@ -79,6 +93,8 @@ namespace GraphicsEngine
             _shaderProgram = new ShaderProgram();
             _polylineShaderProgram = new PolylineShaderProgram();
             _fillShaderProgram = new FillShaderProgram();
+
+            _shader = new Shader(UnifiedSegmentShaders.VertexShader, UnifiedSegmentShaders.FragmentShader);
 
             // Initialize polygon renderer used for filled overlays (window selection)
             // This was missing previously which caused RenderFilledPolygon to be a no-op.
@@ -97,7 +113,11 @@ namespace GraphicsEngine
            // GLDiag.TryEnableDebugOutput();
             GLDiag.LogContextInfo();
 
-            UpdateProjection(width, height);
+            _viewport = new Viewport(glWPFControl) { Camera = _camera };
+
+            //_camera.SetViewportSize(_viewport.PixelWidth, _viewport.PixelHeight);
+
+            UpdateProjection(_viewport.PixelWidth, _viewport.PixelHeight);
             RegisterDefaultRenderers();
 
             GLDiag.Check("Initialize end");
@@ -133,21 +153,6 @@ namespace GraphicsEngine
                           IEnumerable<OpenCADObject>? highlightedObjects = null, 
                           IEnumerable<OpenCADObject>? selectedObjects = null)
         {
-            // Compute correct camera matrices
-            float aspect = (float)_viewportWidth / _viewportHeight;
-
-            if (_projectionMode == ProjectionMode.Orthographic)
-            {
-                _viewMatrix = _orthoCamera.GetViewMatrix();
-                _projectionMatrix = _orthoCamera.GetProjectionMatrix(aspect);
-            }
-            else
-            {
-                _viewMatrix = _camera.GetViewMatrix();
-                _projectionMatrix = _camera.GetProjectionMatrix(aspect);
-            }
-
-
             // Create sets for fast lookup
             var highlightedSet = highlightedObjects != null 
                 ? new HashSet<OpenCADObject>(highlightedObjects) 
@@ -156,50 +161,48 @@ namespace GraphicsEngine
                 ? new HashSet<OpenCADObject>(selectedObjects) 
                 : new HashSet<OpenCADObject>();
 
-            int count = 0;
-            var drawableObjects = objects.Where(o => o.IsDrawable).ToList();
-            int[] vp = new int[4];
-            GL.GetInteger(GetPName.Viewport, vp);
+            var segmentSources = objects.OfType<ISegmentSource>().ToList();
+            
+            float maxSagittaWorld = _viewport.PixelsToWorld(0.5f); // e.g. 0.5px tolerance
 
-            foreach (var obj in drawableObjects)
+            // -------------------------------
+            // PASS 1: Normal geometry
+            // -------------------------------
+            _segmentRenderer.BeginFrame(_viewport, _viewport.ProjectionMatrix);
+            foreach (var source in segmentSources)
             {
-                count++;
-                
-                // Create context with highlighting/selection state
-                var context = new RenderContext
-                {
-                    ViewMatrix = _viewMatrix,
-                    ProjectionMatrix = _projectionMatrix,
-                    Viewport = new Vector2(vp[2], vp[3]),
-                    IsHighlighted = highlightedSet.Contains(obj),
-                    IsSelected = selectedSet.Contains(obj)
-                };
-                
-                // Render with context
-                var renderer = _renderers.FirstOrDefault(r => r.CanRender(obj));
-                if (renderer != null)
-                {
-                    renderer.Render(obj, context);
-                }
+                var segments = source.GetSegments(maxSagittaWorld);
+                var lineTypeData = source.GetLinetypeGpuData();
+
+                _segmentRenderer.DrawSegments(segments, _viewport, lineTypeData);
             }
+            _segmentRenderer.EndFrame();
+
+            // -------------------------------
+            // PASS 2: Glow pass
+            // -------------------------------
+            foreach (var source in segmentSources)
+            {
+                if (!highlightedSet.Contains((OpenCADObject)source) &&
+                    !selectedSet.Contains((OpenCADObject)source))
+                    continue;
+
+                var segments = source.GetSegments(maxSagittaWorld);
+
+                _segmentRenderer.BeginGlowPass(_viewport, _viewport.ProjectionMatrix);
+                _segmentRenderer.DrawGlow(segments, _viewport);
+                _segmentRenderer.EndGlowPass();
+            }
+
+
 
             GLDiag.Check("End of Render");
         }
 
         public void RenderOverlay(IEnumerable<OpenCADObject> overlayObjects)
         {
-            float aspect = (float)_viewportWidth / _viewportHeight;
-
-            if (_projectionMode == ProjectionMode.Orthographic)
-            {
-                _viewMatrix = _orthoCamera.GetViewMatrix();
-                _projectionMatrix = _orthoCamera.GetProjectionMatrix(aspect);
-            }
-            else
-            {
-                _viewMatrix = _camera.GetViewMatrix();
-                _projectionMatrix = _camera.GetProjectionMatrix(aspect);
-            }
+            _viewMatrix = _camera.ViewMatrix;
+            _projectionMatrix = _camera.ProjectionMatrix;
 
             // Save states
             bool depthWasEnabled = GL.IsEnabled(EnableCap.DepthTest);
@@ -209,27 +212,73 @@ namespace GraphicsEngine
             GL.Enable(EnableCap.Blend);
             GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
 
-            var drawable = overlayObjects.Where(o => o.IsDrawable).ToList();
-            foreach (var obj in drawable)
+            var sources = overlayObjects.Where(o => o is ISegmentSource).ToList();
+            foreach (ISegmentSource source in sources)
             {
-                var context = new RenderContext
-                {
-                    ViewMatrix = _viewMatrix,
-                    ProjectionMatrix = _projectionMatrix,
-                    IsHighlighted = false,  // Overlays are never highlighted
-                    IsSelected = false       // Overlays are never selected
-                };
-                
-                var renderer = _renderers.FirstOrDefault(r => r.CanRender(obj));
-                if (renderer != null)
-                {
-                    renderer.Render(obj, context);
-                }
+                var segments = source.GetSegments();
+                _segmentRenderer.BeginFrame(_viewport, _viewport.ProjectionMatrix);
+                _segmentRenderer.DrawSegments(segments, _viewport, source.GetLinetypeGpuData());
+                _segmentRenderer.EndFrame();
             }
+
+            //var objects = overlayObjects.Where(o => o.IsDrawable).ToList();
+            //foreach (var obj in objects)
+            //{ 
+            //    var context = new RenderContext
+            //    {
+            //        ViewMatrix = _viewMatrix,
+            //        ProjectionMatrix = _projectionMatrix,
+            //        IsHighlighted = false,  // Overlays are never highlighted
+            //        IsSelected = false       // Overlays are never selected
+            //    };
+
+            //    var renderer = _renderers.FirstOrDefault(r => r.CanRender(obj));
+            //    if (renderer != null)
+            //    {
+            //        renderer.Render(obj, context);
+            //    }
+            //}
 
             // Restore states
             if (!blendWasEnabled) GL.Disable(EnableCap.Blend);
             if (depthWasEnabled) GL.Enable(EnableCap.DepthTest);
+
+            //var testSegments = new List<Segment>
+            //{
+            //    new Segment(
+            //        new Vector2(0, 0),
+            //        new Vector2(10, 0),
+            //        widthA: 10,
+            //        widthB: 10,
+            //        d0: 1,
+            //        d1: 100,
+            //        lineTypeId: 0,
+            //        color: new Vector4(255, 0, 0, 255)
+            //    ),
+            //    new Segment(
+            //        new Vector2(0, 0),
+            //        new Vector2(0, 10),
+            //        widthA: 10,
+            //        widthB: 1,
+            //        d0: 0,
+            //        d1: 100,
+            //        lineTypeId: 0,
+            //        color: new Vector4(255, 255, 0, 255)
+            //    ),
+            //        new Segment(
+            //        new Vector2(0, 0),
+            //        new Vector2(10, 10),
+            //        widthA: 1,
+            //        widthB: 10,
+            //        d0: 0,
+            //        d1: 100,
+            //        lineTypeId: 0,
+            //        color: new Vector4(255, 0, 255, 255)
+            //    )
+
+            //};
+            //_segmentRenderer.BeginFrame(_viewport, _viewport.ProjectionMatrix);
+            //_segmentRenderer.DrawSegments(testSegments, _viewport);
 
             GLDiag.Check("End of RenderOverlay");
         }
@@ -268,59 +317,11 @@ namespace GraphicsEngine
             {
             }
 
-            float aspect = (float)width / height;
+            _camera.UpdateProjection((float)width / height);
+            _viewMatrix = _camera.ViewMatrix;
+            _projectionMatrix = _camera.ProjectionMatrix;
 
-            if (_projectionMode == ProjectionMode.Orthographic)
-            {
-                // Use the new OrthoCamera
-                _projectionMatrix = _orthoCamera.GetProjectionMatrix(aspect);
-            }
-            else
-            {
-                // Use your existing perspective camera
-                _projectionMatrix = _camera.GetProjectionMatrix(aspect);
-            }
-
-            //GLDiag.Check("UpdateProjection");
-            //if (width <= 0 || height <= 0) return;
-
-            //_viewportWidth = width;
-            //_viewportHeight = height;
-
-            //GL.Viewport(0, 0, width, height);
-
-            //float aspectRatio = (float)width / height;
-
-            //if (_projectionMode == ProjectionMode.Orthographic)
-            //{
-            //    // Use centered ortho window to support pan without touching the camera
-            //    _projectionMatrix = CreateOrthographicGL(
-            //        _orthographicScale, aspectRatio, 0.1f, 1000.0f,
-            //        _orthoCenterX, _orthoCenterY);
-
-            //    // DEBUG: dump the matrix shape we expect for a pure ortho (no shear/tilt)
-            //    var m = _projectionMatrix;
-            //    //Debug.WriteLine($"[RE] Ortho: center=({_orthoCenterX:F4},{_orthoCenterY:F4}) scale={_orthographicScale:F4} aspect={aspectRatio:F4} size=({(_orthographicScale*aspectRatio):F4}x{_orthographicScale:F4})");
-            //    //Debug.WriteLine($"[RE] Ortho M2x2=[[{m.M11:F6},{m.M12:F6}],[{m.M21:F6},{m.M22:F6}]]  T=({m.M41:F6},{m.M42:F6})  M34={m.M34:F6} M44={m.M44:F6}");
-            //    if (MathF.Abs(m.M12) > 1e-6f || MathF.Abs(m.M21) > 1e-6f)
-            //        Debug.WriteLine("[RE][WARN] Ortho off-diagonal != 0 (shear/tilt) in projection.");
-            //}
-            //else
-            //{
-            //    _projectionMatrix = CreatePerspectiveFieldOfViewGL(
-            //        MathF.PI / 4f,
-            //        aspectRatio,
-            //        0.1f,
-            //        1000.0f
-            //    );
-            //}
-
-            //// Log viewport sanity
-            //int[] vp = new int[4];
-            //GL.GetInteger(GetPName.Viewport, vp);
-            ////System.Diagnostics.Debug.WriteLine($"Projection updated ({_projectionMode}): {width}x{height}, GL viewport: {vp[2]}x{vp[3]} at ({vp[0]},{vp[1]})");
-
-            //GLDiag.Check("UpdateProjection");
+            GLDiag.Check("UpdateProjection");
         }
 
         /// <summary>
@@ -335,7 +336,7 @@ namespace GraphicsEngine
                 float zoomFactor = 1.0f + delta;
 
                 // Use the new OrthoCamera zoom
-                _orthoCamera.Zoom(zoomFactor);
+                _camera.Zoom(zoomFactor);
             }
             //if (_projectionMode == ProjectionMode.Orthographic)
             //{
@@ -370,99 +371,6 @@ namespace GraphicsEngine
             m.M43 = (2f * zFar * zNear) / (zNear - zFar);
             m.M44 = 0f;
             return m;
-        }
-
-        // OpenGL (RH) orthographic matrix with clip depth -1..1
-        //private static Matrix4x4 CreateOrthographicGL(float scale, float aspect, float zNear, float zFar)
-        //    => CreateOrthographicGL(scale, aspect, zNear, zFar, 0f, 0f);
-
-        //// Centered ortho: panning is just changing (centerX, centerY)
-        //private static Matrix4x4 CreateOrthographicGL(float scale, float aspect, float zNear, float zFar, float centerX, float centerY)
-        //{
-        //    if (scale <= 0) throw new ArgumentOutOfRangeException(nameof(scale));
-        //    if (aspect <= 0) throw new ArgumentOutOfRangeException(nameof(aspect));
-        //    if (zNear >= zFar) throw new ArgumentOutOfRangeException(nameof(zNear));
-
-        //    float height = scale;
-        //    float width = height * aspect;
-
-        //    float left = centerX - width / 2f;
-        //    float right = centerX + width / 2f;
-        //    float bottom = centerY - height / 2f;
-        //    float top = centerY + height / 2f;
-
-        //    Matrix4x4 m = new Matrix4x4();
-        //    m.M11 = 2f / (right - left);
-        //    m.M22 = 2f / (top - bottom);
-        //    m.M33 = -2f / (zFar - zNear);
-        //    m.M41 = -(right + left) / (right - left);
-        //    m.M42 = -(top + bottom) / (top - bottom);
-        //    m.M43 = -(zFar + zNear) / (zFar - zNear);
-        //    m.M44 = 1f;
-        //    return m;
-        //}
-
-        private void AlignCameraForOrthographic()
-        {
-            // Reset the orthographic camera to a clean top-down view
-            _orthoCamera.Up = Vector3.UnitY;
-
-            // Look straight down the Z axis
-            _orthoCamera.Position = new Vector3(0, 0, 10);
-            _orthoCamera.Target = new Vector3(0, 0, 0);
-
-            // Set a reasonable default zoom level (world units across horizontally)
-            _orthoCamera.OrthoWidth = 100f;
-        }
-
-        /// <summary>
-        /// Pan the orthographic view by adjusting the camera position
-        /// </summary>
-        public void PanOrthoPixels(float deltaXpx, float deltaYpx)
-        {
-            if (_projectionMode != ProjectionMode.Orthographic)
-            {
-                _camera.Pan(deltaXpx, deltaYpx);
-                return;
-            }
-
-            if (_viewportWidth == 0 || _viewportHeight == 0)
-                return;
-
-            // Use the new OrthoCamera pan logic
-            _orthoCamera.Pan(
-                new Vector2(deltaXpx, deltaYpx),
-                _viewportWidth,
-                _viewportHeight
-            );
-
-            //if (_projectionMode != ProjectionMode.Orthographic)
-            //{
-            //    _camera.Pan(deltaXpx, deltaYpx);
-            //    return;
-            //}
-
-            //// Ignore tiny/no movement to avoid needless projection rebuilds
-            //if (MathF.Abs(deltaXpx) < 0.001f && MathF.Abs(deltaYpx) < 0.001f)
-            //    return;
-
-            //if (_viewportWidth == 0 || _viewportHeight == 0) return;
-
-            //float worldHeight = _orthographicScale;
-            //float worldWidth = worldHeight * ((float)_viewportWidth / _viewportHeight);
-
-            //float worldPerPixelX = worldWidth / _viewportWidth;
-            //float worldPerPixelY = worldHeight / _viewportHeight;
-
-            //float dxWorld = -deltaXpx * worldPerPixelX;
-            //float dyWorld = -deltaYpx * worldPerPixelY;
-
-            //_orthoCenterX += dxWorld;
-            //_orthoCenterY -= dyWorld;
-
-            ////Debug.WriteLine($"[RE] PanOrthoPixels px=({deltaXpx:F3},{deltaYpx:F3}) world=({dxWorld:F3},{dyWorld:F3}) center=({_orthoCenterX:F3},{_orthoCenterY:F3})");
-
-            //UpdateProjection(_viewportWidth, _viewportHeight);
         }
 
         /// <summary>
@@ -525,7 +433,7 @@ namespace GraphicsEngine
             //_polygonRenderer.RenderFilled(points, fillColor, _viewMatrix, _projectionMatrix);
             var worldPolygon = new WorldPolygon(points, fillColor);
 
-            _worldPolygonRenderer?.Render(worldPolygon, _orthoCamera.GetViewMatrix(), _orthoCamera.GetProjectionMatrix(AspectRatio));
+            _worldPolygonRenderer?.Render(worldPolygon, _camera.ViewMatrix, _camera.ProjectionMatrix);
         }
 
         public void ResizeViewport(int width, int height)
@@ -542,9 +450,8 @@ namespace GraphicsEngine
 
         public void UpdateViewMatrix()
         {
-            _viewMatrix = (_projectionMode == ProjectionMode.Orthographic)
-                ? _orthoCamera.GetViewMatrix()
-                : _camera.GetViewMatrix();
+            _viewMatrix =  _camera.ViewMatrix;
         }
+
     }
 }

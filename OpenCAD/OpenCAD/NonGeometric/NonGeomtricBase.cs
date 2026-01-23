@@ -1,6 +1,7 @@
 ﻿using OpenCAD.Geometry;
 using OpenCAD.Geometry.Helpers;
 using OpenCAD.Interfaces;
+using OpenCAD.Styles.LineTypes;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -33,7 +34,7 @@ namespace OpenCAD.NonGeometric
             {
                 Layer = _document.CurrentLayer;
                 Color = _document.CurrentColor;
-                LineType = _document.CurrentLineType ?? LineType.Continuous;
+                LineTypeID = _document.CurrentLineTypeID ?? OpenCADDocument.ContinuousLineTypeID;
                 LineWeight = _document.CurrentLineWeight ?? LineWeight.Default;
             }
         }
@@ -59,31 +60,31 @@ namespace OpenCAD.NonGeometric
         }
 
         [JsonIgnore]
-        public LineType LineType
+        public uint LineTypeID
         {
             get
             {
                 // Try to get the object's own line type property
-                var lineType = GetPropertyValue<LineType?>(PropertyType.LineType, nameof(LineType));
-                if (lineType.HasValue && lineType.Value != LineType.ByLayer)
+                var lineType = GetPropertyValue<uint?>(PropertyType.UInt, nameof(LineTypeID));
+                if (lineType.HasValue && lineType.Value != uint.MaxValue)
                     return lineType.Value;
 
                 // If not set or ByLayer, try to get the layer's line type
                 if (Layer != null)
-                    return Layer.LineType;
+                    return Layer.LineTypeID;
 
                 if (Document != null)
                 {
                     // If the document has a default line type, use it
-                    var docDefaultLineType = Document.CurrentLineType;
-                    if (docDefaultLineType != null && docDefaultLineType != LineType.ByLayer)
-                        return (LineType)docDefaultLineType;
+                    var docDefaultLineType = Document.CurrentLineTypeID;
+                    if (docDefaultLineType.HasValue && docDefaultLineType != OpenCADDocument.LineTypeByLayer)
+                        return docDefaultLineType.Value;
                 }
 
                 // Fallback to Continuous
-                return LineType.Continuous;
+                return OpenCADDocument.ContinuousLineTypeID;
             }
-            set => SetPropertyValue<LineType?>(PropertyType.LineType, nameof(LineType), OpenCADStrings.LineType, value);
+            set => SetPropertyValue<uint?>(PropertyType.UInt, nameof(LineTypeID), OpenCADStrings.LineType, value);
         }
 
         [JsonIgnore]

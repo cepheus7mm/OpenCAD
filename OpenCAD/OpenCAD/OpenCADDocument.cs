@@ -3,6 +3,7 @@ using OpenCAD.Geometry;
 using OpenCAD.Geometry.Helpers;
 using OpenCAD.Interfaces;
 using OpenCAD.Settings;
+using OpenCAD.Styles.LineTypes;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -26,6 +27,9 @@ namespace OpenCAD
             Vector3D,
         }
 
+        public const uint ContinuousLineTypeID = 0; // Reserved ID for the default continuous line type
+        public const uint LineTypeByLayer = uint.MaxValue;
+
         // Add volatile to ensure visibility across threads
         private volatile IServiceProvider? _serviceProvider;
 
@@ -34,6 +38,7 @@ namespace OpenCAD
             // Initialize string properties with names (filename and description)
             Filename = string.Empty;
             Description = string.Empty;
+            _document = this;
 
             // Create the specialized layers container
             var layersContainer = new OpenCADLayers(this);
@@ -42,10 +47,10 @@ namespace OpenCAD
             LayersContainerID = layersContainer.ID;
 
             // Create default "0" layer (standard in CAD systems)
-            var defaultLayer = new OpenCADLayer(OpenCADStrings.DefaultLayerName, Color.White, LineType.Continuous, LineWeight.Default, this);
+            var defaultLayer = new OpenCADLayer(OpenCADStrings.DefaultLayerName, Color.White, ContinuousLineTypeID, LineWeight.Default, this);
             layersContainer.AddLayer(defaultLayer);
             CurrentLayer = defaultLayer;
-            CurrentLineType = LineType.ByLayer;
+            CurrentLineTypeID = LineTypeByLayer;
             CurrentLineWeight = LineWeight.ByLayer;
             CurrentColor = Color.FromArgb(0,0,0,0); // ByLayer
 
@@ -64,6 +69,11 @@ namespace OpenCAD
 
             CurrentViewportSettingsID = viewportSettings.ID;
             LastGeometricChild = Guid.Empty;
+
+            // Add the line types container
+            var lineTypesContainer = new OpenCADLineTypes(this);
+            Add(lineTypesContainer);
+            LineTypesContainerID = lineTypesContainer.ID;
         }
 
         public OpenCADDocument(string filename, string description = "") : this()
@@ -263,10 +273,10 @@ namespace OpenCAD
         /// If null, new objects will use ByLayer line type.
         /// </summary>
         [JsonIgnore]
-        public LineType? CurrentLineType
+        public uint? CurrentLineTypeID
         {
-            get => GetPropertyValue<LineType>(PropertyType.LineType, nameof(CurrentLineType));
-            set => SetPropertyValue(PropertyType.LineType, nameof(CurrentLineType), OpenCADStrings.CurrentLineType, value);
+            get => GetPropertyValue<uint>(PropertyType.UInt, nameof(CurrentLineTypeID));
+            set => SetPropertyValue(PropertyType.UInt, nameof(CurrentLineTypeID), OpenCADStrings.CurrentLineType, value);
         }
 
         /// <summary>
@@ -395,10 +405,10 @@ namespace OpenCAD
         /// <param name="lineType">The default line type for the layer.</param>
         /// <param name="lineWeight">The default line weight for the layer.</param>
         /// <returns>The newly created layer, or null if a layer with the same name already exists.</returns>
-        public OpenCADLayer? CreateLayer(string name, Color? color = null, LineType? lineType = null, LineWeight? lineWeight = null)
+        public OpenCADLayer? CreateLayer(string name, Color? color = null, uint? lineTypeID = null, LineWeight? lineWeight = null)
         {
             var layersContainer = GetLayersContainer();
-            return layersContainer?.CreateLayer(name, color, lineType, lineWeight);
+            return layersContainer?.CreateLayer(name, color, lineTypeID, lineWeight);
         }
 
         /// <summary>
@@ -443,6 +453,16 @@ namespace OpenCAD
             var layersContainer = GetLayersContainer();
             return layersContainer?.GetLayers() ?? Enumerable.Empty<OpenCADLayer>();
         }
+
+        /// <summary>
+        /// Gets all line types in the document.
+        /// </summary>
+        public IEnumerable<OpenCADLineType> GetLineTypes()
+        {
+            var lineTypesContainer = GetLineTypesContainer();
+            return lineTypesContainer?.GetLineTypes() ?? Enumerable.Empty<OpenCADLineType>();
+        }
+
 
         /// <summary>
         /// Sets the current layer by name.
@@ -560,7 +580,7 @@ namespace OpenCAD
 
             obj.Layer = CurrentLayer;
             obj.Color = CurrentColor;
-            obj.LineType = CurrentLineType ?? LineType.ByLayer;
+            obj.LineTypeID = CurrentLineTypeID ?? ContinuousLineTypeID;
             obj.LineWeight = CurrentLineWeight ?? LineWeight.ByLayer;
         }
 
@@ -572,6 +592,13 @@ namespace OpenCAD
         { 
             get => GetPropertyValue<Guid>(PropertyType.ID, nameof(LayersContainerID));
             private set => SetPropertyValue(PropertyType.ID, nameof(LayersContainerID), OpenCADStrings.LayersContainerID, value);
+        }
+
+        [JsonIgnore, XmlIgnore]
+        public Guid LineTypesContainerID
+        {
+            get => GetPropertyValue<Guid>(PropertyType.ID, nameof(LineTypesContainerID));
+            private set => SetPropertyValue(PropertyType.ID, nameof(LineTypesContainerID), OpenCADStrings.LineTypesContainerID, value);
         }
 
         [JsonIgnore, XmlIgnore]
@@ -660,9 +687,17 @@ namespace OpenCAD
         /// <summary>
         /// Gets the layers container.
         /// </summary>
-        private OpenCADLayers? GetLayersContainer()
+        public OpenCADLayers? GetLayersContainer()
         {
             return GetChild(LayersContainerID) as OpenCADLayers;
+        }
+
+        /// <summary>
+        /// Gets the line types container.
+        /// </summary>
+        public OpenCADLineTypes? GetLineTypesContainer()
+        {
+            return GetChild(LineTypesContainerID) as OpenCADLineTypes;
         }
 
         /// <summary>

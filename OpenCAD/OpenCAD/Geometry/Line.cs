@@ -1,13 +1,14 @@
-﻿using System.Text.Json.Serialization;
-using System.Xml.Serialization;
-using System.Numerics;
-using OpenCAD.Geometry.Calculator;
+﻿using OpenCAD.Geometry.Calculator;
 using OpenCAD.Geometry.Helpers;
 using OpenCAD.Interfaces;
+using OpenCAD.SegmentSource;
+using System.Numerics;
+using System.Text.Json.Serialization;
+using System.Xml.Serialization;
 
 namespace OpenCAD.Geometry
 {
-    public class Line : GeometryBase, ICurve, IGeoPointProvider
+    public class Line : GeometryBase, ICurve, IGeoPointProvider, ISegmentSource
     {
         // ---------------------------------------------------------------------
         // Private fields
@@ -192,6 +193,23 @@ namespace OpenCAD.Geometry
             return candidates;
         }
 
+        public IEnumerable<Segment> GetSegments(float maxSagitta = 0)
+        {
+            var lineweightMm = LineWeight.ToMillimeters();
+            var length = (float)Length;
+            yield return new Segment(
+            
+                new Vector2((float)StartPoint.X, (float)StartPoint.Y),
+                new Vector2((float)EndPoint.X, (float)EndPoint.Y),
+                lineweightMm,
+                lineweightMm,
+                0.0f,
+                length,
+                0,
+                ColorVector
+            );
+        }
+
         // ---------------------------------------------------------------------
         // Internal methods
         // ---------------------------------------------------------------------
@@ -202,4 +220,5 @@ namespace OpenCAD.Geometry
         // ---------------------------------------------------------------------
         // (none at present)
     }
+
 }

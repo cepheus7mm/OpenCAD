@@ -150,6 +150,16 @@
         public const string LayersContainerID = "Layers Container ID";
 
         /// <summary>
+        /// Property name for line types container ID
+        /// </summary>
+        public const string LineTypesContainerID = "Line Types Container ID";
+
+        /// <summary>
+        /// Property name for line types container ID
+        /// </summary>
+        public const string LineTypeID = "Line Type ID";
+
+        /// <summary>
         /// Property name for textStyles container
         /// </summary>
         public const string TextStylesContainer = "TextStyles Container";

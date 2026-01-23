@@ -1,14 +1,17 @@
-using OpenCAD.Geometry;
+﻿using OpenCAD.Geometry;
 using OpenCAD;
 using System.Numerics;
 using OpenTK.Graphics.OpenGL;
 using System.Diagnostics;
+using GraphicsEngine.Interfaces;
+using OpenCAD.Styles.LineTypes;
 
 namespace GraphicsEngine
 {
     /// <summary>
     /// Modern OpenGL renderer for Arc geometry using VBOs and shaders.
     /// Tessellates arcs into line segments for rendering.
+    /// Uses simple line rendering for thin lines and quad rendering for thick lines.
     /// </summary>
     public class ArcRenderer : IRenderer
     {
@@ -21,6 +24,7 @@ namespace GraphicsEngine
         private Vector2 _viewport = new Vector2(800, 600);
         private const float THIN_LINE_THRESHOLD = 2.5f;
         private const float MIN_LINE_LENGTH = 0.0001f;
+        private const float MIN_ARC_SEGMENT_LENGTH = 0.0001f;
 
         // Tessellation quality settings
         private const int MIN_SEGMENTS = 8;
@@ -39,15 +43,16 @@ namespace GraphicsEngine
                 // Error: Failed to create VAO/VBO
             }
 
-            // Set up VAO
+            // Set up VAO once in constructor - this state is preserved
             GL.BindVertexArray(_vao);
             GL.BindBuffer(BufferTarget.ArrayBuffer, _vbo);
 
-            // position (vec3) + per-vertex distance (float)
+            // Interleaved layout: vec3 position + float distance (in world units)
             int stride = 4 * sizeof(float);
             GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, stride, 0);
             GL.EnableVertexAttribArray(0);
 
+            // location 1 = per-vertex cumulative distance (in world units)
             GL.VertexAttribPointer(1, 1, VertexAttribPointerType.Float, false, stride, 3 * sizeof(float));
             GL.EnableVertexAttribArray(1);
 
@@ -88,72 +93,84 @@ namespace GraphicsEngine
             }
 
             try
+            {
+                // Validate arc parameters
+                if (arc.Center == null || !IsValidPoint(arc.Center))
                 {
-                    // Validate arc parameters
-                    if (arc.Center == null || !IsValidPoint(arc.Center))
-                    {
-                        Debug.WriteLine("[AR] Skipping arc with invalid center point");
-                        return;
-                    }
-
-                    if (arc.Radius <= 0 || double.IsNaN(arc.Radius) || double.IsInfinity(arc.Radius))
-                    {
-                        Debug.WriteLine("[AR] Skipping arc with invalid radius");
-                        return;
-                    }
-
-                    // Get effective properties
-                    var effectiveColor = arc.Color;
-                    var effectiveLineWeight = arc.LineWeight;
-                    var effectiveLineType = arc.LineType;
-
-                    Vector4 color = new Vector4(
-                        effectiveColor.R / 255.0f,
-                        effectiveColor.G / 255.0f,
-                        effectiveColor.B / 255.0f,
-                        effectiveColor.A / 255.0f
-                    );
-
-                    float lineWidth = effectiveLineWeight.ToOpenGLWidth();
-                    int lineTypePattern = GetLineTypePattern(effectiveLineType);
-
-                    // Override for selected objects
-                    if (context.IsSelected)
-                    {
-                        lineTypePattern = 8; // Fine dashed pattern
-                        lineWidth = Math.Max(lineWidth, 2.0f);
-                    }
-
-                    bool useThinLineRendering = lineWidth <= THIN_LINE_THRESHOLD;
-
-                    // Orthographic detection
-                    bool isOrtho = MathF.Abs(context.ProjectionMatrix.M34) < 1e-6f &&
-                                  MathF.Abs(context.ProjectionMatrix.M44 - 1f) < 1e-6f;
-
-                    float glowRadius = context.IsHighlighted ? 5.0f : 0.0f;
-
-                    if (isOrtho)
-                    {
-                        RenderOrthographic(arc, context.ProjectionMatrix, color, lineWidth, lineTypePattern, useThinLineRendering, glowRadius);
-                    }
-                    else
-                    {
-                        RenderPerspective(arc, context.ViewMatrix, context.ProjectionMatrix, color, lineWidth, lineTypePattern, useThinLineRendering, glowRadius);
-                    }
+                    Debug.WriteLine("[AR] Skipping arc with invalid center point");
+                    return;
                 }
-                catch (Exception ex)
+
+                if (arc.Radius <= 0 || double.IsNaN(arc.Radius) || double.IsInfinity(arc.Radius))
                 {
-                    Debug.WriteLine($"[AR] Exception rendering arc: {ex.Message}");
-                    Debug.WriteLine($"[AR] Stack trace: {ex.StackTrace}");
+                    Debug.WriteLine("[AR] Skipping arc with invalid radius");
+                    return;
                 }
+
+                // Get effective properties
+                var effectiveColor = arc.Color;
+                var effectiveLineWeight = arc.LineWeight;
+                var effectiveLineType = arc.LineTypeID;
+
+                // Convert System.Drawing.Color to Vector4 (normalized RGBA with alpha)
+                Vector4 color = new Vector4(
+                    effectiveColor.R / 255.0f,
+                    effectiveColor.G / 255.0f,
+                    effectiveColor.B / 255.0f,
+                    effectiveColor.A / 255.0f
+                );
+
+                // Convert LineWeight to OpenGL width
+                float lineWidth = effectiveLineWeight.ToOpenGLWidth();
+
+                // Convert LineType to pattern index for shader
+                int lineTypePattern = 0;// GetLineTypePattern(effectiveLineType);
+
+                // Override for selected objects
+                if (context.IsSelected)
+                {
+                    // Selected objects: use original color with fine dashed pattern (pattern 8)
+                    lineTypePattern = 8;
+                    lineWidth = Math.Max(lineWidth, 2.0f); // Make selected lines at least 2px thick
+                }
+
+                // Determine rendering method based on line width
+                bool useThinLineRendering = lineWidth <= THIN_LINE_THRESHOLD;
+
+                // Orthographic detection: no perspective divide
+                bool isOrtho = MathF.Abs(context.ProjectionMatrix.M34) < 1e-6f &&
+                              MathF.Abs(context.ProjectionMatrix.M44 - 1f) < 1e-6f;
+
+                float glowRadius = context.IsHighlighted ? 5.0f : 0.0f;
+
+                if (isOrtho)
+                {
+                    RenderOrthographic(arc, context.ViewMatrix, context.ProjectionMatrix, color, lineWidth, lineTypePattern, useThinLineRendering, glowRadius);
+                }
+                else
+                {
+                    RenderPerspective(arc, context.ViewMatrix, context.ProjectionMatrix, color, lineWidth, lineTypePattern, useThinLineRendering, glowRadius);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[AR] Exception rendering arc: {ex.Message}");
+                Debug.WriteLine($"[AR] Stack trace: {ex.StackTrace}");
+            }
         }
 
+        /// <summary>
+        /// Validates that a point contains valid coordinate values
+        /// </summary>
         private bool IsValidPoint(Point3D point)
         {
             return !double.IsNaN(point.X) && !double.IsNaN(point.Y) && !double.IsNaN(point.Z) &&
                    !double.IsInfinity(point.X) && !double.IsInfinity(point.Y) && !double.IsInfinity(point.Z);
         }
 
+        /// <summary>
+        /// Converts a LineType enum to a shader pattern index
+        /// </summary>
         private int GetLineTypePattern(LineType lineType)
         {
             return lineType switch
@@ -177,7 +194,7 @@ namespace GraphicsEngine
         private int CalculateSegmentCount(Arc arc, float screenRadius)
         {
             double sweepAngle = arc.GetSweepAngle();
-            
+
             // Estimate based on screen size
             float arcLengthPixels = (float)(sweepAngle * screenRadius);
             int segments = (int)Math.Ceiling(arcLengthPixels / PIXELS_PER_SEGMENT);
@@ -189,7 +206,7 @@ namespace GraphicsEngine
         }
 
         /// <summary>
-        /// Tessellates the arc into line segments.
+        /// Tessellates the arc into line segments in world space.
         /// </summary>
         private float[] TessellateArc(Arc arc, int segmentCount)
         {
@@ -198,12 +215,12 @@ namespace GraphicsEngine
 
             // Create vertices for line strip (world-space)
             float[] vertices = new float[(segmentCount + 1) * 3];
-            
+
             for (int i = 0; i <= segmentCount; i++)
             {
                 double angle = arc.StartAngle + i * angleStep;
                 int idx = i * 3;
-                
+
                 vertices[idx] = (float)(arc.Center.X + arc.Radius * Math.Cos(angle));
                 vertices[idx + 1] = (float)(arc.Center.Y + arc.Radius * Math.Sin(angle));
                 vertices[idx + 2] = (float)arc.Center.Z;
@@ -212,161 +229,365 @@ namespace GraphicsEngine
             return vertices;
         }
 
-        private void RenderOrthographic(Arc arc, Matrix4x4 projectionMatrix, Vector4 color, 
-            float lineWidth, int lineTypePattern, bool useThinLineRendering, float glowRadius)
+        /// <summary>
+        /// Creates quad geometry (triangle strip) for arc segments with perpendicular width.
+        /// Unlike straight lines, arcs require calculating tangent at each vertex.
+        /// </summary>
+        /// <param name="ndcVertices">Arc vertices in NDC space (centerline)</param>
+        /// <param name="vertexCount">Number of vertices in the arc</param>
+        /// <param name="halfWidthNDC">Half-width of the quad in NDC space</param>
+        /// <param name="cumulativeDistances">Cumulative distance for each centerline vertex (for line patterns)</param>
+        /// <param name="quadDistances">Output: Per-vertex cumulative distances for quad vertices</param>
+        /// <returns>Interleaved triangle vertices, or null if arc is degenerate</returns>
+        private float[]? CreateArcQuads(float[] ndcVertices, int vertexCount, float halfWidthNDC,
+            float[] cumulativeDistances, out float[] quadDistances)
         {
-            // Extract ortho parameters from projection matrix
-            float sx = projectionMatrix.M11;
-            float sy = projectionMatrix.M22;
-            float txRow = projectionMatrix.M41;
-            float tyRow = projectionMatrix.M42;
+            quadDistances = Array.Empty<float>();
 
-            if (MathF.Abs(sx) > 1e-12f && MathF.Abs(sy) > 1e-12f)
+            if (vertexCount < 2)
             {
-                // Get viewport dimensions
-                int[] viewport = new int[4];
-                GL.GetInteger(GetPName.Viewport, viewport);
+                Debug.WriteLine("[AR] Arc too short for quad generation");
+                return null;
+            }
 
-                if (viewport[2] <= 0 || viewport[3] <= 0)
+            // Pre-calculate tangent directions for each vertex
+            Vector2[] tangents = new Vector2[vertexCount];
+
+            for (int i = 0; i < vertexCount; i++)
+            {
+                Vector2 tangent;
+
+                if (i == 0)
                 {
-                    Debug.WriteLine($"[AR] Invalid viewport dimensions: {viewport[2]}x{viewport[3]}");
-                    return;
+                    // First vertex: use forward difference
+                    Vector2 curr = new Vector2(ndcVertices[i * 3], ndcVertices[i * 3 + 1]);
+                    Vector2 next = new Vector2(ndcVertices[(i + 1) * 3], ndcVertices[(i + 1) * 3 + 1]);
+                    Vector2 diff = next - curr;
+                    float len = diff.Length();
+                    tangent = len > MIN_ARC_SEGMENT_LENGTH ? diff / len : Vector2.UnitX;
                 }
-
-                _viewport = new Vector2(viewport[2], viewport[3]);
-
-                float halfW = 1.0f / sx;
-                float halfH = 1.0f / sy;
-                float centerX = -txRow / sx;
-                float centerY = -tyRow / sy;
-
-                // Calculate screen-space radius
-                float worldRadius = (float)arc.Radius;
-                float ndcRadius = worldRadius / halfW;
-                float screenRadius = ndcRadius * 0.5f * _viewport.X;
-
-                // Determine segment count based on screen size
-                int segmentCount = CalculateSegmentCount(arc, screenRadius);
-
-                // Tessellate arc into world-space vertices
-                float[] vertices = TessellateArc(arc, segmentCount);
-
-                // Transform vertices to NDC space (for GPU when mvp=Identity)
-                float[] ndcVertices = new float[vertices.Length];
-                int vertexCount = ndcVertices.Length / 3;
-                for (int i = 0; i < vertices.Length; i += 3)
+                else if (i == vertexCount - 1)
                 {
-                    float wx = vertices[i];
-                    float wy = vertices[i + 1];
-
-                    ndcVertices[i] = (wx - centerX) / halfW;
-                    ndcVertices[i + 1] = (wy - centerY) / halfH;
-                    ndcVertices[i + 2] = 0f;
-                }
-
-                // Compute per-vertex cumulative distances in world units (object length)
-                float[] cumulative = new float[vertexCount];
-                cumulative[0] = 0f;
-                for (int i = 1; i < vertexCount; i++)
-                {
-                    int pi = (i - 1) * 3;
-                    int ci = i * 3;
-                    float dx = vertices[ci + 0] - vertices[pi + 0];
-                    float dy = vertices[ci + 1] - vertices[pi + 1];
-                    float dz = vertices[ci + 2] - vertices[pi + 2];
-                    cumulative[i] = cumulative[i - 1] + MathF.Sqrt(dx * dx + dy * dy + dz * dz);
-                }
-
-                float totalWorldLength = cumulative[vertexCount - 1];
-                if (totalWorldLength < 1e-12f) totalWorldLength = 1.0f;
-
-                // Build interleaved buffer: position (NDC) + distance (world units)
-                float[] interleaved = new float[vertexCount * 4];
-                for (int i = 0; i < vertexCount; i++)
-                {
-                    int vi = i * 3;
-                    int ii = i * 4;
-                    interleaved[ii + 0] = ndcVertices[vi + 0];
-                    interleaved[ii + 1] = ndcVertices[vi + 1];
-                    interleaved[ii + 2] = ndcVertices[vi + 2];
-                    interleaved[ii + 3] = cumulative[i];
-                }
-
-                // Set up shader
-                _shaderProgram.Use();
-                _shaderProgram.SetMatrix4("mvp", Matrix4x4.Identity);
-                _shaderProgram.SetVector4("color", color);
-                _shaderProgram.SetInt("lineTypePattern", lineTypePattern);
-                _shaderProgram.SetVector2("viewport", _viewport);
-
-                // Disable shader-based distance discard for curved arcs (use GL.LineWidth for thickness)
-                _shaderProgram.SetFloat("lineWidth", 10000.0f); // <- change: large to bypass shader distance test
-                _shaderProgram.SetFloat("glowRadius", 0.0f);    // shader-based glow disabled for arcs
-
-                // Pass per-object linetype scale (applies to world-unit pattern lengths)
-                _shaderProgram.SetFloat("lineTypeScale", (float)arc.LinetypeScale);
-
-                // Pass total world length as uniform (optional for shader logic)
-                _shaderProgram.SetFloat("lineLength", totalWorldLength);
-
-                // Set line start/end in screen space (thickness calculations use these)
-                Vector2 arcStart = new Vector2(
-                    (ndcVertices[0] * 0.5f + 0.5f) * _viewport.X,
-                    (ndcVertices[1] * 0.5f + 0.5f) * _viewport.Y
-                );
-                Vector2 arcEnd = new Vector2(
-                    (ndcVertices[ndcVertices.Length - 3] * 0.5f + 0.5f) * _viewport.X,
-                    (ndcVertices[ndcVertices.Length - 2] * 0.5f + 0.5f) * _viewport.Y
-                );
-                
-                _shaderProgram.SetVector2("lineStart", arcStart);
-                _shaderProgram.SetVector2("lineEnd", arcEnd);
-
-                // Bind vertex data (interleaved: NDC pos + world-distance)
-                GL.BindVertexArray(_vao);
-                GL.BindBuffer(BufferTarget.ArrayBuffer, _vbo);
-                GL.BufferData(BufferTarget.ArrayBuffer, interleaved.Length * sizeof(float), interleaved, BufferUsageHint.DynamicDraw);
-
-                // Render glow effect if highlighted
-                if (glowRadius > 0.0f)
-                {
-                    // First pass: Render glow halo with increased line width and transparency
-                    GL.Enable(EnableCap.Blend);
-                    GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
-                    
-                    // Semi-transparent glow color
-                    Vector4 glowColor = new Vector4(color.X, color.Y, color.Z, 0.45f * color.W);
-                    _shaderProgram.SetVector4("color", glowColor);
-                    _shaderProgram.SetFloat("glowRadius", 0.0f); // Disable shader-based glow for arcs
-                    
-                    float glowLineWidth = lineWidth + glowRadius * 2.0f;
-                    GL.LineWidth(glowLineWidth);
-                    GL.DrawArrays(PrimitiveType.LineStrip, 0, vertexCount);
-                    
-                    // Second pass: Render solid line on top
-                    _shaderProgram.SetVector4("color", color);
-                    GL.LineWidth(lineWidth);
-                    GL.DrawArrays(PrimitiveType.LineStrip, 0, vertexCount);
+                    // Last vertex: use backward difference
+                    Vector2 curr = new Vector2(ndcVertices[i * 3], ndcVertices[i * 3 + 1]);
+                    Vector2 prev = new Vector2(ndcVertices[(i - 1) * 3], ndcVertices[(i - 1) * 3 + 1]);
+                    Vector2 diff = curr - prev;
+                    float len = diff.Length();
+                    tangent = len > MIN_ARC_SEGMENT_LENGTH ? diff / len : Vector2.UnitX;
                 }
                 else
                 {
-                    // No glow: single pass rendering
-                    _shaderProgram.SetFloat("glowRadius", 0.0f);
-                    GL.LineWidth(lineWidth);
-                    GL.DrawArrays(PrimitiveType.LineStrip, 0, vertexCount);
+                    // Middle vertices: average of forward and backward tangents (smoother)
+                    Vector2 curr = new Vector2(ndcVertices[i * 3], ndcVertices[i * 3 + 1]);
+                    Vector2 prev = new Vector2(ndcVertices[(i - 1) * 3], ndcVertices[(i - 1) * 3 + 1]);
+                    Vector2 next = new Vector2(ndcVertices[(i + 1) * 3], ndcVertices[(i + 1) * 3 + 1]);
+
+                    Vector2 tangent1 = curr - prev;
+                    Vector2 tangent2 = next - curr;
+
+                    // Average and normalize
+                    Vector2 avgTangent = tangent1 + tangent2;
+                    float len = avgTangent.Length();
+                    tangent = len > MIN_ARC_SEGMENT_LENGTH ? avgTangent / len : Vector2.UnitX;
                 }
 
-                GL.BindVertexArray(0);
-                GLDiag.Check("ArcRenderer draw end (ortho)");
-
-                if (_debugTilt)
-                {
-                    Debug.WriteLine($"[AR][ORTHO] segments={segmentCount} screenRadius={screenRadius:F1}px worldLen={totalWorldLength:F3} color=({color.X:F2},{color.Y:F2},{color.Z:F2},{color.W:F2}) lineWidth={lineWidth:F2} glowRadius={glowRadius:F2}");
-                }
+                tangents[i] = tangent;
             }
+
+            // Build triangle strip: for N centerline vertices, create 2N quad vertices
+            // Triangle strip order: outer0, inner0, outer1, inner1, outer2, inner2, ...
+            List<float> quadVertices = new List<float>((vertexCount * 2) * 3);
+            List<float> distancesList = new List<float>(vertexCount * 2);
+
+            for (int i = 0; i < vertexCount; i++)
+            {
+                Vector2 center = new Vector2(ndcVertices[i * 3], ndcVertices[i * 3 + 1]);
+                float z = ndcVertices[i * 3 + 2];
+
+                // Perpendicular direction (90° rotation of tangent)
+                Vector2 perpDir = new Vector2(-tangents[i].Y, tangents[i].X);
+                Vector2 offset = perpDir * halfWidthNDC;
+
+                // Outer vertex (+ offset)
+                Vector2 outer = center + offset;
+                quadVertices.Add(outer.X);
+                quadVertices.Add(outer.Y);
+                quadVertices.Add(z);
+
+                // Inner vertex (- offset)
+                Vector2 inner = center - offset;
+                quadVertices.Add(inner.X);
+                quadVertices.Add(inner.Y);
+                quadVertices.Add(z);
+
+                // Both vertices at this position have the same cumulative distance
+                float dist = cumulativeDistances[i];
+                distancesList.Add(dist); // Outer vertex
+                distancesList.Add(dist); // Inner vertex
+            }
+
+            quadDistances = distancesList.ToArray();
+            return quadVertices.ToArray();
         }
 
-        private void RenderPerspective(Arc arc, Matrix4x4 viewMatrix, Matrix4x4 projectionMatrix, 
+        private void RenderOrthographic(Arc arc, Matrix4x4 viewMatrix, Matrix4x4 projectionMatrix, Vector4 color,
+            float lineWidth, int lineTypePattern, bool useThinLineRendering, float glowRadius)
+        {
+            // Get viewport dimensions
+            int[] viewport = new int[4];
+            GL.GetInteger(GetPName.Viewport, viewport);
+
+            if (viewport[2] <= 0 || viewport[3] <= 0)
+            {
+                Debug.WriteLine($"[AR] Invalid viewport dimensions: {viewport[2]}x{viewport[3]}");
+                return;
+            }
+
+            _viewport = new Vector2(viewport[2], viewport[3]);
+
+            // Use proper view+projection matrix multiplication (like LineRenderer)
+            Matrix4x4 vp = viewMatrix * projectionMatrix;
+
+            // Estimate screen-space radius by transforming arc center and edge point
+            Vector4 worldCenter = new Vector4((float)arc.Center.X, (float)arc.Center.Y, (float)arc.Center.Z, 1f);
+            Vector4 worldEdge = new Vector4((float)(arc.Center.X + arc.Radius), (float)arc.Center.Y, (float)arc.Center.Z, 1f);
+
+            Vector4 clipCenter = Vector4.Transform(worldCenter, vp);
+            Vector4 clipEdge = Vector4.Transform(worldEdge, vp);
+
+            // Validate clip coordinates
+            if (MathF.Abs(clipCenter.W) < 0.0001f || MathF.Abs(clipEdge.W) < 0.0001f)
+            {
+                Debug.WriteLine("[AR] Invalid clip space W coordinate");
+                return;
+            }
+
+            // Perspective divide to NDC
+            Vector2 ndcCenter = new Vector2(clipCenter.X / clipCenter.W, clipCenter.Y / clipCenter.W);
+            Vector2 ndcEdge = new Vector2(clipEdge.X / clipEdge.W, clipEdge.Y / clipEdge.W);
+
+            // Calculate screen-space radius
+            float ndcRadius = Vector2.Distance(ndcCenter, ndcEdge);
+            float screenRadius = ndcRadius * 0.5f * _viewport.X;
+
+            // Determine segment count based on screen size
+            int segmentCount = CalculateSegmentCount(arc, screenRadius);
+
+            // Tessellate arc into world-space vertices
+            float[] vertices = TessellateArc(arc, segmentCount);
+            int vertexCount = vertices.Length / 3;
+
+            // Transform all vertices from world space to NDC space
+            float[] ndcVertices = new float[vertices.Length];
+            for (int i = 0; i < vertexCount; i++)
+            {
+                int vi = i * 3;
+                Vector4 worldPos = new Vector4(vertices[vi], vertices[vi + 1], vertices[vi + 2], 1f);
+                Vector4 clipPos = Vector4.Transform(worldPos, vp);
+
+                if (MathF.Abs(clipPos.W) < 0.0001f)
+                {
+                    Debug.WriteLine($"[AR] Invalid clip W at vertex {i}");
+                    continue;
+                }
+
+                ndcVertices[vi] = clipPos.X / clipPos.W;
+                ndcVertices[vi + 1] = clipPos.Y / clipPos.W;
+                ndcVertices[vi + 2] = clipPos.Z / clipPos.W;
+            }
+
+            // Validate NDC coordinates
+            if (!IsValidFloat(ndcVertices[0]) || !IsValidFloat(ndcVertices[1]))
+            {
+                Debug.WriteLine("[AR] Invalid NDC coordinates");
+                return;
+            }
+
+            // Compute per-vertex cumulative distances in world units
+            float[] cumulative = new float[vertexCount];
+            cumulative[0] = 0f;
+            for (int i = 1; i < vertexCount; i++)
+            {
+                int pi = (i - 1) * 3;
+                int ci = i * 3;
+                float dx = vertices[ci] - vertices[pi];
+                float dy = vertices[ci + 1] - vertices[pi + 1];
+                float dz = vertices[ci + 2] - vertices[pi + 2];
+                cumulative[i] = cumulative[i - 1] + MathF.Sqrt(dx * dx + dy * dy + dz * dz);
+            }
+
+            float totalWorldLength = cumulative[vertexCount - 1];
+            if (totalWorldLength < 1e-12f) totalWorldLength = 1.0f;
+
+            // Convert NDC to screen space for shader uniforms
+            Vector2 screenStart = new Vector2(
+                (ndcVertices[0] * 0.5f + 0.5f) * _viewport.X,
+                (ndcVertices[1] * 0.5f + 0.5f) * _viewport.Y
+            );
+            Vector2 screenEnd = new Vector2(
+                (ndcVertices[(vertexCount - 1) * 3] * 0.5f + 0.5f) * _viewport.X,
+                (ndcVertices[(vertexCount - 1) * 3 + 1] * 0.5f + 0.5f) * _viewport.Y
+            );
+
+            // Set up shader uniforms
+            _shaderProgram.Use();
+            _shaderProgram.SetMatrix4("mvp", Matrix4x4.Identity); // Vertices already in NDC
+            _shaderProgram.SetVector4("color", color);
+            _shaderProgram.SetInt("lineTypePattern", lineTypePattern);
+            _shaderProgram.SetVector2("viewport", _viewport);
+            _shaderProgram.SetVector2("lineStart", screenStart);
+            _shaderProgram.SetVector2("lineEnd", screenEnd);
+
+            // CRITICAL FIX: Bypass shader distance checks for curved arcs
+            // The shader's perpendicular distance logic is designed for straight lines
+            // For arcs: hardware rasterizer (GL.LineWidth) or quad geometry handles thickness
+            _shaderProgram.SetFloat("lineWidth", 10000.0f);
+            _shaderProgram.SetFloat("glowRadius", 0.0f);
+
+            _shaderProgram.SetFloat("lineTypeScale", (float)arc.LinetypeScale);
+            _shaderProgram.SetFloat("lineLength", totalWorldLength);
+
+            // Bind VAO (vertex attributes already configured in constructor)
+            GL.BindVertexArray(_vao);
+
+            // Implement thin vs thick rendering with quad support
+            if (glowRadius > 0.0f)
+            {
+                // GLOW PATH: Force quad rendering to cover glow area
+                useThinLineRendering = false;
+
+                // Expand the quad to cover the glow radius
+                float totalWidth = lineWidth + glowRadius * 2.0f;
+                float halfWidthNDC = (totalWidth * 0.5f) / (_viewport.X * 0.5f);
+
+                // For glow, use REAL lineWidth so shader can calculate distance-based alpha falloff
+                _shaderProgram.SetFloat("lineWidth", lineWidth);  // ✅ REAL VALUE for glow fadeout
+                _shaderProgram.SetFloat("glowRadius", glowRadius);
+
+                float[]? quadVerts = CreateArcQuads(ndcVertices, vertexCount, halfWidthNDC, cumulative, out float[] quadDistances);
+
+                if (quadVerts != null)
+                {
+                    // Build interleaved buffer: position (NDC) + distance (world units)
+                    int quadVertCount = quadVerts.Length / 3;
+                    float[] interleaved = new float[quadVertCount * 4];
+                    for (int i = 0; i < quadVertCount; i++)
+                    {
+                        int vi = i * 3;
+                        int ii = i * 4;
+                        interleaved[ii] = quadVerts[vi];
+                        interleaved[ii + 1] = quadVerts[vi + 1];
+                        interleaved[ii + 2] = quadVerts[vi + 2];
+                        interleaved[ii + 3] = quadDistances[i];
+                    }
+
+                    GL.BindBuffer(BufferTarget.ArrayBuffer, _vbo);
+                    GL.BufferData(BufferTarget.ArrayBuffer, interleaved.Length * sizeof(float), interleaved, BufferUsageHint.DynamicDraw);
+
+                    // Enable blending for glow transparency
+                    GL.Enable(EnableCap.Blend);
+                    GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
+
+                    GL.DrawArrays(PrimitiveType.TriangleStrip, 0, quadVertCount);
+
+                    if (_debugTilt)
+                    {
+                        Debug.WriteLine($"[AR][ORTHO-GLOW] segments={segmentCount} screenRadius={screenRadius:F1}px worldLen={totalWorldLength:F3} color=({color.X:F2},{color.Y:F2},{color.Z:F2},{color.W:F2}) lineWidth={lineWidth:F2} glowRadius={glowRadius:F2}");
+                    }
+                }
+            }
+            else
+            {
+                // NO GLOW: Bypass shader distance checks for curved arcs
+                _shaderProgram.SetFloat("lineWidth", 10000.0f);
+                _shaderProgram.SetFloat("glowRadius", 0.0f);
+
+                if (useThinLineRendering)
+                {
+                    // THIN LINE PATH: Simple line rendering with hardware rasterizer
+                    float[] interleaved = new float[vertexCount * 4];
+                    for (int i = 0; i < vertexCount; i++)
+                    {
+                        int vi = i * 3;
+                        int ii = i * 4;
+                        interleaved[ii] = ndcVertices[vi];
+                        interleaved[ii + 1] = ndcVertices[vi + 1];
+                        interleaved[ii + 2] = ndcVertices[vi + 2];
+                        interleaved[ii + 3] = cumulative[i];
+                    }
+
+                    GL.BindBuffer(BufferTarget.ArrayBuffer, _vbo);
+                    GL.BufferData(BufferTarget.ArrayBuffer, interleaved.Length * sizeof(float), interleaved, BufferUsageHint.DynamicDraw);
+
+                    GL.LineWidth(lineWidth);
+                    GL.DrawArrays(PrimitiveType.LineStrip, 0, vertexCount);
+
+                    if (_debugTilt)
+                    {
+                        Debug.WriteLine($"[AR][ORTHO-THIN] segments={segmentCount} screenRadius={screenRadius:F1}px worldLen={totalWorldLength:F3} color=({color.X:F2},{color.Y:F2},{color.Z:F2},{color.W:F2}) lineWidth={lineWidth:F2} pattern={lineTypePattern}");
+                    }
+                }
+                else
+                {
+                    // THICK LINE PATH: Quad rendering with geometry-based thickness
+                    float halfWidthNDC = (lineWidth * 0.5f) / (_viewport.X * 0.5f);
+
+                    float[]? quadVerts = CreateArcQuads(ndcVertices, vertexCount, halfWidthNDC, cumulative, out float[] quadDistances);
+
+                    if (quadVerts != null)
+                    {
+                        // Build interleaved buffer: position (NDC) + distance (world units)
+                        int quadVertCount = quadVerts.Length / 3;
+                        float[] interleaved = new float[quadVertCount * 4];
+                        for (int i = 0; i < quadVertCount; i++)
+                        {
+                            int vi = i * 3;
+                            int ii = i * 4;
+                            interleaved[ii] = quadVerts[vi];
+                            interleaved[ii + 1] = quadVerts[vi + 1];
+                            interleaved[ii + 2] = quadVerts[vi + 2];
+                            interleaved[ii + 3] = quadDistances[i];
+                        }
+
+                        GL.BindBuffer(BufferTarget.ArrayBuffer, _vbo);
+                        GL.BufferData(BufferTarget.ArrayBuffer, interleaved.Length * sizeof(float), interleaved, BufferUsageHint.DynamicDraw);
+
+                        GL.DrawArrays(PrimitiveType.TriangleStrip, 0, quadVertCount);
+
+                        if (_debugTilt)
+                        {
+                            Debug.WriteLine($"[AR][ORTHO-QUAD] segments={segmentCount} screenRadius={screenRadius:F1}px worldLen={totalWorldLength:F3} color=({color.X:F2},{color.Y:F2},{color.Z:F2},{color.W:F2}) lineWidth={lineWidth:F2} pattern={lineTypePattern}");
+                        }
+                    }
+                    else
+                    {
+                        // Fallback to simple line rendering if quad creation failed
+                        Debug.WriteLine("[AR] Falling back to simple line rendering for degenerate thick arc");
+                        float[] interleavedFallback = new float[vertexCount * 4];
+                        for (int i = 0; i < vertexCount; i++)
+                        {
+                            int vi = i * 3;
+                            int ii = i * 4;
+                            interleavedFallback[ii] = ndcVertices[vi];
+                            interleavedFallback[ii + 1] = ndcVertices[vi + 1];
+                            interleavedFallback[ii + 2] = ndcVertices[vi + 2];
+                            interleavedFallback[ii + 3] = cumulative[i];
+                        }
+
+                        GL.BindBuffer(BufferTarget.ArrayBuffer, _vbo);
+                        GL.BufferData(BufferTarget.ArrayBuffer, interleavedFallback.Length * sizeof(float), interleavedFallback, BufferUsageHint.DynamicDraw);
+
+                        GL.LineWidth(lineWidth);
+                        GL.DrawArrays(PrimitiveType.LineStrip, 0, vertexCount);
+                    }
+                }
+            }
+
+            GL.BindVertexArray(0);
+            GLDiag.Check("ArcRenderer draw end (ortho)");
+        }
+
+        private void RenderPerspective(Arc arc, Matrix4x4 viewMatrix, Matrix4x4 projectionMatrix,
             Vector4 color, float lineWidth, int lineTypePattern, bool useThinLineRendering, float glowRadius)
         {
             // Get viewport dimensions
@@ -381,13 +602,13 @@ namespace GraphicsEngine
 
             _viewport = new Vector2(viewport[2], viewport[3]);
 
-            // Calculate MVP matrix
+            // Calculate MVP matrix (like LineRenderer)
             var model = Matrix4x4.Identity;
             var mvpRow = Matrix4x4.Multiply(Matrix4x4.Multiply(model, viewMatrix), projectionMatrix);
 
             // Transform center to clip space to estimate screen radius
             Vector4 clipCenter = Vector4.Transform(new Vector4((float)arc.Center.X, (float)arc.Center.Y, (float)arc.Center.Z, 1.0f), mvpRow);
-            
+
             if (MathF.Abs(clipCenter.W) < 0.0001f)
             {
                 Debug.WriteLine("[AR] Invalid clip space coordinates");
@@ -395,7 +616,7 @@ namespace GraphicsEngine
             }
 
             Vector2 ndcCenter = new Vector2(clipCenter.X / clipCenter.W, clipCenter.Y / clipCenter.W);
-            
+
             // Estimate screen-space radius (approximate for perspective)
             Vector4 clipEdge = Vector4.Transform(new Vector4((float)(arc.Center.X + arc.Radius), (float)arc.Center.Y, (float)arc.Center.Z, 1.0f), mvpRow);
             Vector2 ndcEdge = new Vector2(clipEdge.X / clipEdge.W, clipEdge.Y / clipEdge.W);
@@ -416,7 +637,7 @@ namespace GraphicsEngine
             {
                 int pi = (i - 1) * 3;
                 int ci = i * 3;
-                float dx = vertices[ci + 0] - vertices[pi + 0];
+                float dx = vertices[ci] - vertices[pi];
                 float dy = vertices[ci + 1] - vertices[pi + 1];
                 float dz = vertices[ci + 2] - vertices[pi + 2];
                 cumulative[i] = cumulative[i - 1] + MathF.Sqrt(dx * dx + dy * dy + dz * dz);
@@ -425,40 +646,9 @@ namespace GraphicsEngine
             float totalWorldLength = cumulative[vertexCount - 1];
             if (totalWorldLength < 1e-12f) totalWorldLength = 1.0f;
 
-            // Build interleaved buffer: position (world) + distance (world units)
-            float[] interleaved = new float[vertexCount * 4];
-            for (int i = 0; i < vertexCount; i++)
-            {
-                int vi = i * 3;
-                int ii = i * 4;
-                interleaved[ii + 0] = vertices[vi + 0];
-                interleaved[ii + 1] = vertices[vi + 1];
-                interleaved[ii + 2] = vertices[vi + 2];
-                interleaved[ii + 3] = cumulative[i];
-            }
-
-            // Set up shader
-            _shaderProgram.Use();
-            _shaderProgram.SetMatrix4("mvp", mvpRow);
-            _shaderProgram.SetVector4("color", color);
-            _shaderProgram.SetInt("lineTypePattern", lineTypePattern);
-            _shaderProgram.SetVector2("viewport", _viewport);
-
-            // Disable shader-based distance discard for curved arcs (use GL.LineWidth for thickness)
-            _shaderProgram.SetFloat("lineWidth", 10000.0f); // <- change: large to bypass shader distance test
-            _shaderProgram.SetFloat("glowRadius", glowRadius); // keep glow handling as appropriate
-
-            // GL.LineWidth(lineWidth) still controls actual rasterized width below
-
-            // Pass per-object linetype scale (applies to world-unit pattern lengths)
-            _shaderProgram.SetFloat("lineTypeScale", (float)arc.LinetypeScale);
-
-            // Pass total world length as uniform (optional)
-            _shaderProgram.SetFloat("lineLength", totalWorldLength);
-
-            // Compute screen space start/end for thickness calculations
-            Vector4 clipStart = Vector4.Transform(new Vector4(interleaved[0], interleaved[1], interleaved[2], 1.0f), mvpRow);
-            Vector4 clipEnd = Vector4.Transform(new Vector4(interleaved[(vertexCount - 1) * 4 + 0], interleaved[(vertexCount - 1) * 4 + 1], interleaved[(vertexCount - 1) * 4 + 2], 1.0f), mvpRow);
+            // Compute screen space start/end for shader uniforms
+            Vector4 clipStart = Vector4.Transform(new Vector4(vertices[0], vertices[1], vertices[2], 1.0f), mvpRow);
+            Vector4 clipEnd = Vector4.Transform(new Vector4(vertices[(vertexCount - 1) * 3], vertices[(vertexCount - 1) * 3 + 1], vertices[(vertexCount - 1) * 3 + 2], 1.0f), mvpRow);
 
             Vector2 ndcStart = new Vector2(clipStart.X / clipStart.W, clipStart.Y / clipStart.W);
             Vector2 ndcEnd = new Vector2(clipEnd.X / clipEnd.W, clipEnd.Y / clipEnd.W);
@@ -472,30 +662,205 @@ namespace GraphicsEngine
                 (ndcEnd.Y * 0.5f + 0.5f) * _viewport.Y
             );
 
+            // Set up shader
+            _shaderProgram.Use();
+            _shaderProgram.SetVector4("color", color);
+            _shaderProgram.SetInt("lineTypePattern", lineTypePattern);
+            _shaderProgram.SetVector2("viewport", _viewport);
             _shaderProgram.SetVector2("lineStart", screenStart);
             _shaderProgram.SetVector2("lineEnd", screenEnd);
 
-            // Bind and upload interleaved data
+            // CRITICAL FIX: Bypass shader distance checks for curved arcs
+            _shaderProgram.SetFloat("lineWidth", 10000.0f);
+            _shaderProgram.SetFloat("glowRadius", 0.0f);
+
+            _shaderProgram.SetFloat("lineTypeScale", (float)arc.LinetypeScale);
+
+            // Bind VAO (vertex attributes already configured in constructor)
             GL.BindVertexArray(_vao);
-            GL.BindBuffer(BufferTarget.ArrayBuffer, _vbo);
-            GL.BufferData(BufferTarget.ArrayBuffer, interleaved.Length * sizeof(float), interleaved, BufferUsageHint.DynamicDraw);
 
-            if (useThinLineRendering)
+            // Implement thin vs thick rendering
+            if (glowRadius > 0.0f)
             {
-                GL.LineWidth(lineWidth);
-            }
+                // GLOW PATH: Force quad rendering
+                useThinLineRendering = false;
 
-            GL.DrawArrays(PrimitiveType.LineStrip, 0, vertexCount);
+                // Transform to NDC on CPU for quad generation
+                float[] ndcVertices = new float[vertices.Length];
+                for (int i = 0; i < vertexCount; i++)
+                {
+                    int vi = i * 3;
+                    Vector4 worldPos = new Vector4(vertices[vi], vertices[vi + 1], vertices[vi + 2], 1f);
+                    Vector4 clipPos = Vector4.Transform(worldPos, mvpRow);
+
+                    if (MathF.Abs(clipPos.W) < 0.0001f)
+                    {
+                        Debug.WriteLine($"[AR] Invalid clip W at vertex {i} in perspective");
+                        continue;
+                    }
+
+                    ndcVertices[vi] = clipPos.X / clipPos.W;
+                    ndcVertices[vi + 1] = clipPos.Y / clipPos.W;
+                    ndcVertices[vi + 2] = clipPos.Z / clipPos.W;
+                }
+
+                float totalWidth = lineWidth + glowRadius * 2.0f;
+                float halfWidthNDC = (totalWidth * 0.5f) / (_viewport.X * 0.5f);
+
+                // For glow, use REAL lineWidth so shader can calculate distance-based alpha falloff
+                _shaderProgram.SetFloat("lineWidth", lineWidth);  // ✅ REAL VALUE for glow fadeout
+                _shaderProgram.SetFloat("glowRadius", glowRadius);
+
+                float[]? quadVerts = CreateArcQuads(ndcVertices, vertexCount, halfWidthNDC, cumulative, out float[] quadDistances);
+
+                if (quadVerts != null)
+                {
+                    int quadVertCount = quadVerts.Length / 3;
+                    float[] interleaved = new float[quadVertCount * 4];
+                    for (int i = 0; i < quadVertCount; i++)
+                    {
+                        int vi = i * 3;
+                        int ii = i * 4;
+                        interleaved[ii] = quadVerts[vi];
+                        interleaved[ii + 1] = quadVerts[vi + 1];
+                        interleaved[ii + 2] = quadVerts[vi + 2];
+                        interleaved[ii + 3] = quadDistances[i];
+                    }
+
+                    GL.BindBuffer(BufferTarget.ArrayBuffer, _vbo);
+                    GL.BufferData(BufferTarget.ArrayBuffer, interleaved.Length * sizeof(float), interleaved, BufferUsageHint.DynamicDraw);
+
+                    _shaderProgram.SetMatrix4("mvp", Matrix4x4.Identity); // Already in NDC
+
+                    // Enable blending for glow transparency
+                    GL.Enable(EnableCap.Blend);
+                    GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
+
+                    GL.DrawArrays(PrimitiveType.TriangleStrip, 0, quadVertCount);
+
+                    if (_debugTilt)
+                    {
+                        Debug.WriteLine($"[AR][PERSP-GLOW] segments={segmentCount} worldLen={totalWorldLength:F3} color=({color.X:F2},{color.Y:F2},{color.Z:F2},{color.W:F2}) lineWidth={lineWidth:F2} glowRadius={glowRadius:F2}");
+                    }
+                }
+            }
+            else
+            {
+                // NO GLOW: Bypass shader distance checks
+                _shaderProgram.SetFloat("lineWidth", 10000.0f);
+                _shaderProgram.SetFloat("glowRadius", 0.0f);
+
+                // THIN LINE PATH: Upload world vertices, let GPU transform
+                if (useThinLineRendering)
+                {
+                    float[] interleaved = new float[vertexCount * 4];
+                    for (int i = 0; i < vertexCount; i++)
+                    {
+                        int vi = i * 3;
+                        int ii = i * 4;
+                        interleaved[ii] = vertices[vi];
+                        interleaved[ii + 1] = vertices[vi + 1];
+                        interleaved[ii + 2] = vertices[vi + 2];
+                        interleaved[ii + 3] = cumulative[i];
+                    }
+
+                    GL.BindBuffer(BufferTarget.ArrayBuffer, _vbo);
+                    GL.BufferData(BufferTarget.ArrayBuffer, interleaved.Length * sizeof(float), interleaved, BufferUsageHint.DynamicDraw);
+
+                    _shaderProgram.SetMatrix4("mvp", mvpRow); // GPU transforms world → clip → NDC
+
+                    GL.LineWidth(lineWidth);
+                    GL.DrawArrays(PrimitiveType.LineStrip, 0, vertexCount);
+
+                    if (_debugTilt)
+                    {
+                        Debug.WriteLine($"[AR][PERSP-THIN] segments={segmentCount} worldLen={totalWorldLength:F3} color=({color.X:F2},{color.Y:F2},{color.Z:F2},{color.W:F2}) lineWidth={lineWidth:F2} pattern={lineTypePattern}");
+                    }
+                }
+                else
+                {
+                    // THICK LINE PATH: Transform to NDC on CPU, generate quads
+                    float[] ndcVertices = new float[vertices.Length];
+                    for (int i = 0; i < vertexCount; i++)
+                    {
+                        int vi = i * 3;
+                        Vector4 worldPos = new Vector4(vertices[vi], vertices[vi + 1], vertices[vi + 2], 1f);
+                        Vector4 clipPos = Vector4.Transform(worldPos, mvpRow);
+
+                        if (MathF.Abs(clipPos.W) < 0.0001f)
+                        {
+                            Debug.WriteLine($"[AR] Invalid clip W at vertex {i} in perspective");
+                            continue;
+                        }
+
+                        ndcVertices[vi] = clipPos.X / clipPos.W;
+                        ndcVertices[vi + 1] = clipPos.Y / clipPos.W;
+                        ndcVertices[vi + 2] = clipPos.Z / clipPos.W;
+                    }
+
+                    float halfWidthNDC = (lineWidth * 0.5f) / (_viewport.X * 0.5f);
+                    float[]? quadVerts = CreateArcQuads(ndcVertices, vertexCount, halfWidthNDC, cumulative, out float[] quadDistances);
+
+                    if (quadVerts != null)
+                    {
+                        // Build interleaved buffer: position (NDC) + distance (world units)
+                        int quadVertCount = quadVerts.Length / 3;
+                        float[] interleaved = new float[quadVertCount * 4];
+                        for (int i = 0; i < quadVertCount; i++)
+                        {
+                            int vi = i * 3;
+                            int ii = i * 4;
+                            interleaved[ii] = quadVerts[vi];
+                            interleaved[ii + 1] = quadVerts[vi + 1];
+                            interleaved[ii + 2] = quadVerts[vi + 2];
+                            interleaved[ii + 3] = quadDistances[i];
+                        }
+
+                        GL.BindBuffer(BufferTarget.ArrayBuffer, _vbo);
+                        GL.BufferData(BufferTarget.ArrayBuffer, interleaved.Length * sizeof(float), interleaved, BufferUsageHint.DynamicDraw);
+
+                        _shaderProgram.SetMatrix4("mvp", Matrix4x4.Identity); // Already in NDC
+
+                        GL.DrawArrays(PrimitiveType.TriangleStrip, 0, quadVertCount);
+
+                        if (_debugTilt)
+                        {
+                            Debug.WriteLine($"[AR][PERSP-QUAD] segments={segmentCount} worldLen={totalWorldLength:F3} color=({color.X:F2},{color.Y:F2},{color.Z:F2},{color.W:F2}) lineWidth={lineWidth:F2} pattern={lineTypePattern}");
+                        }
+                    }
+                    else
+                    {
+                        // Fallback to simple line rendering if quad creation failed
+                        Debug.WriteLine("[AR] Falling back to simple line rendering for degenerate thick arc in perspective");
+                        float[] interleavedFallback = new float[vertexCount * 4];
+                        for (int i = 0; i < vertexCount; i++)
+                        {
+                            int vi = i * 3;
+                            int ii = i * 4;
+                            interleavedFallback[ii] = vertices[vi];
+                            interleavedFallback[ii + 1] = vertices[vi + 1];
+                            interleavedFallback[ii + 2] = vertices[vi + 2];
+                            interleavedFallback[ii + 3] = cumulative[i];
+                        }
+
+                        GL.BindBuffer(BufferTarget.ArrayBuffer, _vbo);
+                        GL.BufferData(BufferTarget.ArrayBuffer, interleavedFallback.Length * sizeof(float), interleavedFallback, BufferUsageHint.DynamicDraw);
+
+                        _shaderProgram.SetMatrix4("mvp", mvpRow);
+
+                        GL.LineWidth(lineWidth);
+                        GL.DrawArrays(PrimitiveType.LineStrip, 0, vertexCount);
+                    }
+                }
+            }
 
             GL.BindVertexArray(0);
             GLDiag.Check("ArcRenderer draw end (perspective)");
-
-            if (_debugTilt)
-            {
-                Debug.WriteLine($"[AR][PERSP] segments={segmentCount} worldLen={totalWorldLength:F3} color=({color.X:F2},{color.Y:F2},{color.Z:F2},{color.W:F2}) lineWidth={lineWidth:F2}");
-            }
         }
 
+        /// <summary>
+        /// Validates that a float value is not NaN or Infinity
+        /// </summary>
         private bool IsValidFloat(float value)
         {
             return !float.IsNaN(value) && !float.IsInfinity(value);

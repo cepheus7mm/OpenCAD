@@ -39,7 +39,7 @@ namespace GraphicsEngineTests
             engine.ResizeViewport(1200, 600);
 
             float aspect = 1200f / 600f;
-            Matrix4x4 expected = engine.OrthoCamera.GetProjectionMatrix(aspect);
+            Matrix4x4 expected = engine.Camera.ProjectionMatrix;
             Matrix4x4 actual = engine.ProjectionMatrix;
 
             Assert.AreEqual(expected, actual);
@@ -55,7 +55,7 @@ namespace GraphicsEngineTests
             engine.ResizeViewport(800, 600);
 
             float aspect = 800f / 600f;
-            Matrix4x4 expected = engine.Camera.GetProjectionMatrix(aspect);
+            Matrix4x4 expected = engine.Camera.ProjectionMatrix;
             Matrix4x4 actual = engine.ProjectionMatrix;
 
             Assert.AreEqual(expected, actual);
@@ -69,7 +69,7 @@ namespace GraphicsEngineTests
         {
             engine.ProjectionMode = ProjectionMode.Orthographic;
 
-            Matrix4x4 expected = engine.OrthoCamera.GetViewMatrix();
+            Matrix4x4 expected = engine.Camera.ViewMatrix;
             Matrix4x4 actual = engine.ViewMatrix;
 
             Assert.AreEqual(expected, actual);
@@ -83,7 +83,7 @@ namespace GraphicsEngineTests
         {
             engine.ProjectionMode = ProjectionMode.Perspective;
 
-            Matrix4x4 expected = engine.Camera.GetViewMatrix();
+            Matrix4x4 expected = engine.Camera.ViewMatrix;
             Matrix4x4 actual = engine.ViewMatrix;
 
             Assert.AreEqual(expected, actual);

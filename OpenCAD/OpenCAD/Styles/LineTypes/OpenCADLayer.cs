@@ -3,7 +3,7 @@ using System.Drawing;
 using System.Text.Json.Serialization;
 using System.Xml.Serialization;
 
-namespace OpenCAD
+namespace OpenCAD.Styles.LineTypes
 {
     /// <summary>
     /// Represents a layer in the CAD document.
@@ -24,9 +24,9 @@ namespace OpenCAD
         /// </summary>
         /// <param name="name">The name of the layer. Must be unique within the document.</param>
         /// <param name="color">The default color for objects on this layer.</param>
-        /// <param name="lineType">The default line type for objects on this layer.</param>
+        /// <param name="lineTypeID">The default line type for objects on this layer.</param>
         /// <param name="lineWeight">The default line weight for objects on this layer.</param>
-        public OpenCADLayer(string name, Color color, LineType lineType, LineWeight lineWeight, OpenCADDocument document) 
+        public OpenCADLayer(string name, Color color, uint lineTypeID, LineWeight lineWeight, OpenCADDocument document) 
             : base(document)
         {
             if (string.IsNullOrWhiteSpace(name))
@@ -37,12 +37,10 @@ namespace OpenCAD
             // Initialize layer name using the base Name property
             Name = name;
             Color = color;
-            LineType = lineType;
+            LineTypeID = lineTypeID;
             LineWeight = lineWeight;
             IsLocked = false;
             IsVisible = true;
-
-            _document = document;
         }
 
         /// <summary>
@@ -56,22 +54,41 @@ namespace OpenCAD
         }
 
         /// <summary>
-        /// Gets or sets the default line type for objects on this layer.
+        /// Gets or sets the default line type ID for objects on this layer.
+        /// This is the uint rendering ID, not the Guid.
         /// </summary>
         [JsonIgnore, XmlIgnore]
-        public OpenCAD.LineType LineType
+        public uint LineTypeID
         {
-            get => GetPropertyValue<OpenCAD.LineType>(PropertyType.LineType, nameof(LineType));
-            set => SetPropertyValue(PropertyType.LineType, nameof(LineType), OpenCADStrings.LayerLineType, value);
+            get => GetPropertyValue<uint>(PropertyType.UInt, nameof(LineTypeID));
+            set => SetPropertyValue(PropertyType.UInt, nameof(LineTypeID), OpenCADStrings.LineTypeID, value);
+        }
+
+        /// <summary>
+        /// Gets or sets the default line type for objects on this layer.
+        /// This is a convenience property that resolves the line type from the document.
+        /// </summary>
+        [JsonIgnore, XmlIgnore]
+        public OpenCADLineType? LineType
+        {
+            get
+            {
+                if (_document == null)
+                    return null;
+
+                // Get line type from document's line types container by rendering ID
+                return _document.GetLineTypes().FirstOrDefault(x => x.LineTypeID == LineTypeID);
+            }
+            set => LineTypeID = value?.LineTypeID ?? 0;
         }
 
         /// <summary>
         /// Gets or sets the default line weight for objects on this layer.
         /// </summary>
         [JsonIgnore, XmlIgnore]
-        public OpenCAD.LineWeight LineWeight
+        public LineWeight LineWeight
         {
-            get => GetPropertyValue<OpenCAD.LineWeight>(PropertyType.LineWeight, nameof(LineWeight));
+            get => GetPropertyValue<LineWeight>(PropertyType.LineWeight, nameof(LineWeight));
             set => SetPropertyValue(PropertyType.LineWeight, nameof(LineWeight), OpenCADStrings.LayerLineWeight, value);    
         }
 
@@ -99,7 +116,7 @@ namespace OpenCAD
 
         public override string ToString()
         {
-            return $"Layer: {Name} (Color: {Color.Name}, LineType: {LineType}, LineWeight: {LineWeight})";
+            return $"Layer: {Name} (Color: {Color.Name}, LineType: {LineType?.Name ?? "None"}, LineWeight: {LineWeight})";
         }
 
         public override bool Equals(object? obj)

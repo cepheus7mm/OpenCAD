@@ -2,6 +2,7 @@
 using System.Linq;
 using System.Windows.Input;
 using OpenCAD;
+using OpenCAD.Styles.LineTypes;
 using UI.Controls.Viewport;
 
 namespace UI.Controls.MainWindow
@@ -57,7 +58,7 @@ namespace UI.Controls.MainWindow
 		/// <summary>
 		/// Gets the collection of available line types for the dropdown
 		/// </summary>
-		public ObservableCollection<LineType> AvailableLineTypes { get; }
+		public ObservableCollection<OpenCADLineType> AvailableLineTypes { get; }
 
 		/// <summary>
 		/// Gets the collection of available line weights for the dropdown
@@ -94,25 +95,26 @@ namespace UI.Controls.MainWindow
 		/// </summary>
 		public ICommand RefreshCommand { get; }
 
-		public LayersViewModel()
+        private OpenCADLineType? _currentLineType;
+
+        /// <summary>
+        /// Gets or sets the currently selected line type in the dropdown
+        /// </summary>
+        public OpenCADLineType? CurrentLineType
+        {
+            get => _currentLineType;
+            set => SetField(ref _currentLineType, value);
+        }
+
+        public LayersViewModel()
 		{
 			_layers = new ObservableCollection<LayerItem>();
 			
 			// Initialize available line types (exclude ByLayer for layer properties)
-			AvailableLineTypes = new ObservableCollection<LineType>
-			{
-				LineType.Continuous,
-				LineType.Dashed,
-				LineType.Dotted,
-				LineType.DashDot,
-				LineType.DashDotDot,
-				LineType.Center,
-				LineType.Hidden,
-				LineType.Phantom
-			};
+			AvailableLineTypes = new ObservableCollection<OpenCADLineType>();
 
-			// Initialize available line weights (exclude ByLayer for layer properties)
-			AvailableLineWeights = new ObservableCollection<LineWeight>
+            // Initialize available line weights (exclude ByLayer for layer properties)
+            AvailableLineWeights = new ObservableCollection<LineWeight>
 			{
 				LineWeight.Default,
 				LineWeight.Hairline,
@@ -171,6 +173,7 @@ namespace UI.Controls.MainWindow
 			if (document != null)
 			{
 				DisplayDocumentLayers(document);
+				UpdateAvailableLineTypes();
 			}
 			else
 			{
@@ -178,10 +181,26 @@ namespace UI.Controls.MainWindow
 			}
 		}
 
-		/// <summary>
-		/// Display layers for an OpenCAD document
-		/// </summary>
-		private void DisplayDocumentLayers(OpenCADDocument document)
+        private void UpdateAvailableLineTypes()
+        {
+            AvailableLineTypes.Clear();
+			var sortedLineTypes = _currentDocument!.GetLineTypes()
+				.OrderBy(lt => lt.Name)
+				.ToList();
+            foreach (var lt in sortedLineTypes)
+				AvailableLineTypes.Add(lt);
+			var currentLineTypeId = _currentDocument.CurrentLineTypeID;
+			if (!currentLineTypeId.HasValue || currentLineTypeId.Value == uint.MaxValue)
+			{
+				currentLineTypeId = OpenCADDocument.ContinuousLineTypeID;
+            }
+            CurrentLineType = AvailableLineTypes.FirstOrDefault(lt => lt.LineTypeID == currentLineTypeId);
+        }
+
+        /// <summary>
+        /// Display layers for an OpenCAD document
+        /// </summary>
+        private void DisplayDocumentLayers(OpenCADDocument document)
 		{
 			var layers = new ObservableCollection<LayerItem>();
 			var currentLayerId = document.CurrentLayer?.ID;
@@ -445,7 +464,7 @@ namespace UI.Controls.MainWindow
 	{
 		private string _name = string.Empty;
 		private System.Drawing.Color _color;
-		private LineType _lineType;
+		private OpenCADLineType? _lineType;
 		private LineWeight _lineWeight;
 		private bool _isVisible;
 		private bool _isLocked;
@@ -477,7 +496,7 @@ namespace UI.Controls.MainWindow
 		/// <summary>
 		/// Gets or sets the layer line type
 		/// </summary>
-		public LineType LineType
+		public OpenCADLineType? LineType
 		{
 			get => _lineType;
 			set => SetField(ref _lineType, value);

@@ -1,0 +1,20 @@
+*DASHED, Dashed __ __ __
+A,0.25,-0.125
+
+*DOTTED, Dotted . . . .
+A,0.05,-0.10
+
+*DASHDOT, Dash dot _ . _ . _
+A,0.25,-0.10,0.05,-0.10
+
+*DASHDOTDOT, Dash dot dot _ . . _ . . _
+A,0.25,-0.10,0.05,-0.10,0.05,-0.10
+
+*CENTER, Center line __ _ __ _ __
+A,0.5,-0.1,0.125,-0.1
+
+*HIDDEN, Hidden _ _ _ _ _
+A,0.125,-0.075
+
+*PHANTOM, Phantom __ _ _ __ _ _ __
+A,0.5,-0.1,0.125,-0.1,0.125,-0.1

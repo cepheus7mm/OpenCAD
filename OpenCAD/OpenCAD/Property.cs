@@ -9,6 +9,7 @@ using System.Xml.Serialization;
 using OpenCAD.Geometry;
 using OpenCAD.Settings;
 using OpenCAD.Geometry.Helpers;
+using OpenCAD.Styles.LineTypes;
 
 namespace OpenCAD
 {
