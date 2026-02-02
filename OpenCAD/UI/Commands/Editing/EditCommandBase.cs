@@ -1,13 +1,15 @@
 ﻿using OpenCAD;
 using OpenCAD.Geometry;
+using OpenCAD.Geometry.Helpers;
+using OpenCAD.Interfaces;
+using OpenCAD.Undo;
+using OpenCAD.Undo.OpenCAD.Undo;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using UI.Controls.Viewport;
-using UI.Commands.Undo;
-using OpenCAD.Geometry.Helpers;
 
 namespace UI.Commands.Editing
 {
@@ -137,7 +139,7 @@ namespace UI.Commands.Editing
             base.Cancel();
 
             // Ensure preview stopped and preview objects removed
-            StopPreview();
+            CancelPreview();
 
             Context?.PostToUI(() =>
             {
@@ -145,7 +147,7 @@ namespace UI.Commands.Editing
                 if (viewmodel != null)
                 {
                     viewmodel.SelectionChanged -= OnSelectionChanged;
-                    viewmodel.ClearSelection();
+                    viewmodel.SelectionManager.ClearSelection();
                 }
             });
 
@@ -189,7 +191,7 @@ namespace UI.Commands.Editing
                 }
 
                 // Start unified preview support (now provided by CommandBase)
-                StartPreview();
+                BeginPreview();
 
                 try
                 {
@@ -215,18 +217,34 @@ namespace UI.Commands.Editing
                 finally
                 {
                     // Ensure preview is cleaned up if something goes wrong
-                    StopPreview();
+                    CommitPreview();
                 } 
             }
             catch (OperationCanceledException)
             {
-                // Ensure preview objects removed when cancelled
-                StopPreview();
                 Cancel();
             }
         }
 
         protected abstract Matrix4D GetTransformation();
+
+        protected override IEnumerable<OpenCADObject> ComputePreviewObjects()
+        {
+            if (SelectedObjects == null || BasePoint == Point3D.NotAPoint || TargetPoint == Point3D.NotAPoint)
+                yield break;
+
+            var matrix = GetTransformation(); // based on BasePoint/TargetPoint
+
+            foreach (var obj in SelectedObjects)
+            {
+                if (obj is ICurve curve)
+                {
+                    var preview = curve.Transform(matrix) as OpenCADObject;
+                    if (preview != null)
+                        yield return preview;
+                }
+            }
+        }
 
         public bool TryGetTransformation(out Matrix4D transformation)
         {
@@ -242,14 +260,10 @@ namespace UI.Commands.Editing
 
         protected virtual void TransformSelectedObjects()
         {
-            var transformationMatrix = GetTransformation();
-
-            if (transformationMatrix == Matrix4D.Identity)
-            {
+            var matrix = GetTransformation();
+            if (matrix == Matrix4D.Identity)
                 return;
-            }
 
-            // Apply rotation (use cached providers)
             if (document == null || viewport == null)
             {
                 Context?.OutputMessage(UnableToActOnObjectsMissingContext);
@@ -257,48 +271,51 @@ namespace UI.Commands.Editing
                 return;
             }
 
+            var undo = CachedUndoManager;
+            if (undo == null)
+                return;
+
+            // Determine which objects we are transforming
             List<OpenCADObject> objectsToTransform = SelectedObjects!;
+
             if (_preserveOriginal)
             {
-                // Clone objects before transforming
-                var clonedObjects = new List<OpenCADObject>();
+                var clones = new List<OpenCADObject>();
                 foreach (var obj in SelectedObjects!)
                 {
                     var clone = obj.Clone(document);
                     if (clone != null)
                     {
                         document.Add(clone);
-                        clonedObjects.Add(clone);
+                        clones.Add(clone);
                     }
                 }
-                objectsToTransform = clonedObjects;
+                objectsToTransform = clones;
             }
 
-            if (CachedUndoManager != null)
+            // Apply transform using ReplaceGeometryAction
+            foreach (var obj in objectsToTransform)
             {
-                try
+                if (obj is ICurve curve)
                 {
-                    var action = new TransformGeometryAction(
-                        objectsToTransform,
-                        transformationMatrix,
-                        string.Format(OpenCADStrings.UndoTransformedObjectsFormat, objectsToTransform.Count, GetCommandName(capitized: true))
-                    );
-                    CachedUndoManager.ExecuteAction(action);
-                    Context?.OutputMessage(string.Format(OpenCADStrings.ObjectsTransformedFormat, objectsToTransform.Count, GetCommandName(true, true)));
-                }
-                catch (InvalidOperationException)
-                {
-                    // Non-invertible matrix should be treated as invalid input
-                    if (viewport != null)
-                        ClearPreviewObjects(viewport);
-                    if (CachedViewModel != null && _previewHandler != null)
-                        CachedViewModel.PropertyChanged -= _previewHandler;
+                    var transformed = curve.Transform(matrix) as OpenCADObject; // returns new object
+                    if (transformed != null)
+                    {
+                        var action = new ReplaceGeometryAction(obj, transformed,
+                            $"Transform {GetCommandName(true)}");
 
-                    Context?.OutputMessage(OpenCADStrings.InvalidPointInput);
-                    Cancel();
-                    return;
+                        undo.ExecuteAction(action);
+                    }
+                }
+                else
+                {
+                    // Non-curve objects may need their own transform logic
+                    Context?.OutputMessage($"Cannot transform object of type {obj.GetType().Name}");
                 }
             }
+
+            Context?.OutputMessage(
+                $"{objectsToTransform.Count} object(s) transformed by {GetCommandName(true, true)}");
         }
 
         private object? GetCommandName(bool capitized = false, bool pastTense = false)

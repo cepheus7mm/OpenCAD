@@ -344,10 +344,14 @@ namespace UI
                 $"New document created {DateTime.Now:yyyy-MM-dd HH:mm:ss}"
             );
 
+
             if (Application.Current is App app)
             {
                 document.ServiceProvider = app.Services;
             }
+
+            var undoManager = document.GetUndoRedoManager();
+            undoManager.Dispatcher = new WpfDispatcher();
 
             // Create viewport control for the document, passing the document to the constructor
             var viewport = new ViewportControl(document);

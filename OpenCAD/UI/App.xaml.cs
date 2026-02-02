@@ -1,8 +1,10 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using OpenCAD.Interfaces;
 using OpenCAD.TextRendering;
 using System.Configuration;
 using System.Data;
 using System.Windows;
+using UI.Commands;
 
 namespace UI
 {
@@ -24,6 +26,12 @@ namespace UI
 
             // Register text metrics provider as the PUBLIC service (depends on IFontProvider internally)
             services.AddSingleton<ITextMetricsProvider, TextMetricsProvider>();
+
+            services.AddSingleton<IDispatcher>(sp =>
+            {
+                return new WpfDispatcher();
+            });
+
 
             Services = services.BuildServiceProvider();
 

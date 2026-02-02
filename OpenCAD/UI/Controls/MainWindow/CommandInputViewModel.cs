@@ -7,8 +7,8 @@ using System.Windows;
 using System.Windows.Input;
 using OpenCAD;
 using OpenCAD.Geometry;
+using OpenCAD.Undo;
 using UI.Commands;
-using UI.Commands.Undo;
 using UI.Controls.Viewport;
 
 namespace UI.Controls.MainWindow
@@ -34,7 +34,6 @@ namespace UI.Controls.MainWindow
 
         private readonly CommandRegistry _commandRegistry;
         private readonly ICommandContext _commandContext;
-        private readonly UndoRedoManager _undoRedoManager;
 
         #endregion
 
@@ -128,9 +127,6 @@ namespace UI.Controls.MainWindow
 
         public CommandInputViewModel()
         {
-            // Initialize undo/redo manager
-            _undoRedoManager = new UndoRedoManager();
-
             // Initialize command context
             _commandContext = new CommandContext(
                 outputMessage: AppendToHistory,
@@ -138,11 +134,10 @@ namespace UI.Controls.MainWindow
                 setLastPoint: point => _lastEnteredPoint = point,
                 raiseGeometryCreated: geometry => GeometryCreated?.Invoke(this, new GeometryCreatedEventArgs(geometry)),
                 getActiveViewport: () => _getActiveViewport?.Invoke(),
-                getUndoRedoManager: () => _undoRedoManager,
+                getUndoRedoManager: () => _document?.GetUndoRedoManager(),
                 getDocument: () => _document,
                 setCommandPrompt: SetCommandPrompt
             );
-            _undoRedoManager.Context = _commandContext;
 
             // Initialize and discover commands
             _commandRegistry = new CommandRegistry();
@@ -172,7 +167,11 @@ namespace UI.Controls.MainWindow
         /// <summary>
         /// Get the undo/redo manager
         /// </summary>
-        public UndoRedoManager GetUndoRedoManager() => _undoRedoManager;
+        public UndoRedoManager GetUndoRedoManager()
+        {
+            return _document?.GetUndoRedoManager()
+                   ?? throw new InvalidOperationException("No active document/UndoRedoManager is available.");
+        }
 
         /// <summary>
         /// Handle key down events

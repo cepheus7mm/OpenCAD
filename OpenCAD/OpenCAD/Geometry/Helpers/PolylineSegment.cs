@@ -1,4 +1,5 @@
 ﻿using OpenCAD.Geometry.Calculator;
+using OpenCAD.Geometry.Helpers.GeoPoints;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -75,16 +76,16 @@ namespace OpenCAD.Geometry.Helpers
         public static PolylineSegment FromLine(Line line)
         {
             return new PolylineSegment(
-                start: line.StartPoint,
-                end: line.EndPoint
+                start: line.Start,
+                end: line.End
             );
         }
 
         public static PolylineSegment FromArc(Arc arc)
         {
             return new PolylineSegment(
-                start: arc.StartPoint,
-                end: arc.EndPoint,
+                start: arc.Start,
+                end: arc.End,
                 center: arc.Center,
                 sweep: arc.Angle
             );

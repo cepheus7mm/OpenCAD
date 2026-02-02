@@ -1,5 +1,5 @@
 ﻿using OpenCAD.Geometry;
-using OpenCAD.Geometry.Helpers;
+using OpenCAD.Geometry.Helpers.GeoPoints;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -23,6 +23,7 @@ namespace OpenCAD.Interfaces
         /// A sequence of GeoPoints describing all valid snap points for the requested modes.
         /// </returns>
         IEnumerable<GeoPoint> GetGeoPoints(
+            OpenCADObject owner,
             GeoPointModes modes,
             Point3D referencePoint
         );

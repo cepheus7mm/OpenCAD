@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace OpenCAD.Geometry.Helpers
+namespace OpenCAD.Geometry.Helpers.GeoPoints
 {
     [Flags]
     public enum GeoPointModes

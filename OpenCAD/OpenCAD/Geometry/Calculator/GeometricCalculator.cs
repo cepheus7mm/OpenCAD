@@ -1,4 +1,5 @@
 ﻿using OpenCAD.Geometry.Helpers;
+using OpenCAD.Geometry.Helpers.GeoPoints;
 using OpenCAD.Interfaces;
 using System;
 using System.Collections.Generic;
@@ -179,7 +180,7 @@ namespace OpenCAD.Geometry.Calculator
 
         public static GeoPoint Perpendicular(Point3D point, Line line)
         {
-            var projection = LineUtils.GetClosestPoint(point, line.StartPoint, line.EndPoint);
+            var projection = LineUtils.GetClosestPoint(point, line.Start, line.End);
             var geoPoint = new GeoPoint(projection, GeoPointModes.Perpendicular);
             geoPoint.RelatedGeometryId = line.ID;
             return geoPoint;
@@ -187,7 +188,7 @@ namespace OpenCAD.Geometry.Calculator
 
         public static GeoPoint Perpendicular(Point3D point, Arc arc)
         {
-            var closest = ArcUtils.GetClosestPoint(point, arc.StartPoint, arc.Center, arc.Angle);
+            var closest = ArcUtils.GetClosestPoint(point, arc.Start, arc.Center, arc.Angle);
             var geoPoint = new GeoPoint(closest, GeoPointModes.Perpendicular);
             geoPoint.RelatedGeometryId = arc.ID;
             return geoPoint;

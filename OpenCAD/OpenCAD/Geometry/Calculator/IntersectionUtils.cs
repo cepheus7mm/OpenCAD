@@ -34,8 +34,8 @@ namespace OpenCAD.Geometry.Calculator
 
         public static (Point3D, Point3D) LineCircleIntersections(Line line, ICircularGeometry circle)
         {
-            var p1 = line.StartPoint;
-            var p2 = line.EndPoint;
+            var p1 = line.Start;
+            var p2 = line.End;
             var cx = circle.Center.X;
             var cy = circle.Center.Y;
             var r = circle.Radius;
@@ -89,8 +89,8 @@ namespace OpenCAD.Geometry.Calculator
             if (dir1 == dir2 || !dir1.HasValue || !dir2.HasValue)
                 return Point3D.NotAPoint;
 
-            var p1 = (line1.StartPoint.X, line1.StartPoint.Y);
-            var p2 = (line2.StartPoint.X, line2.StartPoint.Y);
+            var p1 = (line1.Start.X, line1.Start.Y);
+            var p2 = (line2.Start.X, line2.Start.Y);
 
             double dx = p2.X - p1.X;
             double dy = p2.Y - p1.Y;
@@ -101,7 +101,7 @@ namespace OpenCAD.Geometry.Calculator
 
             double t = (dx * dir2.Value.Y - dy * dir2.Value.X) / det;
             var intersection = (p1.X + t * dir1.Value.X, p1.Y + t * dir1.Value.Y);
-            return new Point3D(intersection.Item1, intersection.Item2, line1.StartPoint.Z);
+            return new Point3D(intersection.Item1, intersection.Item2, line1.Start.Z);
         }
 
         public static (Point3D, Point3D) CircleCircleIntersections(ICircularGeometry circ1, ICircularGeometry circ2)

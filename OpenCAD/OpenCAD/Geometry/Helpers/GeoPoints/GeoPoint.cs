@@ -4,10 +4,11 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace OpenCAD.Geometry.Helpers
+namespace OpenCAD.Geometry.Helpers.GeoPoints
 {
     public class GeoPoint
     {
+        public OpenCADObject? Owner { get; private set; } = null;
         public Point3D Position { get; private set; }
 
         public GeoPointModes PointType { get; set; } = GeoPointModes.None;
@@ -26,5 +27,11 @@ namespace OpenCAD.Geometry.Helpers
         }
 
         public override string ToString() => $"{Position} [{PointType}]";
+
+        public GeoPoint WithOwner(OpenCADObject owner)
+        {
+            this.Owner = owner;
+            return this;
+        }
     }
 }

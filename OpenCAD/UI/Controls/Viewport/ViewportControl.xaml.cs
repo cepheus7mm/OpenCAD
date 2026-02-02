@@ -15,6 +15,7 @@ using OpenCAD.TextRendering;
 using OpenCAD.Geometry.Helpers;
 using System.Diagnostics;
 using OpenCAD.Styles.LineTypes;
+using OpenCAD.Geometry.Helpers.GeoPoints;
 
 namespace UI.Controls.Viewport
 {
@@ -36,8 +37,8 @@ namespace UI.Controls.Viewport
         private readonly ViewportSettings _viewportSettings;
         private bool _documentFullyLoaded = false;
 
-        // Add near the top with other fields
-        private readonly List<OpenCADObject> _previewObjects = new List<OpenCADObject>();
+        private readonly HashSet<OpenCADObject> _visibleObjects = new();
+
 
         // Lazy text metrics cache
         private ITextMetricsProvider? _lazyTextMetrics;
@@ -70,6 +71,7 @@ namespace UI.Controls.Viewport
             
             _viewModel = new ViewportViewModel(document);
             _viewModel.SetViewportSettings(_viewportSettings); // Pass settings to ViewModel
+            _viewModel.Initialize(ScreenToWorld, WorldToScreen);
                         
             DataContext = _viewModel;
 
@@ -172,18 +174,14 @@ namespace UI.Controls.Viewport
         public void SetStatusBar(StatusBarControl statusBar) => _viewModel.SetStatusBar(statusBar);
         public void AddObject(OpenCADObject obj) => _viewModel.AddObject(obj);
         public void RemoveObject(OpenCADObject obj) => _viewModel.RemoveObject(obj);
-        public void ClearSelection() => _viewModel.ClearSelection();
-        
+        public void ClearSelection() => _viewModel.SelectionManager.ClearSelection();
+
         /// <summary>
         /// Gets the document being displayed in this viewport
         /// </summary>
-        public OpenCADDocument Document => _document;
+        public OpenCADDocument Document => _viewModel.Document;
         
-        /// <summary>
-        /// Gets the object to display (the document)
-        /// </summary>
-        public OpenCADObject ObjectToDisplay => _viewModel.ObjectToDisplay;
-        
+       
         public GLWpfControl GlControl => GlWPFControl;
 
         /// <summary>
@@ -196,22 +194,21 @@ namespace UI.Controls.Viewport
         /// </summary>
         public void UpdateSnappingFromSettings() => _viewModel.UpdateSnappingFromSettings();
 
-        internal void AddPreviewObject(OpenCADObject obj)
-        {
-            if (!_previewObjects.Contains(obj))
-                _previewObjects.Add(obj);
-            Refresh();
-        }
+        //internal void AddPreviewObject(OpenCADObject obj)
+        //{
+        //    _viewModel.PreviewManager.ShowPreview(obj);
+        //    Refresh();
+        //}
 
-        internal void RemovePreviewObject(OpenCADObject obj)
-        {
-            _previewObjects.Remove(obj);
-            Refresh();
-        }
+        //internal void RemovePreviewObject(OpenCADObject obj)
+        //{
+        //    _previewObjects.Remove(obj);
+        //    Refresh();
+        //}
 
         internal void ClearPreviewObjects()
         {
-            _previewObjects.Clear();
+            _viewModel.PreviewManager.Clear();
             Refresh();
         }
 
@@ -281,6 +278,7 @@ namespace UI.Controls.Viewport
                 {
                 }
 
+                _viewModel.SetRenderEngine(_renderEngine);
                 _isInitialized = true;
             }
             catch (Exception)
@@ -351,6 +349,10 @@ namespace UI.Controls.Viewport
 
                 RenderSceneFlat(_document);
 
+                _viewModel.RenderGripPreviewObjects(_renderEngine);
+
+                _viewModel.RenderGrips();
+
                 RenderPostGeometry();
             }
             catch (Exception)
@@ -384,19 +386,18 @@ namespace UI.Controls.Viewport
             if (document == null || _renderEngine == null) return;
 
             // Use HashSet to prevent duplicates
-            var objectSet = new HashSet<OpenCADObject>();
-            CollectDrawable(document, objectSet);
+            var objectSet = _viewModel.VisibleObjects;
 
-            // Add preview objects to the set (HashSet will ignore duplicates)
-            foreach (var previewObj in _previewObjects.Where(o => o.IsDrawable))
-            {
-                objectSet.Add(previewObj);
-            }
+            //// Add preview objects to the set (HashSet will ignore duplicates)
+            //foreach (var previewObj in _viewModel.PreviewManager.PreviewObjects.Where(o => o.IsDrawable))
+            //{
+            //    objectSet.Add(previewObj);
+            //}
 
             // Convert to list for rendering
             var list = objectSet.ToList();
 
-            var highlightedObjects = new List<OpenCADObject>();
+            var highlightedObjects = new HashSet<OpenCADObject>();
 
             // Add single highlighted object (hover)
             if (_viewModel.HighlightedObject != null)
@@ -407,14 +408,12 @@ namespace UI.Controls.Viewport
             // Add window selection preview objects to highlighted list
             foreach (var previewObj in _viewModel.WindowSelectionPreviewObjects)
             {
-                if (!highlightedObjects.Contains(previewObj))
-                {
-                    highlightedObjects.Add(previewObj);
-                }
+                highlightedObjects.Add(previewObj);
             }
+            var selectedSet = new HashSet<OpenCADObject>(_viewModel.SelectedObjects);
 
             // Pass highlighting and selection information to the render engine
-            _renderEngine.Render(list, highlightedObjects, _viewModel.SelectedObjects);
+            _renderEngine.Render(list, highlightedObjects, selectedSet);
         }
 
         private void CollectDrawable(OpenCADObject parent, HashSet<OpenCADObject> objectSet)
@@ -680,8 +679,8 @@ namespace UI.Controls.Viewport
                 screenToWorldScale = Math.Abs(worldOffset.Value.X - worldCenter.Value.X);
             }
 
-            double pickboxSizePixels = _viewportSettings.Crosshair?.PickboxSize ?? 5.0;
-            double apertureboxSizePixels = _viewModel.ApertureSize > 0 ? _viewModel.ApertureSize : (_viewportSettings.Crosshair?.PickboxSize * 3.0 ?? 15.0);
+            int pickboxSizePixels = _viewportSettings.Crosshair?.PickboxSize ?? 5;
+            int apertureboxSizePixels = _viewModel.ApertureSize > 0 ? _viewModel.ApertureSize : (_viewportSettings.Crosshair?.PickboxSize * 3 ?? 15);
             var boxSizePixels = _viewModel.IsPointPickingMode && _viewModel.GeoPointModes != GeoPointModes.None ? apertureboxSizePixels : pickboxSizePixels;
             double halfBox = boxSizePixels * screenToWorldScale;
 
@@ -855,7 +854,6 @@ namespace UI.Controls.Viewport
             _lastMousePosDip = mousePos; // start delta tracking
 
             var worldPos = ScreenToWorld(mousePos);
-
             var result = _viewModel.HandleMouseDown(e.ChangedButton, mousePos, worldPos);
 
             if (result.Handled)
@@ -1078,7 +1076,7 @@ namespace UI.Controls.Viewport
                 if (_viewModel.IsSelectionMode && _viewModel.SelectedObjects.Count > 0)
                 {
                     //System.Diagnostics.Debug.WriteLine("ESC pressed - clearing selection");
-                    _viewModel.ClearSelection();
+                    _viewModel.SelectionManager.ClearSelection();
                     e.Handled = true;
                     return;
                 }
@@ -1103,6 +1101,10 @@ namespace UI.Controls.Viewport
         #endregion
 
         #region Coordinate Conversion
+        private Vector3? ScreenToWorld(System.Drawing.Point screenPosPx)
+        {
+            return ScreenToWorld(new Point(screenPosPx.X, screenPosPx.Y));
+        }
 
         public Vector3? ScreenToWorld(Point screenPosDip)
         {
@@ -1185,6 +1187,14 @@ namespace UI.Controls.Viewport
             }
         }
 
+        private System.Drawing.Point? WorldToScreen(Vector3 worldPoint)
+        {
+            var pt = WorldToScreen(new Point3D(worldPoint.X, worldPoint.Y, worldPoint.Z));
+            if (!pt.HasValue)
+                return null;
+            return new System.Drawing.Point((int)pt.Value.X, (int)pt.Value.Y);
+        }
+
         private Point? WorldToScreen(Point3D worldPoint)
         {
             if (_renderEngine == null) return null;
@@ -1250,7 +1260,7 @@ namespace UI.Controls.Viewport
             if (_viewModel.IsSelectionMode && _viewModel.SelectedObjects.Count > 0)
             {
                 //System.Diagnostics.Debug.WriteLine("ESC handled - clearing selection");
-                _viewModel.ClearSelection();
+                _viewModel.SelectionManager.ClearSelection();
                 return true;
             }
             
@@ -1278,7 +1288,7 @@ namespace UI.Controls.Viewport
                 }
         
                 // Clear the selection after deletion
-                _viewModel.ClearSelection();
+                _viewModel.SelectionManager.ClearSelection();
         
                 return true;
             }

@@ -1,16 +1,18 @@
+using OpenCAD;
+using OpenCAD.Geometry;
+using OpenCAD.Geometry.Helpers;
+using OpenCAD.Interfaces;
+using OpenCAD.Undo;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenCAD;
-using OpenCAD.Geometry;
-using OpenCAD.Geometry.Helpers;
-using OpenCAD.Interfaces;
+using System.Windows.Shapes;
 using UI.Commands.Editing;
 using UI.Commands.InputHelpers;
-using UI.Commands.Undo;
 using UI.Controls.Viewport;
 
 namespace UI.Commands
@@ -21,6 +23,8 @@ namespace UI.Commands
     public abstract class CommandBase : IInputCommand
     {
         protected CancellationTokenSource? _cancellationTokenSource;
+        protected UndoTransaction? _undoTransaction;
+        protected IPreviewManager? PreviewManager => Context?.GetActiveViewportViewModel()?.PreviewManager;
 
         protected ICommandContext? Context { get; private set; }
         private string _currentPrompt = string.Empty;
@@ -55,6 +59,21 @@ namespace UI.Commands
         public virtual async Task Initialize(ICommandContext context)
         {
             Context = context;
+            if (Context != null && Context.GetActiveViewportViewModel() != null)
+            {
+                Context!.GetActiveViewportViewModel()!.PropertyChanged += _previewHandler = (s, e) =>
+                {
+                    if (e.PropertyName == nameof(ViewportViewModel.PreviewPoint))
+                    {
+                        var point = context?.GetActiveViewportViewModel()?.PreviewPoint;
+                        if (point.HasValue)
+                        {
+                            TargetPoint = point.Value;
+                            UpdatePreview();
+                        }
+                    }
+                };
+            }
         }
 
         public abstract Task Execute();
@@ -74,7 +93,7 @@ namespace UI.Commands
             CurrentPrompt = string.Empty;
 
             // Ensure preview stopped if any command cancels
-            StopPreview(false);
+            CancelPreview();
         }
 
         /// <summary>
@@ -85,28 +104,28 @@ namespace UI.Commands
             CommandCompletedEvent?.Invoke(this, EventArgs.Empty);
         }
 
-        /// <summary>
-        /// Helper method to parse a point from input
-        /// </summary>
-        protected OpenCAD.Geometry.Point3D? ParsePoint(string input)
-        {
-            string[] parts = input.Split(new[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
+        ///// <summary>
+        ///// Helper method to parse a point from input
+        ///// </summary>
+        //protected OpenCAD.Geometry.Point3D? ParsePoint(string input)
+        //{
+        //    string[] parts = input.Split(new[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
 
-            if (parts.Length != 3)
-                return null;
+        //    if (parts.Length != 3)
+        //        return null;
 
-            try
-            {
-                double x = double.Parse(parts[0]);
-                double y = double.Parse(parts[1]);
-                double z = double.Parse(parts[2]);
-                return new OpenCAD.Geometry.Point3D(x, y, z);
-            }
-            catch (FormatException)
-            {
-                return null;
-            }
-        }
+        //    try
+        //    {
+        //        double x = double.Parse(parts[0]);
+        //        double y = double.Parse(parts[1]);
+        //        double z = double.Parse(parts[2]);
+        //        return new OpenCAD.Geometry.Point3D(x, y, z);
+        //    }
+        //    catch (FormatException)
+        //    {
+        //        return null;
+        //    }
+        //}
 
         /// <summary>
         /// Asynchronously prompt the user for a point. Returns the selected point, or null if the
@@ -327,7 +346,7 @@ namespace UI.Commands
         // Objects that should be previewed (derived classes may populate this)
         protected List<OpenCADObject>? SelectedObjects;
 
-        // Base/target points used by preview; derived classes should set BasePoint before StartPreview.
+        // Base/target points used by preview; derived classes should set BasePoint before BeginPreview.
         protected OpenCAD.Geometry.Point3D BasePoint { get; set; } = OpenCAD.Geometry.Point3D.Origin;
         protected OpenCAD.Geometry.Point3D TargetPoint { get; set; } = OpenCAD.Geometry.Point3D.Origin;
 
@@ -343,193 +362,101 @@ namespace UI.Commands
         protected ViewportViewModel? CachedViewModel { get; private set; }
 
         /// <summary>
-        /// Start preview mode using the current BasePoint.
-        /// Subscribes to ViewportViewModel.PreviewPoint changes and shows translated clones.
-        /// Captures providers (viewport/document/undo manager) to avoid them becoming null after awaits.
+        /// Called by derived commands when they are ready to start showing preview
+        /// (e.g. after BasePoint is set).
         /// </summary>
-        public void StartPreview()
+        public void BeginPreview()
         {
-            var viewModel = Context?.GetActiveViewportViewModel();
-            if (viewModel == null || Context == null) return;
-
-            // Capture providers and subscribe on UI thread
-            Context.PostToUI(() =>
-            {
-                var viewport = Context.GetActiveViewport();
-                if (viewport == null) return;
-
-                // Cache providers immediately so awaiting user input cannot lose them
-                this.viewport = viewport;
-                document = Context.GetDocument();
-                CachedUndoManager = Context.GetUndoRedoManager();
-                CachedViewModel = viewModel;
-
-                // Attach handler to respond to PreviewPoint changes
-                _previewHandler = (sender, e) =>
-                {
-                    if (e.PropertyName == nameof(ViewportViewModel.PreviewPoint))
-                    {
-                        var previewPoint = CachedViewModel?.PreviewPoint;
-                        if (previewPoint != null && BasePoint != null)
-                        {
-                            TargetPoint = previewPoint.Value;
-                            UpdatePreviewObjects(this.viewport!);
-                        }
-                        else
-                        {
-                            ClearPreviewObjects(this.viewport!);
-                        }
-                    }
-                };
-
-                CachedViewModel.PropertyChanged += _previewHandler;
-            });
+            PreviewManager?.Begin();
         }
 
         /// <summary>
-        /// Stop preview mode and remove any preview clones.
-        /// Clears cached providers.
-        /// If completeCommand is true, CommandCompleted() is called at the end (preserves previous behavior).
+        /// Called whenever the preview needs to be updated (e.g. PreviewPoint changed).
+        /// Derived classes override ComputePreviewObjects to define what to show.
         /// </summary>
-        public void StopPreview(bool completeCommand = true)
+        protected void UpdatePreview()
         {
-            try
-            {
-                var viewModel = Context?.GetActiveViewportViewModel();
-                // Unsubscribe on UI thread using cached view model (safer than re-reading DataContext)
-                if (viewModel != null && _previewHandler != null)
-                {
-                    Context?.PostToUI(() => viewModel.PropertyChanged -= _previewHandler);
-                }
-            }
-            catch
-            {
-                // ignore cleanup errors
-            }
-
-            if (viewport != null)
-                ClearPreviewObjects(viewport);
-
-            _previewHandler = null;
-
-            // Clear cached provider references
-            viewport = null;
-            document = null;
-            CachedUndoManager = null;
-            CachedViewModel = null;
-
-            BasePoint = Point3D.NotAPoint;
-            TargetPoint = Point3D.NotAPoint;
-
-            if (completeCommand)
-                CommandCompleted();
-        }
-
-        /// <summary>
-        /// Update preview clones using the given translation matrix computed by derived class.
-        /// Existing preview clones are removed and replaced.
-        /// Derived classes should implement ComputePreviewTransformation() (or set TargetPoint and rely on CreateTranslatedClone/override).
-        /// </summary>
-        private void UpdatePreviewObjects(ViewportControl viewport)
-        {
-            if (viewport == null) return;
-
-            // Run on UI thread
-            Context?.PostToUI(() =>
-            {
-                // Clear existing preview objects
-                viewport.ClearPreviewObjects();
-
-                var document = this.document ?? viewport.Document;
-                if (document == null || SelectedObjects == null)
-                    return;
-
-                Matrix4D transformation = GetPreviewTransformation();
-
-                foreach (var obj in SelectedObjects)
-                {
-                    var clone = CreateTranslatedClone(obj, transformation, document);
-                    if (clone != null)
-                    {
-                        viewport.AddPreviewObject(clone);
-                    }
-                }
-            });
-        }
-
-        protected void ClearPreviewObjects(ViewportControl viewport)
-        {
-            if (_previewObjects.Count == 0)
+            var pm = PreviewManager;
+            if (pm == null)
                 return;
 
-            Context?.PostToUI(() =>
-            {
-                viewport?.ClearPreviewObjects();
-            });
+            pm.Clear();
+
+            foreach (var obj in ComputePreviewObjects())
+                pm.ShowPreview(obj);
         }
 
         /// <summary>
-        /// Remove preview clones previously added to the current preview viewport,
-        /// but keep preview mode active (do not unsubscribe handlers or clear cached providers).
-        /// Useful when a command wants to commit a copy/move while continuing point picking.
+        /// Called when the command is canceled.
+        /// Restores originals and removes preview objects.
         /// </summary>
-        protected void ClearPreviewClones()
+        protected void CancelPreview()
         {
-            try
-            {
-                if (viewport != null)
-                    ClearPreviewObjects(viewport);
-            }
-            catch
-            {
-                // ignore
-            }
+            PreviewManager?.Clear();
         }
 
         /// <summary>
-        /// Create a translated clone for a given source object.
-        /// Default implementation supports GeometryBase; override to support more types.
+        /// Called when the command successfully completes.
+        /// Keeps preview objects visible; originals are expected to be
+        /// replaced/removed by the undo actions in the commit phase.
         /// </summary>
-        protected virtual OpenCADObject? CreateTranslatedClone(OpenCADObject source, Matrix4D translation, OpenCADDocument document)
+        public void CommitPreview()
         {
-            try
-            {
-                if (source is ICurve curve)
-                {
-                    return curve.Transform(translation) as OpenCADObject;
-                }
-            }
-            catch (NotSupportedException ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Preview clone failed for {source.GetType().Name}: {ex.Message}");
-                return null;
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Unexpected error creating preview clone: {ex.Message}");
-                return null;
-            }
-
-            return null;
+            PreviewManager?.Commit();
         }
+
+        /// <summary>
+        /// Derived commands return the current preview geometry here,
+        /// based on BasePoint/TargetPoint or other state.
+        /// </summary>
+        protected virtual IEnumerable<OpenCADObject> ComputePreviewObjects()
+        {
+            yield break;
+        }
+        ///// <summary>
+        ///// Create a translated clone for a given source object.
+        ///// Default implementation supports GeometryBase; override to support more types.
+        ///// </summary>
+        //protected virtual OpenCADObject? CreateTranslatedClone(OpenCADObject source, Matrix4D translation, OpenCADDocument document)
+        //{
+        //    try
+        //    {
+        //        if (source is ICurve curve)
+        //        {
+        //            return curve.Transform(translation) as OpenCADObject;
+        //        }
+        //    }
+        //    catch (NotSupportedException ex)
+        //    {
+        //        System.Diagnostics.Debug.WriteLine($"Preview clone failed for {source.GetType().Name}: {ex.Message}");
+        //        return null;
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        System.Diagnostics.Debug.WriteLine($"Unexpected error creating preview clone: {ex.Message}");
+        //        return null;
+        //    }
+
+        //    return null;
+        //}
 
         /// <summary>
         /// Method used by the preview update to compute the transformation matrix.
         /// Default uses BasePoint and TargetPoint and attempts translation; derived classes that
         /// require different transforms should override this.
         /// </summary>
-        protected virtual Matrix4D GetPreviewTransformation()
-        {
-            if (this is EditCommandBase editCommand)
-            {
-                if (editCommand.TryGetTransformation(out Matrix4D transformation))
-                {
-                    return transformation;
-                }
-            }
+        //protected virtual Matrix4D GetPreviewTransformation()
+        //{
+        //    if (this is EditCommandBase editCommand)
+        //    {
+        //        if (editCommand.TryGetTransformation(out Matrix4D transformation))
+        //        {
+        //            return transformation;
+        //        }
+        //    }
 
-            return Matrix4D.Identity; // Identity fallback
-        }
+        //    return Matrix4D.Identity; // Identity fallback
+        //}
 
         /// <summary>
         /// Call this to finish the command: ensure point picking disabled and raise completion.
@@ -561,5 +488,40 @@ namespace UI.Commands
         #endregion
 
         public virtual void HandleObjectClick(OpenCADObject obj, Point3D worldPoint) { }
+
+        protected virtual string GetUndoCreateString(OpenCADObject obj)
+        {
+            return string.Format(
+                "UndoCreateObject",
+                obj.GetType().Name);
+        }
+
+        protected void CreateObject(OpenCADObject obj)
+        {
+            var document = Context?.GetDocument() ?? throw new InvalidOperationException("No active document.");
+
+            var undoManager = Context?.GetUndoRedoManager();
+            var createString = GetUndoCreateString(obj);
+            // If undo available, the action may need a UI-thread viewport reference; capture + execute on UI thread
+            if (undoManager != null)
+            {
+                Context?.PostToUI(() =>
+                {
+                    var viewport = Context.GetActiveViewport();
+                    var action = new OpenCAD.Undo.AddGeometryAction(
+                        obj,
+                        createString
+                    );
+                    undoManager.ExecuteAction(action);
+                });
+            }
+            else
+            {
+                // CommandContext.RaiseGeometryCreated already posts to UI (our implementation does), so safe to call directly
+                Context?.RaiseGeometryCreated(obj);
+            }
+
+            Context?.OutputMessage(createString);
+        }
     }
 }

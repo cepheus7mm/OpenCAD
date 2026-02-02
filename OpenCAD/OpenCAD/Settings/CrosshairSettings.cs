@@ -10,7 +10,7 @@ namespace OpenCAD.Settings // CHANGED
     /// </summary>
     public class CrosshairSettings : OpenCADObject
     {
-        private const uint DefaultPickboxSize = 5;
+        private const int DefaultPickboxSize = 5;
 
         public CrosshairSettings() : this(null!)
         {
@@ -65,10 +65,10 @@ namespace OpenCAD.Settings // CHANGED
         /// Default: 5 pixels
         /// </summary>
         [JsonIgnore, XmlIgnore]
-        public double PickboxSize
+        public int PickboxSize
         {
-            get => GetPropertyValue<double>(PropertyType.DoubleLength, nameof(PickboxSize));
-            set => SetPropertyValue(PropertyType.DoubleLength, nameof(PickboxSize), OpenCADStrings.PickboxSize, value);
+            get => GetPropertyValue<int>(PropertyType.Integer, nameof(PickboxSize));
+            set => SetPropertyValue(PropertyType.Integer, nameof(PickboxSize), OpenCADStrings.PickboxSize, value);
         }
     }
 }

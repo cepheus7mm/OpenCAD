@@ -127,9 +127,9 @@ namespace UI.Commands.Drawing
             bool previewNeeded = _circleInputMode == CircleInputMode.RAD || _circleInputMode == CircleInputMode.DIA;
             if (previewNeeded)
             {
-                StartPreview();
+                BeginPreview();
 
-                // Attach the Circle preview handler on the UI thread after StartPreview has captured cached providers
+                // Attach the Circle preview handler on the UI thread after BeginPreview has captured cached providers
                 if (Context != null && _circlePreviewHandler != null)
                 {
                     Context.PostToUI(() =>
@@ -187,7 +187,7 @@ namespace UI.Commands.Drawing
                 }
             }
             catch { }
-            StopPreview();
+            CommitPreview();
         }
 
         private void SetCirclePoint(Point3D result)
@@ -277,9 +277,9 @@ namespace UI.Commands.Drawing
                 _ => throw new NotImplementedException()
             };
 
-            StartPreview();
+            BeginPreview();
 
-            // Attach the Circle preview handler on the UI thread after StartPreview has captured cached providers
+            // Attach the Circle preview handler on the UI thread after BeginPreview has captured cached providers
             if (Context != null && _circlePreviewHandler != null)
             {
                 Context.PostToUI(() =>
@@ -412,55 +412,23 @@ namespace UI.Commands.Drawing
             return Math.Sqrt(dx * dx + dy * dy);
         }
 
-        /// <summary>
-        /// Calculate the angle from center to point (in radians, counter-clockwise from positive X-axis)
-        /// </summary>
-        private double CalculateAngle(Point3D center, Point3D point)
-        {
-            double dx = point.X - center.X;
-            double dy = point.Y - center.Y;
-            return Math.Atan2(dy, dx);
-        }
-
         private void CreateCircle()
         {
             Circle Circle = null;
 
             // Get the document to apply current properties
             var document = Context?.GetDocument();
-            if (document != null && _center.IsValid && _radius > (0 + 1e-12))
-            {
-                Circle = new Circle(_center, _radius, document);
-            }
-            else
-            {
-                throw new InvalidOperationException("No active document to create Circle in.");
-            }
+            Circle = new Circle(_center, _radius, document);
+            CreateObject(Circle);
+        }
 
-            // Use undo/redo system if available
-            var undoManager = Context?.GetUndoRedoManager();
-
-            if (undoManager != null)
+        protected override string GetUndoCreateString(OpenCADObject obj)
+        {
+            if (obj is Circle)
             {
-                // Execute undo action creation/execution on UI thread so any viewport access is safe
-                Context?.PostToUI(() =>
-                {
-                    var viewport = Context.GetActiveViewport();
-                    var action = new Undo.AddGeometryAction(
-                        Circle,
-                        document,
-                        $"Create Circle at ({_center.X:F3}, {_center.Y:F3}, {_center.Z:F3}), Radius: {_radius:F3}"
-                    );
-                    undoManager.ExecuteAction(action);
-                });
+                return string.Format($"Create Circle at ({_center.X:F3}, {_center.Y:F3}, {_center.Z:F3}), Radius: {_radius:F3}");
             }
-            else
-            {
-                // Fallback to direct creation (CommandContext.RaiseGeometryCreated posts to UI)
-                Context?.RaiseGeometryCreated(Circle);
-            }
-
-            Context?.OutputMessage($"Create Circle at ({_center.X:F3}, {_center.Y:F3}, {_center.Z:F3}), Radius: {_radius:F3}");
+            return base.GetUndoCreateString(obj);
         }
 
         public override void Cancel()

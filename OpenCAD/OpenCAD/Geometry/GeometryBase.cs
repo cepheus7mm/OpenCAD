@@ -1,4 +1,5 @@
 ﻿using OpenCAD.Geometry.Helpers;
+using OpenCAD.Geometry.Helpers.GeoPoints;
 using OpenCAD.Interfaces;
 using OpenCAD.SegmentSource;
 using OpenCAD.Styles.LineTypes;

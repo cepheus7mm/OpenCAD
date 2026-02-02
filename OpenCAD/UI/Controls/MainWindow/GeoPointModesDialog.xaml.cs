@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
-using OpenCAD.Geometry.Helpers;
+using OpenCAD.Geometry.Helpers.GeoPoints;
 
 namespace UI.Controls.MainWindow
 {

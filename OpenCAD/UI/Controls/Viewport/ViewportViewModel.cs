@@ -2,6 +2,11 @@
 using OpenCAD;
 using OpenCAD.Geometry;
 using OpenCAD.Geometry.Helpers;
+using OpenCAD.Geometry.Helpers.GeoPoints;
+using OpenCAD.Geometry.Helpers.GeoPoints.GeoPointProviders;
+using OpenCAD.Geometry.Helpers.Snaps;
+using OpenCAD.Grips;
+using OpenCAD.Grips.GripProviders;
 using OpenCAD.Interfaces;
 using OpenCAD.Settings;
 using System;
@@ -30,6 +35,16 @@ namespace UI.Controls.Viewport
             WindowSelection,
             CommandInput
         }
+        public enum MouseMoveState
+        {
+            WindowSelection,
+            GripDrag,
+            HoverUpdate,
+            PointPicking,
+            CameraPan,
+            CameraOrbit,
+            None
+        }
         #region Fields
 
         private readonly OpenCADDocument _document;
@@ -44,36 +59,42 @@ namespace UI.Controls.Viewport
         private Action<Point3D>? _previewCallback;
         private Point3D? _previewPoint;
 
+        private IHitTester? _hitTester;
+        private SnapManager _snapManager;
+        private IGripManager _gripManager;
+        private GripRenderer _gripRenderer;
+
         // Selection state
         //private bool _isSelectionMode = false;
         private OpenCADObject? _highlightedObject;
-        private readonly List<OpenCADObject> _selectedObjects = new();
 
         // Mouse state
         private Point _lastMousePos;
+        private Point _mouseDownPos;
 
         // Cursor state
         private Cursor _cursor = Cursors.Arrow;
 
         private ViewportSettings? _viewportSettings;
 
-        // Window selection state
-        private Point3D? _windowSelectionStartPoint;
-        private Point3D? _windowSelectionCurrentPoint;
-        private readonly List<OpenCADObject> _windowSelectionPreviewObjects = new();
-
-        private GeoPointManager _geoPointManager = new GeoPointManager();
+        private IGeoPointManager _geoPointManager;
+        private ISelectionManager _selectionManager;
+        private IGripProviderFactory? _gripProviderFactory;
+        private IGeoPointProviderFactory? _geoPointProviderFactory;
 
         #endregion
 
         #region Properties
 
-        /// <summary>
-        /// Gets the object being displayed in this viewport
-        /// </summary>
-        public OpenCADObject ObjectToDisplay => _document;
+        private readonly HashSet<OpenCADObject> _visibleObjects = new();
+
+        public IEnumerable<OpenCADObject> VisibleObjects => _visibleObjects;
 
         private InputMode _previousSelectionMode = InputMode.None;
+        private RenderEngine _renderEngine;
+        private bool _mouseDownOnGrip;
+        private bool _isDragging;
+        private Vector3D? _lastWorldPos;
 
         /// <summary>
         /// Gets whether point picking mode is enabled
@@ -102,6 +123,10 @@ namespace UI.Controls.Viewport
             }
         }
 
+        public IPreviewManager PreviewManager { get; }
+
+        public ISelectionManager SelectionManager => _selectionManager;
+
         /// <summary>
         /// Gets the currently highlighted object (hover)
         /// </summary>
@@ -122,7 +147,7 @@ namespace UI.Controls.Viewport
         /// <summary>
         /// Gets the list of selected objects
         /// </summary>
-        public IReadOnlyList<OpenCADObject> SelectedObjects => _selectedObjects.AsReadOnly();
+        public IReadOnlyList<OpenCADObject> SelectedObjects => _selectionManager.SelectedObjects.ToList();
 
         /// <summary>
         /// Gets the current cursor
@@ -171,7 +196,7 @@ namespace UI.Controls.Viewport
         /// <summary>
         /// Gets whether snapping is enabled
         /// </summary>
-        public uint ApertureSize
+        public int ApertureSize
         {
             get => _viewportSettings?.ApertureSize ?? 15;
             private set
@@ -211,6 +236,7 @@ namespace UI.Controls.Viewport
                 if (_viewportSettings?.Snap != null && _viewportSettings.Snap.SnapEnabled != value)
                 {
                     _viewportSettings.Snap.SnapEnabled = value;
+                    _snapManager.GridSnapEnabled = value;
                     OnPropertyChanged();
                 }
             }
@@ -227,16 +253,65 @@ namespace UI.Controls.Viewport
                 if (_viewportSettings?.Snap != null && Math.Abs(_viewportSettings.Snap.SnapSpacing - value) > 0.0001)
                 {
                     _viewportSettings.Snap.SnapSpacing = value;
+                    _snapManager.GridSize = value;
                     OnPropertyChanged();
                 }
             }
         }
 
-        public Point3D? WindowSelectionStartPoint => _windowSelectionStartPoint;
-        public Point3D? WindowSelectionCurrentPoint => _windowSelectionCurrentPoint;
-        public IReadOnlyList<OpenCADObject> WindowSelectionPreviewObjects => _windowSelectionPreviewObjects.AsReadOnly();
+        public Point3D? WindowSelectionStartPoint => _selectionManager.WindowSelectionStart;
+        public Point3D? WindowSelectionCurrentPoint => _selectionManager.WindowSelectionCurrent;
+        public IReadOnlyList<OpenCADObject> WindowSelectionPreviewObjects => _selectionManager.PreviewObjects.ToList();
 
         public bool IsShiftKeyPressed { get; internal set; }
+        public int PickboxSize 
+        { 
+            get => _viewportSettings?.Crosshair?.PickboxSize ?? 5;
+            set
+            {
+                if (_viewportSettings != null && _viewportSettings.Crosshair != null && _viewportSettings.Crosshair.PickboxSize != value)
+                {
+                    _viewportSettings.Crosshair.PickboxSize = value;
+                    OnPropertyChanged();
+                }
+            } 
+        }
+
+        public IGripProviderFactory GripProviderFactory
+        {
+            get => _gripProviderFactory ??= RegisterGripProviders();
+            set => _gripProviderFactory ??= value
+                ?? throw new ArgumentNullException(nameof(value));
+        }
+
+        public IGeoPointProviderFactory GeoPointProviderFactory
+        {
+            get => _geoPointProviderFactory ??= RegisterGeoPointProviders();
+            set => _geoPointProviderFactory ??= value
+                ?? throw new ArgumentNullException(nameof(value));
+        }
+
+        public OpenCADDocument Document => _document;
+
+        private IGripProviderFactory RegisterGripProviders()
+        {
+            var factory = new GripProviderFactory();
+            // Register grip providers here
+            factory.Register<Line>(new LineGripProvider());
+            factory.Register<Circle>(new CircleGripProvider());
+            return factory;
+        }
+
+        private IGeoPointProviderFactory RegisterGeoPointProviders()
+        {
+            var factory = new GeoPointProviderFactory();
+            // Register geo point providers here
+            factory.Register<Line>(new LineGeoPointProvider());
+            factory.Register<Arc>(new ArcGeoPointProvider());
+            factory.Register<Circle>(new CircleGeoPointProvider());
+            factory.Register<Polyline>(new PolylineGeoPointProvider());
+            return factory;
+        }
 
         #endregion
 
@@ -303,9 +378,24 @@ namespace UI.Controls.Viewport
             _document.ObjectAdded += OnDocumentObjectAdded;
             _document.ObjectRemoved += OnDocumentObjectRemoved;
             _document.ObjectChanged += OnDocumentObjectChanged;
+
+            PreviewManager = new PreviewManager();
+            PreviewManager.PreviewAdded += obj => AddObject(obj);
+            PreviewManager.PreviewRemoved += obj => RemoveObject(obj);
+            PreviewManager.OriginalHidden += obj => RemoveObject(obj);
+            PreviewManager.OriginalRestored += obj => AddObject(obj);
         }
 
         #endregion
+        public void AddObject(OpenCADObject obj)
+        {
+            _visibleObjects.Add(obj);
+        }
+
+        public void RemoveObject(OpenCADObject obj)
+        {
+            _visibleObjects.Remove(obj);
+        }
 
         #region Public Methods - Selection
 
@@ -339,50 +429,6 @@ namespace UI.Controls.Viewport
         //    //System.Diagnostics.Debug.WriteLine("  Selection mode DISABLED");
         //}
 
-        /// <summary>
-        /// Clear all selected objects
-        /// </summary>
-        public void ClearSelection()
-        {
-            if (_selectedObjects.Count > 0)  // Only raise event if there were selections
-            {
-                _selectedObjects.Clear();
-                OnPropertyChanged(nameof(SelectedObjects));
-                RefreshRequested?.Invoke(this, EventArgs.Empty);
-                SelectionChanged?.Invoke(this, EventArgs.Empty);  // ADD THIS LINE
-            }
-        }
-
-        /// <summary>
-        /// Add an object to the selection
-        /// </summary>
-        public void SelectObject(OpenCADObject obj)
-        {
-            if (!_selectedObjects.Contains(obj))
-            {
-                _selectedObjects.Add(obj);
-                OnPropertyChanged(nameof(SelectedObjects));
-                ObjectSelected?.Invoke(this, new ObjectSelectedEventArgs(obj));
-                RefreshRequested?.Invoke(this, EventArgs.Empty);
-                SelectionChanged?.Invoke(this, EventArgs.Empty);  // ADD THIS LINE
-                //System.Diagnostics.Debug.WriteLine($"Object selected: {obj.GetType().Name}");
-            }
-        }
-
-        /// <summary>
-        /// Remove an object from the selection
-        /// </summary>
-        public void DeselectObject(OpenCADObject obj)
-        {
-            if (_selectedObjects.Remove(obj))
-            {
-                OnPropertyChanged(nameof(SelectedObjects));
-                RefreshRequested?.Invoke(this, EventArgs.Empty);
-                SelectionChanged?.Invoke(this, EventArgs.Empty);  // ADD THIS LINE
-                //System.Diagnostics.Debug.WriteLine($"Object deselected: {obj.GetType().Name}");
-            }
-        }
-
         #endregion
 
         #region Public Methods - Point Picking
@@ -392,20 +438,8 @@ namespace UI.Controls.Viewport
         /// </summary>
         public void EnablePointPickingMode()
         {
-            //System.Diagnostics.Debug.WriteLine($"=== EnablePointPickingMode called, current state: InputMode={CurrentInputMode} ===");
-
-            //// Disable selection mode when entering point picking mode
-            //if (_isSelectionMode)
-            //{
-            //    //System.Diagnostics.Debug.WriteLine("  Disabling selection mode");
-            //    IsSelectionMode = false;
-            //    HighlightedObject = null;
-            //}
-            //_previousSelectionMode = IsSelectionMode;
-            //IsPointPickingMode = true;
             CurrentInputMode = InputMode.PointPicking;
             _geoPointManager.Clear();
-            //System.Diagnostics.Debug.WriteLine($"  Point picking mode ENABLED, _tempPoints.Count={_tempPoints.Count}");
         }
 
         /// <summary>
@@ -413,15 +447,8 @@ namespace UI.Controls.Viewport
         /// </summary>
         public void DisablePointPickingMode()
         {
-            ////System.Diagnostics.Debug.WriteLine($"=== DisablePointPickingMode called ===");
-            //IsPointPickingMode = false;
-            //_tempPoints.Clear();
-            //PreviewPoint = null;
-            //_previewCallback = null;
-            //IsSelectionMode = _previousSelectionMode;
             CurrentInputMode = InputMode.Selection;
             _geoPointManager.Clear();
-            //System.Diagnostics.Debug.WriteLine("  Point picking mode DISABLED, temp points cleared");
         }
 
         /// <summary>
@@ -451,7 +478,6 @@ namespace UI.Controls.Viewport
         public void EnablePreviewMode(Action<Point3D> previewCallback)
         {
             _previewCallback = previewCallback;
-            //System.Diagnostics.Debug.WriteLine("Preview mode ENABLED");
         }
 
         /// <summary>
@@ -461,7 +487,6 @@ namespace UI.Controls.Viewport
         {
             _previewCallback = null;
             PreviewPoint = null;
-            //System.Diagnostics.Debug.WriteLine("Preview mode DISABLED");
         }
 
         /// <summary>
@@ -495,52 +520,36 @@ namespace UI.Controls.Viewport
         #region Public Methods - Snapping
 
         /// <summary>
-        /// Enable or disable snapping to grid
-        /// </summary>
-        //public void EnableSnapping(bool enabled, double gridSize = 1.0)
-        //{
-        //    SnappingEnabled = enabled;
-        //    GridSize = gridSize;
-        //}
-
-        /// <summary>
         /// Snap a point to the nearest grid intersection
         /// </summary>
         public Point3D SnapToGrid(Point3D point)
         {
-            if (!SnappingEnabled)
-                return point;
-
-            return new Point3D(
-                Math.Round(point.X / SnapSize) * SnapSize,
-                Math.Round(point.Y / SnapSize) * SnapSize,
-                Math.Round(point.Z / SnapSize) * SnapSize
-            );
+            return new Point3D(_snapManager.GetFinalSnapPoint(new Vector2((float)point.X, (float)point.Y)));
         }
 
         #endregion
 
         #region Public Methods - Object Management
 
-        /// <summary>
-        /// Add an object to the scene (model-first).
-        /// The document will raise ObjectAdded and the VM will react via subscription.
-        /// </summary>
-        public void AddObject(OpenCADObject obj)
-        {
-            ObjectToDisplay?.Add(obj);
-            // Do not raise ObjectAdded/Refresh here — document event handler will do it.
-        }
+        ///// <summary>
+        ///// Add an object to the scene (model-first).
+        ///// The document will raise ObjectAdded and the VM will react via subscription.
+        ///// </summary>
+        //public void AddObject(OpenCADObject obj)
+        //{
+        //    ObjectToDisplay?.Add(obj);
+        //    // Do not raise ObjectAdded/Refresh here — document event handler will do it.
+        //}
 
-        /// <summary>
-        /// Remove an object from the scene (model-first).
-        /// The document will raise ObjectRemoved and the VM will react via subscription.
-        /// </summary>
-        public void RemoveObject(OpenCADObject obj)
-        {
-            ObjectToDisplay?.Remove(obj);
-            // Do not raise Refresh here — document event handler will do it.
-        }
+        ///// <summary>
+        ///// Remove an object from the scene (model-first).
+        ///// The document will raise ObjectRemoved and the VM will react via subscription.
+        ///// </summary>
+        //public void RemoveObject(OpenCADObject obj)
+        //{
+        //    ObjectToDisplay?.Remove(obj);
+        //    // Do not raise Refresh here — document event handler will do it.
+        //}
 
         /// <summary>
         /// Document event handlers - update VM state when the canonical model changes.
@@ -549,6 +558,8 @@ namespace UI.Controls.Viewport
         {
             if (sender != _document) return;
 
+            AddObject(e.Object);
+
             // Forward as VM-level event for UI consumers
             ObjectAdded?.Invoke(this, new ObjectEventArgs(e.Object));
 
@@ -556,31 +567,24 @@ namespace UI.Controls.Viewport
             RefreshRequested?.Invoke(this, EventArgs.Empty);
 
             // Notify property changes if selection collections depend on this
-            OnPropertyChanged(nameof(ObjectToDisplay));
+            //OnPropertyChanged(nameof(ObjectToDisplay));
         }
 
         private void OnDocumentObjectRemoved(object? sender, OpenCAD.DocumentObjectEventArgs e)
         {
             if (sender != _document) return;
-
-            // If the object was selected, remove it from selection
-            if (_selectedObjects.Contains(e.Object))
-            {
-                _selectedObjects.Remove(e.Object);
-                OnPropertyChanged(nameof(SelectedObjects));
-                SelectionChanged?.Invoke(this, EventArgs.Empty);
-            }
+            _selectionManager.Deselect(e.Object);
 
             // If the object was highlighted, clear highlight (this triggers RefreshRequested via setter)
             if (HighlightedObject == e.Object)
             {
                 HighlightedObject = null;
             }
-
+            RemoveObject(e.Object);
             ObjectRemoved?.Invoke(this, new ObjectEventArgs(e.Object));
             RefreshRequested?.Invoke(this, EventArgs.Empty);
 
-            OnPropertyChanged(nameof(ObjectToDisplay));
+            //OnPropertyChanged(nameof(ObjectToDisplay));
         }
 
         private void OnDocumentObjectChanged(object? sender, OpenCAD.DocumentObjectEventArgs e)
@@ -648,37 +652,28 @@ namespace UI.Controls.Viewport
         /// </summary>
         public MouseHandlingResult HandleMouseDown(MouseButton button, Point mousePos, Vector3? worldPos)
         {
-            switch (button)
+            return button switch
             {
-                case MouseButton.Left:
-                    return HandleLeftMouseDown(mousePos, worldPos);
-                case MouseButton.Right:
-                    return HandleRightMouseDown(mousePos, worldPos);
-                case MouseButton.Middle:
-                    return HandleMiddleMouse(mousePos, worldPos);
-                default:
-                    _lastMousePos = mousePos;
-                    return new MouseHandlingResult { Handled = false, NeedsRefresh = false, CaptureMouse = true };
-            }
+                MouseButton.Left => HandleLeftMouseDown(mousePos, worldPos),
+                MouseButton.Right => HandleRightMouseDown(mousePos, worldPos),
+                MouseButton.Middle => HandleMiddleMouse(mousePos, worldPos),
+
+                _ => new MouseHandlingResult { Handled = false, NeedsRefresh = false, CaptureMouse = true }
+            };
         }
 
         private MouseHandlingResult HandleLeftMouseDown(Point mousePos, Vector3? worldPos)
         {
-            if (CurrentInputMode == InputMode.PointPicking)
-            {
-                return HandleLeftMouseDownPointPicking(mousePos, worldPos);
-            }
-            else if (CurrentInputMode == InputMode.Selection)
-            {
-                return HandleLeftMouseDownSelection(mousePos, worldPos);
-            }
-            else if (CurrentInputMode == InputMode.CommandInput)
-            {
-                return HandleLeftMouseDownCommandInput(mousePos, worldPos);
-            }
-
             _lastMousePos = mousePos;
-            return new MouseHandlingResult { Handled = false, NeedsRefresh = false, CaptureMouse = true };
+            _mouseDownPos = mousePos;
+
+            return CurrentInputMode switch
+            {
+                InputMode.PointPicking => HandleLeftMouseDownPointPicking(mousePos, worldPos),
+                InputMode.Selection => HandleLeftMouseDownSelection(mousePos, worldPos),
+                InputMode.CommandInput => HandleLeftMouseDownCommandInput(mousePos, worldPos),
+                _ => new MouseHandlingResult { Handled = false, NeedsRefresh = false, CaptureMouse = true },
+            };
         }
 
         private MouseHandlingResult HandleLeftMouseDownCommandInput(Point mousePos, Vector3? worldPos)
@@ -694,36 +689,46 @@ namespace UI.Controls.Viewport
 
         private MouseHandlingResult HandleLeftMouseDownSelection(Point mousePos, Vector3? worldPos)
         {
+            if (_gripManager.HoverGrip.HasValue)
+            {
+                var grip = _gripManager.HoverGrip.Value;
+                bool shiftDown = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
+
+                if (shiftDown)
+                {
+                    // Shift-click always adds, never clears
+                    _gripManager.AddToSelection(grip);
+                }
+                else
+                {
+                    // If this grip is already selected, do NOT clear selection
+                    if (!_gripManager.IsGripSelected(grip))
+                    {
+                        _gripManager.SelectSingle(grip);
+                    }
+
+                    // Mark that mouse is down on a grip (for drag detection)
+                    _mouseDownOnGrip = true;
+                }
+
+                return new MouseHandlingResult { Handled = true, NeedsRefresh = true };
+            }
+
             if (HighlightedObject != null)
             {
-                if (_selectedObjects.Contains(HighlightedObject))
-                {
-                    DeselectObject(HighlightedObject);
-                }
-                else
-                {
-                    SelectObject(HighlightedObject);
-                }
-                return new MouseHandlingResult { Handled = true, NeedsRefresh = true, CaptureMouse = false };
+                _selectionManager.ToggleSelection(HighlightedObject);
+                return new MouseHandlingResult { Handled = true, NeedsRefresh = true };
             }
+
+            // Begin window selection
+            CurrentInputMode = InputMode.WindowSelection;
+
+            if (worldPos.HasValue)
+                _selectionManager.BeginWindowSelection(new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z));
             else
-            {
-                _previousSelectionMode = CurrentInputMode;
-                CurrentInputMode = InputMode.WindowSelection;
+                _selectionManager.BeginWindowSelection(default);
 
-                if (worldPos.HasValue)
-                {
-                    _windowSelectionStartPoint = new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z);
-                }
-                else
-                {
-                    _windowSelectionStartPoint = null;
-                }
-
-                _windowSelectionCurrentPoint = null;
-                _windowSelectionPreviewObjects.Clear();
-                return new MouseHandlingResult { Handled = true, NeedsRefresh = true, CaptureMouse = true };
-            }
+            return new MouseHandlingResult { Handled = true, NeedsRefresh = true, CaptureMouse = true };
         }
 
         private MouseHandlingResult HandleLeftMouseDownPointPicking(Point mousePos, Vector3? worldPos)
@@ -739,8 +744,8 @@ namespace UI.Controls.Viewport
                 }
                 else if (SnappingEnabled)
                 {
-                    var snappedPoint = SnapToGrid(point);
-                    point = snappedPoint;
+                    var snappedPoint = _snapManager.GetFinalSnapPoint(new Vector2(worldPos.Value.X, worldPos.Value.Y));
+                    point = new Point3D(snappedPoint);
                 }
 
                 _tempPoints.Add(point);
@@ -776,154 +781,224 @@ namespace UI.Controls.Viewport
             return new MouseHandlingResult { Handled = false, NeedsRefresh = false, CaptureMouse = true };
         }
 
+        private bool MouseMovedBeyondThreshold(Point currentPos)
+        {
+            const double threshold = 3.0; // pixels
+            double dx = currentPos.X - _mouseDownPos.X;
+            double dy = currentPos.Y - _mouseDownPos.Y;
+            return (dx * dx + dy * dy) > (threshold * threshold);
+        }
+
+        private MouseMoveState GetMouseMoveState(
+                    Point currentPos,
+                    Vector3D? worldPos,
+                    MouseButtonState middleButton,
+                    MouseButtonState rightButton,
+                    bool isShiftPressed)
+        {
+            if (IsWindowSelectionMode && worldPos.HasValue)
+                return MouseMoveState.WindowSelection;
+
+            if (_isDragging && _gripManager.ActiveGrip != null)
+                return MouseMoveState.GripDrag;
+
+            if (CurrentInputMode == InputMode.PointPicking)
+                return MouseMoveState.PointPicking;
+
+            if (middleButton == MouseButtonState.Pressed)
+                return isShiftPressed ? MouseMoveState.CameraOrbit : MouseMoveState.CameraPan;
+
+            if (rightButton == MouseButtonState.Pressed)
+                return MouseMoveState.CameraPan;
+
+            return MouseMoveState.HoverUpdate;
+        }
+
+        private MouseHandlingResult HandleWindowSelectionMove(Point currentPos, Vector3D worldPos)
+        {
+            _selectionManager.UpdateWindowSelection(
+                new Point3D(worldPos.X, worldPos.Y, worldPos.Z));
+
+            _lastMousePos = currentPos;
+
+            return new MouseHandlingResult
+            {
+                Handled = true,
+                NeedsRefresh = true,
+                CaptureMouse = true
+            };
+        }
+
+        private MouseHandlingResult HandleGripDragMove(Point currentPos, Vector3D worldPos)
+        {
+            var vec = new Vector2((float)worldPos.X, (float)worldPos.Y);
+            _gripManager.UpdateEdit(vec);
+
+            _lastMousePos = currentPos;
+
+            return new MouseHandlingResult
+            {
+                Handled = true,
+                NeedsRefresh = true,
+                CaptureMouse = true
+            };
+        }
+
+        private MouseHandlingResult HandleHoverMove(Point currentPos, Vector3D? worldPos)
+        {
+            if (_hitTester == null)
+                return NoOpResult;
+
+            // Update grip hover
+            var point = new System.Drawing.Point((int)currentPos.X, (int)currentPos.Y);
+            var hitResult = _hitTester.HitTest(point);
+            _gripManager.UpdateHover(hitResult);
+
+            // Update object hover
+            if (hitResult.Kind == HitResultKind.Entity && hitResult.Entity != null)
+                HighlightedObject = hitResult.Entity;
+            else if (hitResult.Kind == HitResultKind.None && hitResult.Entity != null)
+                HighlightedObject = null;
+
+            _lastMousePos = currentPos;
+
+            return new MouseHandlingResult
+            {
+                Handled = false,
+                NeedsRefresh = true,
+                CaptureMouse = false
+            };
+        }
+
+        private MouseHandlingResult HandlePointPickingMove(Point currentPos, Vector3D? worldPos)
+        {
+            if (worldPos.HasValue)
+            {
+                var snappedPoint = _snapManager.GetFinalSnapPoint(new Vector2((float)worldPos.Value.X, (float)worldPos.Value.Y));
+
+                var point = new Point3D(snappedPoint);
+
+                PreviewPoint = point;
+
+                _previewCallback?.Invoke(point);
+                UpdateStatusBarWithWorldCoordinates(point.AsVector3D());
+            }
+
+            _lastMousePos = currentPos;
+
+            return new MouseHandlingResult
+            {
+                Handled = true,
+                NeedsRefresh = true,
+                CaptureMouse = false
+            };
+        }
+
+        private MouseHandlingResult HandleCameraPanMove(
+                    Point currentPos,
+                    float panScale,
+                    out CameraOperation? cameraOp)
+        {
+            double dx = currentPos.X - _lastMousePos.X;
+            double dy = currentPos.Y - _lastMousePos.Y;
+
+            cameraOp = new CameraOperation
+            {
+                Type = CameraOperationType.Pan,
+                DeltaX = (float)-dx * panScale,
+                DeltaY = (float)dy * panScale
+            };
+
+            _lastMousePos = currentPos;
+
+            return new MouseHandlingResult
+            {
+                Handled = true,
+                NeedsRefresh = true,
+                CaptureMouse = true
+            };
+        }
+
+        private MouseHandlingResult HandleCameraOrbitMove(
+                    Point currentPos,
+                    out CameraOperation? cameraOp)
+        {
+            double dx = currentPos.X - _lastMousePos.X;
+            double dy = currentPos.Y - _lastMousePos.Y;
+
+            cameraOp = new CameraOperation
+            {
+                Type = CameraOperationType.Orbit,
+                DeltaX = (float)dx * 0.01f,
+                DeltaY = (float)dy * 0.01f
+            };
+
+            _lastMousePos = currentPos;
+
+            return new MouseHandlingResult
+            {
+                Handled = true,
+                NeedsRefresh = true,
+                CaptureMouse = true
+            };
+        }
+
+        private static readonly MouseHandlingResult NoOpResult = new MouseHandlingResult { Handled = false, NeedsRefresh = false, CaptureMouse = false };
+
+
         /// <summary>
         /// Handle mouse move event
         /// </summary>
         public MouseHandlingResult HandleMouseMove(Point currentPos, Vector3D? worldPos, MouseButtonState middleButton, MouseButtonState rightButton, bool isShiftPressed, float panScale, out CameraOperation? cameraOp)
         {
             cameraOp = null;
-            double dx = currentPos.X - _lastMousePos.X;
-            double dy = currentPos.Y - _lastMousePos.Y;
 
-            // Handle window selection mode
-            if (IsWindowSelectionMode && worldPos.HasValue)
+            if (_mouseDownOnGrip && !_isDragging)
             {
-                return HandleMouseMoveWindowSelection(currentPos, worldPos.Value);
-            }
-
-            // Update status bar
-            if (worldPos is not null)
-            {
-                // If in point picking mode with snapping enabled, show snapped coordinates
-                if (CurrentInputMode == InputMode.PointPicking && SnappingEnabled)
+                if (MouseMovedBeyondThreshold(currentPos))
                 {
-                    var rawPoint = new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z);
-                    var snappedPoint = SnapToGrid(rawPoint);
-
-                    // Update status bar with snapped coordinates
-                    var snappedVector = new Vector3D(snappedPoint.X, snappedPoint.Y, snappedPoint.Z);
-                    UpdateStatusBarWithWorldCoordinates(snappedVector);
-                }
-                else
-                {
-                    // Show raw world coordinates
-                    UpdateStatusBarWithWorldCoordinates(worldPos);
-                }
-
-                // Call preview callback during point picking AND update preview point
-                if (CurrentInputMode == InputMode.PointPicking && _previewCallback != null)
-                {
-                    var previewPoint = new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z);
-
-                    // Apply snapping if enabled
-                    if (SnappingEnabled)
-                    {
-                        previewPoint = SnapToGrid(previewPoint);
-                    }
-
-                    // Update the preview point for rendering
-                    PreviewPoint = previewPoint;
-
-                    // Also call the callback for command logic
-                    _previewCallback(previewPoint);
-                }
-                else
-                {
-                    // Clear preview point if not in point picking mode
-                    PreviewPoint = null;
+                    _isDragging = true;
+                    var vec = new Vector2((float)worldPos!.Value.X, (float)worldPos!.Value.Y);
+                    _gripManager.BeginEdit(vec);
                 }
             }
-            //else
-            //{
-            //    UpdateStatusBarWithScreenCoordinates(currentPos);
-            //}
+            UpdateStatusBarWithWorldCoordinates(worldPos);
+            _lastWorldPos = worldPos;
 
-            // Don't do camera manipulation in point picking mode
-            if (CurrentInputMode == InputMode.PointPicking)
+            var state = GetMouseMoveState(currentPos, worldPos, middleButton, rightButton, isShiftPressed);
+
+            return state switch
             {
-                _lastMousePos = currentPos;
-                return new MouseHandlingResult { Handled = false, NeedsRefresh = false, CaptureMouse = false };
-            }
+                MouseMoveState.WindowSelection => HandleWindowSelectionMove(currentPos, worldPos!.Value),
 
-            bool needsRefresh = false;
+                MouseMoveState.GripDrag => HandleGripDragMove(currentPos, worldPos!.Value),
 
-            // Only allow camera operations if not in point picking or selection mode
-            if (middleButton == MouseButtonState.Pressed)
-            {
-                // Middle mouse button: Pan normally, Orbit with Shift
-                if (isShiftPressed)
-                {
-                    // Shift + Middle = Orbit
-                    cameraOp = new CameraOperation
-                    {
-                        Type = CameraOperationType.Orbit,
-                        DeltaX = (float)dx * 0.01f,
-                        DeltaY = (float)dy * 0.01f
-                    };
-                }
-                else
-                {
-                    // Middle = Pan (use provided pan scale)
-                    cameraOp = new CameraOperation
-                    {
-                        Type = CameraOperationType.Pan,
-                        DeltaX = (float)-dx * panScale,
-                        DeltaY = (float)dy * panScale
-                    };
-                }
-                needsRefresh = true;
-            }
-            else if (rightButton == MouseButtonState.Pressed)
-            {
-                // Right mouse button pans (use provided pan scale)
-                cameraOp = new CameraOperation
-                {
-                    Type = CameraOperationType.Pan,
-                    DeltaX = (float)-dx * panScale,
-                    DeltaY = (float)dy * panScale
-                };
-                needsRefresh = true;
-            }
+                MouseMoveState.HoverUpdate => HandleHoverMove(currentPos, worldPos),
 
-            _lastMousePos = currentPos;
+                MouseMoveState.PointPicking => HandlePointPickingMove(currentPos, worldPos),
 
-            return new MouseHandlingResult { Handled = false, NeedsRefresh = needsRefresh, CaptureMouse = false };
+                MouseMoveState.CameraPan => HandleCameraPanMove(currentPos, panScale, out cameraOp),
+
+                MouseMoveState.CameraOrbit => HandleCameraOrbitMove(currentPos, out cameraOp),
+
+                _ => NoOpResult
+            };
+
         }
 
         private MouseHandlingResult HandleMouseMoveWindowSelection(Point currentPos, Vector3D worldPos)
         {
-            // Update the current point of the selection window
-            _windowSelectionCurrentPoint = new Point3D(worldPos.X, worldPos.Y, worldPos.Z);
-
-            // Clear previous preview objects
-            _windowSelectionPreviewObjects.Clear();
-
-            // Calculate the selection rectangle bounds
-            if (_windowSelectionStartPoint.HasValue)
-            {
-                double minX = Math.Min(_windowSelectionStartPoint.Value.X, _windowSelectionCurrentPoint.Value.X);
-                double maxX = Math.Max(_windowSelectionStartPoint.Value.X, _windowSelectionCurrentPoint.Value.X);
-                double minY = Math.Min(_windowSelectionStartPoint.Value.Y, _windowSelectionCurrentPoint.Value.Y);
-                double maxY = Math.Max(_windowSelectionStartPoint.Value.Y, _windowSelectionCurrentPoint.Value.Y);
-
-                // Collect all drawable objects
-                var drawableObjects = new List<OpenCADObject>();
-                CollectDrawableObjects(ObjectToDisplay, drawableObjects);
-
-                // Test each object to see if it's fully inside the selection rectangle
-                foreach (var obj in drawableObjects)
-                {
-                    if (IsObjectInsideRectangle(obj, minX, maxX, minY, maxY))
-                    {
-                        _windowSelectionPreviewObjects.Add(obj);
-                    }
-                }
-
-                OnPropertyChanged(nameof(WindowSelectionPreviewObjects));
-            }
+            _selectionManager.UpdateWindowSelection(
+                new Point3D(worldPos.X, worldPos.Y, worldPos.Z));
 
             _lastMousePos = currentPos;
-            return new MouseHandlingResult { Handled = true, NeedsRefresh = true, CaptureMouse = true };
+
+            return new MouseHandlingResult
+            {
+                Handled = true,
+                NeedsRefresh = true,
+                CaptureMouse = true
+            };
         }
 
         /// <summary>
@@ -940,66 +1015,46 @@ namespace UI.Controls.Viewport
             };
         }
 
+        public void Initialize(Func<System.Drawing.Point, Vector3?> screenToWorld, Func<Vector3, System.Drawing.Point?> worldToScreen)
+        {
+            _hitTester = new HitTester(_document, GripProviderFactory, screenToWorld, worldToScreen,
+                () => PickboxSize,
+                () => _viewportSettings?.GripSize ?? 5);
+            _snapManager = new SnapManager(GeoPointProviderFactory, () => VisibleObjects);
+            _snapManager.GridSnapEnabled = SnappingEnabled;
+            _snapManager.GridSize = SnapSize;
+            _snapManager.SnapPointChanged += OnSnapPointChanged;
+            _geoPointManager = new GeoPointManager(GeoPointProviderFactory);
+            _gripManager = new GripManager(_document, _hitTester, GripProviderFactory, PreviewManager, _snapManager);
+            _selectionManager = new SelectionManager(_document);
+            _selectionManager.SelectionChanged += (s, e) => SelectionChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void OnSnapPointChanged(SnapPoint? point)
+        {
+            if (point != null)
+            {
+                UpdateStatusBarWithWorldCoordinates(new Point3D(point.Position).AsVector3D());//this will always show Z as 0
+            }
+            else
+            {
+                // No object snap — use cursor snap only
+                var world = new Vector2((float)_lastWorldPos!.Value.X, (float)_lastWorldPos!.Value.Y);
+                world = _snapManager.ApplyCursorSnap(world);
+                var world3D = new Vector3D(world.X, world.Y, 0);
+                UpdateStatusBarWithWorldCoordinates(world3D);
+            }
+        }
+
         /// <summary>
         /// Perform hit testing with pickbox to find objects near the cursor
         /// </summary>
         public OpenCADObject? HitTest(Point screenPos, Func<Point, Vector3?> screenToWorld)
         {
-            return HitTest(screenPos, screenToWorld, (_viewportSettings?.Crosshair?.PickboxSize ?? 5.0)).FirstOrDefault();
-        }
+            var hit = _hitTester?.HitTest(new System.Drawing.Point((int)screenPos.X, (int)screenPos.Y));
+            _gripManager.UpdateHover(hit);
 
-        /// <summary>
-        /// Perform hit testing with pickbox to find objects near the cursor
-        /// </summary>
-        public IEnumerable<OpenCADObject> HitTest(Point screenPos, Func<Point, Vector3?> screenToWorld, double boxSize)
-        {
-            // Collect all drawable objects
-            var curveObjects = new List<OpenCADObject>();
-            CollectCurveObjects(ObjectToDisplay, curveObjects);
-            List<OpenCADObject> hitObjects = new List<OpenCADObject>();
-            var worldPos = screenToWorld(screenPos);
-            if (worldPos is null || curveObjects.Count < 1)
-                return hitObjects;
-
-            var c1 = screenToWorld(new Point(screenPos.X - boxSize, screenPos.Y - boxSize));
-            var c2 = screenToWorld(new Point(screenPos.X + boxSize, screenPos.Y + boxSize));
-
-            if (c1 is null || c2 is null)
-                return hitObjects;
-
-            // Test each object against the pickbox
-            foreach (var obj in curveObjects)
-            {
-                if (obj is ICurve curve)
-                {
-                    var pt = curve.GetClosestPoint(new Point3D(worldPos.Value.X, worldPos.Value.Y, 0));
-                    if (pt.IsValid)
-                    {
-                        if (pt.X >= c1.Value.X && pt.X <= c2.Value.X &&
-                            pt.Y <= c1.Value.Y && pt.Y >= c2.Value.Y)
-                        {
-                            hitObjects.Add(obj);
-                        }
-                    }
-                }
-            }
-
-            return hitObjects;
-        }
-
-        /// <summary>
-        /// Recursively collect all drawable objects from the scene
-        /// </summary>
-        private void CollectDrawableObjects(OpenCADObject parent, List<OpenCADObject> list)
-        {
-            var children = parent.GetChildren();
-            foreach (var child in children)
-            {
-                if (child.IsDrawable)
-                    list.Add(child);
-
-                CollectDrawableObjects(child, list);
-            }
+            return hit!.Value.Entity;
         }
 
         /// <summary>
@@ -1035,23 +1090,6 @@ namespace UI.Controls.Viewport
             {
                 CurrentCursor = Cursors.Arrow;
             }
-        }
-
-        /// <summary>
-        /// Determines if an object is fully inside the selection rectangle (window selection)
-        /// </summary>
-        private bool IsObjectInsideRectangle(OpenCADObject obj, double minX, double maxX, double minY, double maxY)
-        {
-            if (obj is GeometryBase geometry)
-            {
-                // For other drawable objects, try to get their bounds
-                // This is a simplified check - you may need to implement proper bounds checking
-                var extents = geometry.GetExtents();
-                return extents.Min.X >= minX && extents.Max.X <= maxX &&
-                        extents.Min.Y >= minY && extents.Max.Y <= maxY;
-            }
-
-            return false;
         }
 
         #endregion
@@ -1090,40 +1128,77 @@ namespace UI.Controls.Viewport
             //}
         }
 
-        internal MouseHandlingResult HandleMouseUp(MouseButton button, Point point, Vector3? vector3)
+        internal MouseHandlingResult HandleMouseUp(MouseButton button, Point point, Vector3? worldPos)
         {
-            // Handle window selection completion
+            // ------------------------------------------------------------
+            // 1. WINDOW SELECTION COMMIT
+            // ------------------------------------------------------------
             if (IsWindowSelectionMode && button == MouseButton.Left)
             {
-                // Select all preview objects
-                foreach (var obj in _windowSelectionPreviewObjects)
+                _selectionManager.CommitWindowSelection();
+
+                CurrentInputMode = _previousSelectionMode != InputMode.None
+                    ? _previousSelectionMode
+                    : InputMode.Selection;
+
+                return new MouseHandlingResult
                 {
-                    if (!_selectedObjects.Contains(obj))
-                    {
-                        _selectedObjects.Add(obj);
-                    }
-                }
-
-                // Clear window selection state
-                _windowSelectionStartPoint = null;
-                _windowSelectionCurrentPoint = null;
-                _windowSelectionPreviewObjects.Clear();
-
-                // Return to previous mode (Selection)
-                CurrentInputMode = _previousSelectionMode != InputMode.None ? _previousSelectionMode : InputMode.Selection;
-
-                // Notify of selection changes
-                if (_selectedObjects.Count > 0)
-                {
-                    OnPropertyChanged(nameof(SelectedObjects));
-                    OnPropertyChanged(nameof(WindowSelectionPreviewObjects));
-                    SelectionChanged?.Invoke(this, EventArgs.Empty);
-                }
-
-                return new MouseHandlingResult { Handled = true, NeedsRefresh = true, CaptureMouse = false };
+                    Handled = true,
+                    NeedsRefresh = true,
+                    CaptureMouse = false
+                };
             }
 
-            return new MouseHandlingResult { Handled = false, NeedsRefresh = false, CaptureMouse = false };
+            // ------------------------------------------------------------
+            // 2. GRIP DRAG COMMIT
+            // ------------------------------------------------------------
+            if (_isDragging)
+            {
+                var newEntity = _gripManager.CommitEdit();
+
+                if (newEntity != null)
+                {
+                    // Replace selection with the new entity
+                    _selectionManager.ClearSelection();
+                    _selectionManager.AddToSelection(newEntity);
+                }
+
+                _isDragging = false;
+                _mouseDownOnGrip = false;
+
+                return new MouseHandlingResult
+                {
+                    Handled = true,
+                    NeedsRefresh = true
+                };
+            }
+
+
+            // ------------------------------------------------------------
+            // 3. MOUSE DOWN ON GRIP BUT NO DRAG
+            // (Click on grip already handled in MouseDown)
+            // ------------------------------------------------------------
+            if (_mouseDownOnGrip)
+            {
+                _mouseDownOnGrip = false;
+
+                return new MouseHandlingResult
+                {
+                    Handled = true,
+                    NeedsRefresh = true,
+                    CaptureMouse = false
+                };
+            }
+
+            // ------------------------------------------------------------
+            // 4. DEFAULT FALLTHROUGH
+            // ------------------------------------------------------------
+            return new MouseHandlingResult
+            {
+                Handled = false,
+                NeedsRefresh = false,
+                CaptureMouse = false
+            };
         }
 
         internal GeoPoint? GetGeoPointAtCurrentMousePosition(Point screenPos, Func<Point, Vector3?> screenToWorld)
@@ -1135,10 +1210,10 @@ namespace UI.Controls.Viewport
             if (!worldPos.HasValue)
                 return null;
 
-            var aperture = _viewportSettings?.ApertureSize ?? 15.0;
-            var hitObjects = HitTest(screenPos, screenToWorld, aperture);
+            var aperture = _viewportSettings?.ApertureSize ?? 15;
+            var hitObjects = _hitTester!.HitTestEntities(new System.Drawing.Point((int)screenPos.X, (int)screenPos.Y), aperture); // HitTest(screenPos, screenToWorld, aperture);
 
-            var point = SnapToGrid(new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z));
+            var point = new Point3D(_snapManager.GetFinalSnapPoint(new (worldPos.Value.X, worldPos.Value.Y)));
 
             if (!hitObjects.Any() || _viewportSettings == null || _viewportSettings.GeoPointModes == GeoPointModes.None)
                 return null;
@@ -1156,7 +1231,7 @@ namespace UI.Controls.Viewport
             if (!w0.HasValue || !w1.HasValue)
                 return 1;
 
-            return Math.Abs((w1.Value - w0.Value).Length()); // or |ΔX| if strictly axis-aligned
+            return Math.Abs((w1.Value - w0.Value).Length());
         }
 
         internal GeoPoint? GetClosestGeoPoint(IEnumerable<GeoPoint> geoPoints, Point3D referencePoint)
@@ -1207,6 +1282,66 @@ namespace UI.Controls.Viewport
         public void UpdateCameraStatus(Vector3 camPos, Vector3 tarPos)
         {
             _statusBar?.UpdateCameraInfo(camPos, tarPos);
+        }
+
+        internal void RenderGrips()
+        {
+            var grips = CollectGripVisuals();
+
+            GripVisual? hover = null;
+            GripVisual? active = null;
+
+            if (_gripManager.HoverGrip is Grip hg)
+                hover = new GripVisual(hg.Position, GripStyles.Hover);
+
+            if (_gripManager.ActiveGrip is Grip ag)
+                active = new GripVisual(ag.Position, GripStyles.Active);
+
+            _gripRenderer.RenderGrips(grips, hover, active);
+        }
+
+        private IEnumerable<GripVisual> CollectGripVisuals()
+        {
+            foreach (var obj in _selectionManager.SelectedObjects)
+            {
+                // Get provider from factory (new architecture)
+                var provider = GripProviderFactory.GetProvider(obj);
+                if (provider == null)
+                    continue;
+
+                foreach (var grip in provider.GetGrips(obj))
+                {
+                    // Skip hover/active grips — they are drawn separately
+                    if (_gripManager.HoverGrip?.Equals(grip) == true)
+                        continue;
+
+                    if (_gripManager.ActiveGrip?.Equals(grip) == true)
+                        continue;
+
+                    // Selected grips
+                    if (_gripManager.IsGripSelected(grip))
+                    {
+                        yield return new GripVisual(grip.Position, GripStyles.Selected);
+                    }
+                    else
+                    {
+                        yield return new GripVisual(grip.Position, GripStyles.Inactive);
+                    }
+                }
+            }
+        }
+
+
+        internal void SetRenderEngine(RenderEngine renderEngine)
+        {
+            _renderEngine = renderEngine;
+            _gripRenderer = new GripRenderer(_renderEngine.Viewport);
+        }
+
+        internal void RenderGripPreviewObjects(RenderEngine renderEngine)
+        {
+            var previewObjects = _gripManager.GetPreviewObjects();
+            renderEngine.Render(previewObjects.Values, new HashSet<OpenCADObject>(), new HashSet<OpenCADObject>(), RenderStyle.Preview);
         }
     }
 

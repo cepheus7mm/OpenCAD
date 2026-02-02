@@ -190,7 +190,7 @@ namespace UI.Commands.Drawing
                 if (vpControl != null && _previewText != null)
                 {
                     // Add as preview object (NOT to document)
-                    vpControl.AddPreviewObject(_previewText);
+                    PreviewManager.ShowPreview(_previewText);
                 }
             });
         }
@@ -231,7 +231,7 @@ namespace UI.Commands.Drawing
                     var vpControl = Context.GetActiveViewport();
                     if (vpControl != null)
                     {
-                        vpControl.RemovePreviewObject(_previewText);
+                        PreviewManager.Commit();
                         vpControl.Refresh();
                     }
                 });
@@ -262,9 +262,8 @@ namespace UI.Commands.Drawing
                 Context?.PostToUI(() =>
                 {
                     var viewport = Context.GetActiveViewport();
-                    var action = new Undo.AddGeometryAction(
+                    var action = new OpenCAD.Undo.AddGeometryAction(
                         text,
-                        document,
                         string.Format(
                             "Create Text at ({0:F3}, {1:F3}, {2:F3}), Height: {3:F3}: \"{4}\"",
                             basePoint.X, basePoint.Y, basePoint.Z,

@@ -1,8 +1,7 @@
 ﻿using System;
 using System.Drawing;
-using OpenCAD.Geometry;
 
-namespace OpenCAD.Geometry.Helpers
+namespace OpenCAD.Geometry.Helpers.GeoPoints
 {
     /// <summary>
     /// A visual marker (glyph) for a GeoPoint snap location.

@@ -5,11 +5,12 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace OpenCAD.Geometry.Helpers
+namespace OpenCAD.Geometry.Helpers.GeoPoints
 {
     public class GeoPointManager : IGeoPointManager
     {
         private GeoPoint? _currentSnap = null;
+        private IGeoPointProviderFactory _geoPointProviderFactory;
         private static readonly Dictionary<GeoPointModes, int> ModePriority = new()
         {
             { GeoPointModes.Vertex,          100 },
@@ -23,6 +24,11 @@ namespace OpenCAD.Geometry.Helpers
             { GeoPointModes.Point,            20 },
             { GeoPointModes.ExtensionSnap,    10 },
         };
+
+        public GeoPointManager(IGeoPointProviderFactory geoPointProviderFactory)
+        {
+            _geoPointProviderFactory = geoPointProviderFactory;
+        }
 
         public GeoPoint? CurrentSnap => _currentSnap;
 
@@ -46,10 +52,9 @@ namespace OpenCAD.Geometry.Helpers
 
             foreach (var obj in visibleObjects)
             {
-                if (obj is not IGeoPointProvider provider)
-                    continue;
+                var provider = _geoPointProviderFactory.GetProvider(obj);
 
-                foreach (var gp in provider.GetGeoPoints(activeModes, cursorWorld))
+                foreach (var gp in provider.GetGeoPoints(obj, activeModes, cursorWorld))
                 {
                     double distSq = (gp.Position - cursorWorld).LengthSquared;
 

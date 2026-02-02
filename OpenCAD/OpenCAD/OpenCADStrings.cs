@@ -47,6 +47,8 @@
 
         public const string ApertureSize = "Aperture Size";
 
+        public const string GripSize = "Grip Size";
+
         public const string GeoPointModes = "GeoPoint Modes";
 
         /// <summary>
@@ -174,6 +176,10 @@
         /// </summary>
         public const string CurrentTextStyleID = "Current TextStyle ID";
 
+        /// <summary>
+        /// Property name for textStyles container ID
+        /// </summary>
+        public const string UndoRedoManagerID = "Undo Redo Manager ID";
 
         /// <summary>
         /// Property name for viewport settings container ID

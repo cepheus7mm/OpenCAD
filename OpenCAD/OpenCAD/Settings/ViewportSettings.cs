@@ -1,5 +1,5 @@
 using OpenCAD;
-using OpenCAD.Geometry.Helpers;
+using OpenCAD.Geometry.Helpers.GeoPoints;
 using System.Text.Json.Serialization;
 using System.Xml.Serialization;
 
@@ -21,6 +21,7 @@ namespace OpenCAD.Settings
             LinetypeScale = 1.0;
             ApertureSize = 15;
             GeoPointModes = GeoPointModes.Vertex | GeoPointModes.Middle | GeoPointModes.Center | GeoPointModes.Anchor;
+            GripSize = 10;
 
             // Create and add the crosshair settings group
             var crosshairSettings = new CrosshairSettings(document);
@@ -63,14 +64,32 @@ namespace OpenCAD.Settings
         /// Default: true
         /// </summary>
         [JsonIgnore, XmlIgnore]
-        public uint ApertureSize
+        public int ApertureSize
         {
-            get => GetPropertyValue<uint>(PropertyType.UInt, nameof(ApertureSize));
+            get => GetPropertyValue<int>(PropertyType.Integer, nameof(ApertureSize));
             set
             {
                 if (value > 0)
                 {
-                    SetPropertyValue(PropertyType.UInt, nameof(ApertureSize), OpenCADStrings.ApertureSize, value);
+                    SetPropertyValue(PropertyType.Integer, nameof(ApertureSize), OpenCADStrings.ApertureSize, value);
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets or sets the size of the geo point aperture.
+        /// Default: true
+        /// </summary>
+        [JsonIgnore, XmlIgnore]
+        public int GripSize
+        {
+            get => GetPropertyValue<int>(PropertyType.Integer, nameof(GripSize));
+            set
+            {
+                if (value > 0)
+                {
+                    SetPropertyValue(PropertyType.Integer, nameof(GripSize), OpenCADStrings.ApertureSize, value);
                     OnPropertyChanged();
                 }
             }

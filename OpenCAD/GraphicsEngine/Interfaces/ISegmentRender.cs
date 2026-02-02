@@ -11,7 +11,7 @@ namespace GraphicsEngine.Interfaces
     public interface ISegmentRenderer
     {
         void BeginFrame(Viewport viewport, Matrix4x4 viewProj);
-        void DrawSegments(IEnumerable<Segment> segments, Viewport vp, LinetypeGpuData linetypeGpuData);
+        void DrawSegments(IEnumerable<Segment> segments, Viewport vp, LinetypeGpuData linetypeGpuData, HighlightMode highlightMode);
         void EndFrame();
     }
 }

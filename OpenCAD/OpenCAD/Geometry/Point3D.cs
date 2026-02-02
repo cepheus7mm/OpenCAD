@@ -18,6 +18,13 @@ namespace OpenCAD.Geometry
             Z = z;
         }
 
+        public Point3D(Vector2 vec)
+        {
+            X = vec.X;
+            Y = vec.Y;
+            Z = 0;
+        }
+
         public static Point3D Origin => new Point3D(0, 0, 0);
 
         public static Point3D NotAPoint => new Point3D(double.NaN, double.NaN, double.NaN);

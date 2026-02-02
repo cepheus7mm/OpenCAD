@@ -25,7 +25,7 @@ namespace GraphicsEngine
 
         //}
 
-        public void AddSegment(Viewport vp, Segment segment)
+        public void AddSegment(Viewport vp, Segment segment, Vector4 color)
         {
             Vector2 aNdc = vp.WorldToNdc(segment.A);
             Vector2 bNdc = vp.WorldToNdc(segment.B);
@@ -61,10 +61,10 @@ namespace GraphicsEngine
             Vector2 b1Ndc = vp.ScreenToNdc(b1);
 
             // 7. Emit final quad vertices (no shader expansion needed)
-            _vertices.Add(new SegmentVertex { Position = a0Ndc, Color = segment.Color, Distance = segment.D0 });
-            _vertices.Add(new SegmentVertex { Position = a1Ndc, Color = segment.Color, Distance = segment.D0 });
-            _vertices.Add(new SegmentVertex { Position = b0Ndc, Color = segment.Color, Distance = segment.D1 });
-            _vertices.Add(new SegmentVertex { Position = b1Ndc, Color = segment.Color, Distance = segment.D1 });
+            _vertices.Add(new SegmentVertex { Position = a0Ndc, Color = color, Distance = segment.D0 });
+            _vertices.Add(new SegmentVertex { Position = a1Ndc, Color = color, Distance = segment.D0 });
+            _vertices.Add(new SegmentVertex { Position = b0Ndc, Color = color, Distance = segment.D1 });
+            _vertices.Add(new SegmentVertex { Position = b1Ndc, Color = color, Distance = segment.D1 });
         }
 
         public ReadOnlySpan<SegmentVertex> Build() => CollectionsMarshal.AsSpan(_vertices);

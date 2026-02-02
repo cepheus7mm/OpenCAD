@@ -220,9 +220,9 @@ namespace UI.Commands.Drawing
                     }
 
                     if (lastDrawable is Line lastLine)
-                        return lastLine.EndPoint;
+                        return lastLine.End;
                     if (lastDrawable is Arc lastArc)
-                        return lastArc.EndPoint;
+                        return lastArc.End;
 
                     // unsupported drawable type for Last
                     Context?.OutputMessage(OpenCADStrings.InvalidPointInput);
@@ -297,7 +297,7 @@ namespace UI.Commands.Drawing
             // For EndPoint mode we want live arc preview and also allow angle input.
             // Set base as center and start previewing.
             BasePoint = _center;
-            StartPreview();
+            BeginPreview();
 
             // preview handler: build temporary arc from current preview point
             _previewArc = null;
@@ -399,7 +399,7 @@ namespace UI.Commands.Drawing
                 }
             };
 
-            // Attach the arc preview handler on the UI thread after StartPreview has captured cached providers
+            // Attach the arc preview handler on the UI thread after BeginPreview has captured cached providers
             if (Context != null && _arcPreviewHandler != null)
             {
                 Context.PostToUI(() =>
@@ -466,7 +466,7 @@ namespace UI.Commands.Drawing
                 }
                 catch { }
 
-                StopPreview();
+                CommitPreview();
             }
         }
 
@@ -577,7 +577,7 @@ namespace UI.Commands.Drawing
 
         private void CreateArc()
         {
-            Arc arc = null;
+            Arc? arc = null;
 
             var startAngle = _center.AngleTo(_start);
             var endAngle = _center.AngleTo(_end);
@@ -585,45 +585,20 @@ namespace UI.Commands.Drawing
 
             // Get the document to apply current properties
             var document = Context?.GetDocument();
-            if (document != null)
-            {
-                arc = new Arc(_center, radius, startAngle, endAngle, document);
-            }
-            else
-            {
-                throw new InvalidOperationException("No active document to create arc in.");
-            }
+            arc = new Arc(_center, radius, startAngle, endAngle, document);
+            CreateObject(arc);
+        }
 
-            // Use undo/redo system if available
-            var undoManager = Context?.GetUndoRedoManager();
+        protected override string GetUndoCreateString(OpenCADObject obj)
+        {
+            if (obj is not Arc arc)
+                return base.GetUndoCreateString(obj);
 
-            if (undoManager != null)
-            {
-                // Execute undo action creation/execution on UI thread so any viewport access is safe
-                Context?.PostToUI(() =>
-                {
-                    var viewport = Context.GetActiveViewport();
-                    var action = new Undo.AddGeometryAction(
-                        arc,
-                        document,
+            return string.Format(
                         $"Create Arc at ({_center.X:F3}, {_center.Y:F3}, {_center.Z:F3}), " +
-                        $"Radius: {radius:F3}, " +
-                        $"Angles: {startAngle * 180 / Math.PI:F1}° to {endAngle * 180 / Math.PI:F1}°"
-                    );
-                    undoManager.ExecuteAction(action);
-                });
-            }
-            else
-            {
-                // Fallback to direct creation (CommandContext.RaiseGeometryCreated posts to UI)
-                Context?.RaiseGeometryCreated(arc);
-            }
-
-            Context?.OutputMessage(
-                $"Arc created: Center=({_center.X:F3}, {_center.Y:F3}, {_center.Z:F3}), " +
-                $"Radius={radius:F3}, " +
-                $"Start angle={startAngle * 180 / Math.PI:F1}°, " +
-                $"End angle={endAngle * 180 / Math.PI:F1}°");
+                        $"Radius: {arc.Radius:F3}, " +
+                        $"Angles: {arc.StartAngle * 180 / Math.PI:F1}° to {arc.EndAngle * 180 / Math.PI:F1}°");
+;
         }
 
         public override void Cancel()

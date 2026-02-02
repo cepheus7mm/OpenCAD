@@ -1,5 +1,6 @@
 ﻿using OpenCAD.Geometry.Calculator;
 using OpenCAD.Geometry.Helpers;
+using OpenCAD.Geometry.Helpers.GeoPoints;
 using OpenCAD.Interfaces;
 using OpenCAD.SegmentSource;
 using System.Numerics;
@@ -11,7 +12,7 @@ namespace OpenCAD.Geometry
     /// <summary>
     /// Represents a polyline - a Index of connected line and arc segments defined by vertices
     /// </summary>
-    public class Polyline : GeometryBase, ICurve, IGeoPointProvider, ISegmentSource
+    public class Polyline : GeometryBase, ICurve, ISegmentSource
     {
         #region Private Fields
 
@@ -56,6 +57,9 @@ namespace OpenCAD.Geometry
                 return vertices[0].Position.DistanceTo(vertices[^1].Position) < 1e-8;
             }
         }
+
+        [JsonIgnore, XmlIgnore]
+        public IEnumerable<PolylineSegment> PolylineSegments => _segments.Items;
 
         /// <summary>
         /// Number of vertices in the polyline
@@ -155,9 +159,9 @@ namespace OpenCAD.Geometry
 
         public double DomainEnd => IsClosed ? VertexCount : VertexCount - 1;
 
-        public Point3D StartPoint => GetVertex(0)?.Position ?? Point3D.NotAPoint;
+        public Point3D Start => GetVertex(0)?.Position ?? Point3D.NotAPoint;
 
-        public Point3D EndPoint => IsClosed ? StartPoint : GetOrderedVertices()?.LastOrDefault()?.Position ?? Point3D.NotAPoint;
+        public Point3D End => IsClosed ? Start : GetOrderedVertices()?.LastOrDefault()?.Position ?? Point3D.NotAPoint;
 
         public double GetParameterAtPoint(Point3D point)
         {

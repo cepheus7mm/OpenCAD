@@ -1,5 +1,6 @@
 ﻿using GraphicsEngine.Interfaces;
 using OpenCAD.SegmentSource;
+using OpenCAD.Styles.LineTypes;
 using OpenTK.Graphics.OpenGL4;
 using OpenTK.Mathematics;
 using System;
@@ -9,14 +10,14 @@ using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
+using System.Windows.Controls;
+using GlMat4 = OpenTK.Mathematics.Matrix4;
+using GlVec2 = OpenTK.Mathematics.Vector2;
+using GlVec3 = OpenTK.Mathematics.Vector3;
+using SysMat4 = System.Numerics.Matrix4x4;
 using SysVec2 = System.Numerics.Vector2;
 using SysVec3 = System.Numerics.Vector3;
 using SysVec4 = System.Numerics.Vector4;
-using SysMat4 = System.Numerics.Matrix4x4;
-
-using GlVec2 = OpenTK.Mathematics.Vector2;
-using GlVec3 = OpenTK.Mathematics.Vector3;
-using GlMat4 = OpenTK.Mathematics.Matrix4;
 
 namespace GraphicsEngine
 {
@@ -38,6 +39,8 @@ namespace GraphicsEngine
         private int _glowVbo;
 
         float GlowRadiusPx = 3f;
+        float SelectionGlowRadiusPx = 6f;
+        SysVec4 SelectionColor = new SysVec4(0f, 1f, 1f, 1f); // Cyan
 
         public SegmentRenderer(Shader shader)
         {
@@ -173,13 +176,38 @@ namespace GraphicsEngine
 
         public void EndFrame() { }
 
-        public void DrawSegments(IEnumerable<Segment> segments, Viewport vp, LinetypeGpuData linetypeGpuData)
+        public void DrawSegments(IEnumerable<Segment> segments, Viewport vp, LinetypeGpuData linetype, HighlightMode mode)
+        {
+            // 1. Glow pass (if needed)
+            if (mode != HighlightMode.None)
+            {
+                BeginGlowPass(vp, vp.ProjectionMatrix);
+
+                if (mode == HighlightMode.Hover || mode == HighlightMode.HoverSelected)
+                    DrawHoverGlow(segments, vp);
+
+                if (mode == HighlightMode.Selected || mode == HighlightMode.HoverSelected)
+                    DrawSelectionGlow(segments, vp);
+
+                EndGlowPass();
+            }
+
+            // 2. Core pass
+            BeginFrame(vp, _viewProj);
+            if (mode == HighlightMode.Selected || mode == HighlightMode.HoverSelected)
+                DrawCore(segments, vp, linetype, SelectionColor);
+            else
+                DrawCore(segments, vp, linetype, segments.First().Color);
+            EndFrame();
+        }
+
+        public void DrawCore(IEnumerable<Segment> segments, Viewport vp, LinetypeGpuData linetypeGpuData, SysVec4 color)
         {
             var builder = new SegmentBatchBuilder();
 
             foreach (var s in segments)
             {
-                builder.AddSegment(vp, s);
+                builder.AddSegment(vp, s, color);
             }
 
             var verts = builder.Build();
@@ -206,14 +234,14 @@ namespace GraphicsEngine
             _glowShader.SetFloat("uGlowRadiusPx", GlowRadiusPx);
         }
 
-        public void DrawGlow(IEnumerable<Segment> segments, Viewport vp)
+        public void DrawHoverGlow(IEnumerable<Segment> segments, Viewport vp)
         {
             var isClosedLoop = segments.FirstOrDefault() is Segment first && segments.LastOrDefault() is Segment last &&
                              (first.A - last.B).LengthSquared() < 1e-6f;
             for (int i = 0; i < segments.Count(); i++)
             {
                 var seg = segments.ElementAt(i);
-                EmitGlowQuad(seg, vp);
+                EmitGlowQuad(seg, vp, GlowRadiusPx);
 
                 float halfWidthPx = vp.MillimetersToPixels(seg.WidthA) * 0.5f;
                 float radiusPx = halfWidthPx + GlowRadiusPx;
@@ -230,7 +258,41 @@ namespace GraphicsEngine
                 }
             }
         }
+        public void DrawSelectionGlow(IEnumerable<Segment> segments, Viewport vp)
+        {
+            // Stronger glow radius for selection
+            float selectionGlowPx = SelectionGlowRadiusPx; // e.g. 6.0f
 
+            var isClosedLoop =
+                segments.FirstOrDefault() is Segment first &&
+                segments.LastOrDefault() is Segment last &&
+                (first.A - last.B).LengthSquared() < 1e-6f;
+
+            int count = segments.Count();
+
+            for (int i = 0; i < count; i++)
+            {
+                var seg = segments.ElementAt(i);
+
+                // Expand the quad in screen space
+                EmitGlowQuad(seg, vp, selectionGlowPx);
+
+                float halfWidthPx = vp.MillimetersToPixels(seg.WidthA) * 0.5f;
+                float radiusPx = halfWidthPx + selectionGlowPx;
+
+                // Start cap
+                if (i == 0 && !isClosedLoop)
+                {
+                    EmitGlowCapHalf(seg.A, seg.B, radiusPx, vp);
+                }
+
+                // End cap
+                if (i == count - 1 && !isClosedLoop)
+                {
+                    EmitGlowCapHalf(seg.B, seg.A, radiusPx, vp);
+                }
+            }
+        }
         public void EndGlowPass()
         {
             // Restore depth write
@@ -240,7 +302,7 @@ namespace GraphicsEngine
             GL.Disable(EnableCap.Blend);
         }
 
-        private void EmitGlowQuad(Segment segment, Viewport vp)
+        private void EmitGlowQuad(Segment segment, Viewport vp, float glowPx)
         {
             // Convert world → NDC
             SysVec2 ndcA = vp.WorldToNdc(segment.A);
@@ -255,7 +317,7 @@ namespace GraphicsEngine
             SysVec2 perp = new SysVec2(-dir.Y, dir.X);
 
             float halfWidthPx = (vp.MillimetersToPixels(segment.WidthA) * 0.5f);
-            float glowPx = GlowRadiusPx;
+            //float glowPx = GlowRadiusPx;
 
             float total = halfWidthPx + glowPx;
 

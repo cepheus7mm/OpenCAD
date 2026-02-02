@@ -1,6 +1,6 @@
 ﻿using OpenCAD;
 using OpenCAD.Geometry.Helpers;
-using UI.Commands.Undo;
+using OpenCAD.Undo;
 using UI.Controls.Viewport;
 
 namespace UI.Commands.Editing
@@ -46,8 +46,6 @@ namespace UI.Commands.Editing
                 {
                     var action = new RemoveGeometryAction(
                         SelectedObjects,
-                        document,
-                        viewport,
                         string.Format(OpenCADStrings.UndoEraseObjectsFormat, SelectedObjects.Count)
                     );
                     undoManager.ExecuteAction(action);
@@ -63,7 +61,7 @@ namespace UI.Commands.Editing
                     Context?.OutputMessage(string.Format(OpenCADStrings.ObjectsErasedNoUndoFormat, SelectedObjects.Count));
                 }
                 var viewModel = viewport.DataContext as ViewportViewModel;
-                viewModel?.ClearSelection();
+                viewModel?.SelectionManager.ClearSelection();
                 viewport.Refresh();
                 CommandCompleted();
             });

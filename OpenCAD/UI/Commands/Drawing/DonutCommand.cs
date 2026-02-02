@@ -86,7 +86,7 @@ namespace UI.Commands.Drawing
                 _step = DonutInputStep.CenterPoint;
                 
                 // Start preview for center point selection
-                StartPreview();
+                BeginPreview();
 
                 // Attach the donut preview handler on the UI thread
                 if (Context != null && _donutPreviewHandler != null)
@@ -178,7 +178,7 @@ namespace UI.Commands.Drawing
             }
             catch { }
 
-            StopPreview();
+            CommitPreview();
         }
 
         public override bool ProcessInput(string input)
@@ -242,9 +242,8 @@ namespace UI.Commands.Drawing
                 // Execute undo action creation/execution on UI thread so any viewport access is safe
                 Context?.PostToUI(() =>
                 {
-                    var action = new Undo.AddGeometryAction(
+                    var action = new OpenCAD.Undo.AddGeometryAction(
                         donut,
-                        document,
                         $"Create Donut at ({_center.X:F3}, {_center.Y:F3}, {_center.Z:F3}), " +
                         $"Inner Diameter: {_innerDiameter:F3}, Outer Diameter: {_outerDiameter:F3}"
                     );

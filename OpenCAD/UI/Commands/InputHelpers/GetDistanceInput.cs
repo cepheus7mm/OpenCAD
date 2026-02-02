@@ -106,7 +106,7 @@ namespace UI.Commands.InputHelpers
                 if (first.ResultType == InputResult.InputResultType.Point && first.Point != null)
                 {
                     BasePoint = first.Point;
-                    _command.StartPreview();
+                    _command.BeginPreview();
 
                     try
                     {
@@ -150,7 +150,7 @@ namespace UI.Commands.InputHelpers
                     }
                     finally
                     {
-                        _command.StopPreview(false);
+                        _command.CommitPreview();
                         BasePoint = null;
                     }
                 }
@@ -179,7 +179,7 @@ namespace UI.Commands.InputHelpers
             CancellationToken cancellationToken)
         {
             BasePoint = basePoint;
-            _command.StartPreview();
+            _command.BeginPreview();
             
             try
             {
@@ -201,7 +201,7 @@ namespace UI.Commands.InputHelpers
             }
             finally
             {
-                _command.StopPreview(false);
+                _command.CommitPreview();
                 BasePoint = null;
             }
         }

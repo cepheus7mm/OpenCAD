@@ -1,7 +1,7 @@
 ﻿using System.Numerics;
 using System.Windows;
 using System.Windows.Controls;
-using OpenCAD.Geometry.Helpers;
+using OpenCAD.Geometry.Helpers.GeoPoints;
 using OpenCAD.Settings;
 
 namespace UI.Controls.MainWindow

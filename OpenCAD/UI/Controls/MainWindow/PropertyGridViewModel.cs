@@ -49,7 +49,7 @@ namespace UI.Controls.MainWindow
 
         protected virtual void UpdateFromViewport()
         {
-            var document = _activeViewport?.ObjectToDisplay as OpenCADDocument;
+            var document = _activeViewport?.Document;
             _currentDocument = document;
         }
 

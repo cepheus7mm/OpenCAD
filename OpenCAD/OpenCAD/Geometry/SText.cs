@@ -1,4 +1,5 @@
 ﻿using OpenCAD.Geometry.Helpers;
+using OpenCAD.Geometry.Helpers.GeoPoints;
 using OpenCAD.Interfaces;
 using OpenCAD.TextRendering;
 using System;
@@ -10,7 +11,7 @@ using System.Xml.Serialization;
 
 namespace OpenCAD.Geometry
 {
-    public class SText : GeometryBase, IGeoPointProvider
+    public class SText : GeometryBase
     {
         // Thread-safe cache access
         private readonly object _cacheLock = new object();

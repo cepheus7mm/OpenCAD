@@ -115,7 +115,7 @@ namespace UI.Commands.Drawing
                     var polylineToPreview = _currentPolyline;
                     Context?.PostToUI(() =>
                     {
-                        _viewport?.AddPreviewObject(polylineToPreview);
+                        PreviewManager.ShowPreview(polylineToPreview);
                     });
                 }
 
@@ -128,7 +128,7 @@ namespace UI.Commands.Drawing
                     var polylineToPreview = _currentPolyline;
                     Context?.PostToUI(() =>
                     {
-                        _viewport?.AddPreviewObject(polylineToPreview);
+                        PreviewManager?.ShowPreview(polylineToPreview);
                     });
                     RefreshPreview();
                 }
@@ -166,7 +166,7 @@ namespace UI.Commands.Drawing
                     var polylineToRemove = _currentPolyline;
                     Context?.PostToUI(() =>
                     {
-                        _viewport?.RemovePreviewObject(polylineToRemove);
+                        PreviewManager?.Commit();
                     });
                 }
                 
@@ -1329,7 +1329,7 @@ namespace UI.Commands.Drawing
         {
             Context?.PostToUI(() =>
             {
-                _viewport?.RemovePreviewObject(polyline);
+                PreviewManager?.Commit();
             });
         }
 
@@ -1365,9 +1365,8 @@ namespace UI.Commands.Drawing
                 Context?.PostToUI(() =>
                 {
                     var viewport = Context.GetActiveViewport();
-                    var action = new Undo.AddGeometryAction(
+                    var action = new OpenCAD.Undo.AddGeometryAction(
                         polylineToAdd,
-                        document,
                         $"Create Polyline with {vertexCount} vertices"
                     );
                     undoManager.ExecuteAction(action);
@@ -1394,7 +1393,7 @@ namespace UI.Commands.Drawing
                 var polylineToRemove = _currentPolyline;
                 Context?.PostToUI(() =>
                 {
-                    _viewport?.RemovePreviewObject(polylineToRemove);
+                    PreviewManager?.Clear();
                 });
             }
             

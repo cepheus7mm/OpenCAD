@@ -94,6 +94,22 @@ namespace GraphicsEngine
             var v = Vector4.Transform(new Vector4(ndc, 0, 1), inv);
             return new Vector2(v.X / v.W, v.Y / v.W);
         }
+        public Vector2 WorldToScreen(Vector2 world)
+        {
+            // 1. World → Clip
+            var v = new Vector4(world, 0, 1);
+            var clip = Vector4.Transform(v, ViewProjectionMatrix);
+
+            // 2. Perspective divide → NDC (-1..1)
+            if (clip.W != 0)
+                clip /= clip.W;
+
+            // 3. NDC → Screen
+            float x = (clip.X * 0.5f + 0.5f) * PixelWidth;
+            float y = (1f - (clip.Y * 0.5f + 0.5f)) * PixelHeight;
+
+            return new Vector2(x, y);
+        }
 
         // ------------------------------------------------------------
         // Resize handler

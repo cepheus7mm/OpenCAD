@@ -135,45 +135,20 @@ namespace UI.Commands.Drawing
             Line line;
 
             var document = Context?.GetDocument();
-            if (document != null)
-            {
-                line = new Line(document, start, end);
-            }
-            else
-            {
-                throw new InvalidOperationException("No active document to create line in.");
-            }
+                line = new Line(document!, start, end);
 
-            var undoManager = Context?.GetUndoRedoManager();
+            CreateObject(line);
+        }
 
-            // If undo available, the action may need a UI-thread viewport reference; capture + execute on UI thread
-            if (undoManager != null)
-            {
-                Context?.PostToUI(() =>
-                {
-                    var viewport = Context.GetActiveViewport();
-                    var action = new Undo.AddGeometryAction(
-                        line,
-                        document,
-                        string.Format(
-                            OpenCADStrings.UndoCreateLine,
-                            start.X, start.Y, start.Z,
-                            end.X, end.Y, end.Z)
-                    );
-                    undoManager.ExecuteAction(action);
-                });
-            }
-            else
-            {
-                // CommandContext.RaiseGeometryCreated already posts to UI (our implementation does), so safe to call directly
-                Context?.RaiseGeometryCreated(line);
-            }
+        protected override string GetUndoCreateString(OpenCADObject obj)
+        {
+            if (obj is not Line line)
+                return base.GetUndoCreateString(obj);
 
-            Context?.OutputMessage(
-                string.Format(
-                    OpenCADStrings.LineCreated,
-                    start.X, start.Y, start.Z,
-                    end.X, end.Y, end.Z));
+            return string.Format(
+                OpenCADStrings.UndoCreateLine,
+                line.Start.X, line.Start.Y, line.Start.Z,
+                line.End.X, line.End.Y, line.End.Z);
         }
 
         public override void Cancel()

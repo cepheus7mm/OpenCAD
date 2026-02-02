@@ -167,7 +167,7 @@ namespace UI.Controls.MainWindow
 				return;
 			}
 
-			var document = viewport.ObjectToDisplay as OpenCADDocument;
+			var document = viewport.Document;
 			_currentDocument = document;
 			
 			if (document != null)

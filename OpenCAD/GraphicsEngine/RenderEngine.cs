@@ -13,6 +13,13 @@ using System.Windows.Controls;
 
 namespace GraphicsEngine
 {
+    public enum RenderStyle
+    {
+        Normal,
+        Highlighted,
+        Selected,
+        Preview
+    }
     /// <summary>
     /// Main graphics engine for rendering OpenCADObjects using OpenGL
     /// </summary>
@@ -50,6 +57,8 @@ namespace GraphicsEngine
         public Matrix4x4 ProjectionMatrix => _projectionMatrix;
 
         //public ICamera Camera => _camera;
+
+        public Viewport Viewport => _viewport;
 
         public ICamera Camera => _camera;
 
@@ -150,16 +159,11 @@ namespace GraphicsEngine
         /// Render a collection of OpenCADObjects with optional highlighting and selection
         /// </summary>
         public void Render(IEnumerable<OpenCADObject> objects, 
-                          IEnumerable<OpenCADObject>? highlightedObjects = null, 
-                          IEnumerable<OpenCADObject>? selectedObjects = null)
+                            HashSet<OpenCADObject> highlightedSet, 
+                            HashSet<OpenCADObject>? selectedSet = null,
+                            RenderStyle renderStyle = RenderStyle.Normal)
         {
-            // Create sets for fast lookup
-            var highlightedSet = highlightedObjects != null 
-                ? new HashSet<OpenCADObject>(highlightedObjects) 
-                : new HashSet<OpenCADObject>();
-            var selectedSet = selectedObjects != null 
-                ? new HashSet<OpenCADObject>(selectedObjects) 
-                : new HashSet<OpenCADObject>();
+
 
             var segmentSources = objects.OfType<ISegmentSource>().ToList();
             
@@ -174,29 +178,25 @@ namespace GraphicsEngine
                 var segments = source.GetSegments(maxSagittaWorld);
                 var lineTypeData = source.GetLinetypeGpuData();
 
-                _segmentRenderer.DrawSegments(segments, _viewport, lineTypeData);
+                var mode = ComputeSegmentHighlightMode(source, highlightedSet, selectedSet);
+
+                _segmentRenderer.DrawSegments(segments, _viewport, lineTypeData, mode);
             }
             _segmentRenderer.EndFrame();
 
-            // -------------------------------
-            // PASS 2: Glow pass
-            // -------------------------------
-            foreach (var source in segmentSources)
-            {
-                if (!highlightedSet.Contains((OpenCADObject)source) &&
-                    !selectedSet.Contains((OpenCADObject)source))
-                    continue;
-
-                var segments = source.GetSegments(maxSagittaWorld);
-
-                _segmentRenderer.BeginGlowPass(_viewport, _viewport.ProjectionMatrix);
-                _segmentRenderer.DrawGlow(segments, _viewport);
-                _segmentRenderer.EndGlowPass();
-            }
-
-
-
             GLDiag.Check("End of Render");
+        }
+
+        private HighlightMode ComputeSegmentHighlightMode(ISegmentSource source, HashSet<OpenCADObject> highlightedSet, HashSet<OpenCADObject> selectedSet)
+        {
+            return highlightedSet.Contains((OpenCADObject)source) &&
+                selectedSet.Contains((OpenCADObject)source)
+                    ? HighlightMode.HoverSelected
+                : highlightedSet.Contains((OpenCADObject)source)
+                    ? HighlightMode.Hover
+                : selectedSet.Contains((OpenCADObject)source)
+                    ? HighlightMode.Selected
+                : HighlightMode.None;
         }
 
         public void RenderOverlay(IEnumerable<OpenCADObject> overlayObjects)
@@ -217,68 +217,13 @@ namespace GraphicsEngine
             {
                 var segments = source.GetSegments();
                 _segmentRenderer.BeginFrame(_viewport, _viewport.ProjectionMatrix);
-                _segmentRenderer.DrawSegments(segments, _viewport, source.GetLinetypeGpuData());
+                _segmentRenderer.DrawSegments(segments, _viewport, source.GetLinetypeGpuData(), HighlightMode.None);
                 _segmentRenderer.EndFrame();
             }
-
-            //var objects = overlayObjects.Where(o => o.IsDrawable).ToList();
-            //foreach (var obj in objects)
-            //{ 
-            //    var context = new RenderContext
-            //    {
-            //        ViewMatrix = _viewMatrix,
-            //        ProjectionMatrix = _projectionMatrix,
-            //        IsHighlighted = false,  // Overlays are never highlighted
-            //        IsSelected = false       // Overlays are never selected
-            //    };
-
-            //    var renderer = _renderers.FirstOrDefault(r => r.CanRender(obj));
-            //    if (renderer != null)
-            //    {
-            //        renderer.Render(obj, context);
-            //    }
-            //}
 
             // Restore states
             if (!blendWasEnabled) GL.Disable(EnableCap.Blend);
             if (depthWasEnabled) GL.Enable(EnableCap.DepthTest);
-
-            //var testSegments = new List<Segment>
-            //{
-            //    new Segment(
-            //        new Vector2(0, 0),
-            //        new Vector2(10, 0),
-            //        widthA: 10,
-            //        widthB: 10,
-            //        d0: 1,
-            //        d1: 100,
-            //        lineTypeId: 0,
-            //        color: new Vector4(255, 0, 0, 255)
-            //    ),
-            //    new Segment(
-            //        new Vector2(0, 0),
-            //        new Vector2(0, 10),
-            //        widthA: 10,
-            //        widthB: 1,
-            //        d0: 0,
-            //        d1: 100,
-            //        lineTypeId: 0,
-            //        color: new Vector4(255, 255, 0, 255)
-            //    ),
-            //        new Segment(
-            //        new Vector2(0, 0),
-            //        new Vector2(10, 10),
-            //        widthA: 1,
-            //        widthB: 10,
-            //        d0: 0,
-            //        d1: 100,
-            //        lineTypeId: 0,
-            //        color: new Vector4(255, 0, 255, 255)
-            //    )
-
-            //};
-            //_segmentRenderer.BeginFrame(_viewport, _viewport.ProjectionMatrix);
-            //_segmentRenderer.DrawSegments(testSegments, _viewport);
 
             GLDiag.Check("End of RenderOverlay");
         }

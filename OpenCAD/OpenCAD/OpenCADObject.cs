@@ -126,7 +126,7 @@ namespace OpenCAD
             return false;
 		}
 
-        public bool Remove(OpenCADObject obj)
+        public virtual bool Remove(OpenCADObject obj)
         {
             if (obj != null && children.TryRemove(obj.ID, out _))
             {

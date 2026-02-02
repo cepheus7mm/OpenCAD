@@ -11,6 +11,7 @@ using System.Linq;
 using System.Runtime.Serialization;
 using System.Text.Json.Serialization;
 using System.Xml.Serialization;
+using OpenCAD.Undo;
 
 namespace OpenCAD
 {
@@ -74,6 +75,10 @@ namespace OpenCAD
             var lineTypesContainer = new OpenCADLineTypes(this);
             Add(lineTypesContainer);
             LineTypesContainerID = lineTypesContainer.ID;
+
+            var undoRedoManager = new UndoRedoManager(this);
+            Add(undoRedoManager);
+            UndoRedoManagerID = undoRedoManager.ID;
         }
 
         public OpenCADDocument(string filename, string description = "") : this()
@@ -329,7 +334,7 @@ namespace OpenCAD
         /// <summary>
         /// Remove an object from the document and notify listeners.
         /// </summary>
-        public bool RemoveObject(OpenCADObject obj)
+        public override bool Remove(OpenCADObject obj)
         {
             if (obj == null) return false;
 
@@ -609,6 +614,13 @@ namespace OpenCAD
         }
 
         [JsonIgnore, XmlIgnore]
+        public Guid UndoRedoManagerID
+        {
+            get => GetPropertyValue<Guid>(PropertyType.ID, nameof(UndoRedoManagerID));
+            set => SetPropertyValue(PropertyType.ID, nameof(UndoRedoManagerID), OpenCADStrings.UndoRedoManagerID, value);
+        }
+
+        [JsonIgnore, XmlIgnore]
         public IServiceProvider? ServiceProvider
         {
             get => _serviceProvider;
@@ -682,6 +694,11 @@ namespace OpenCAD
                     textStyle.Document = this;
                 }
             }
+        }
+
+        public UndoRedoManager? GetUndoRedoManager()
+        {
+            return GetChild(UndoRedoManagerID) as UndoRedoManager;
         }
 
         /// <summary>

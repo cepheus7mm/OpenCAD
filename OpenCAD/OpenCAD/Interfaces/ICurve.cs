@@ -14,8 +14,8 @@ namespace OpenCAD.Interfaces
         double DomainEnd { get; }
 
         // --- Endpoints (always defined, even for closed curves) ---
-        Point3D StartPoint { get; }
-        Point3D EndPoint { get; }
+        Point3D Start { get; }
+        Point3D End { get; }
 
         // --- Core evaluation ---
         Point3D GetPointAtParameter(double t);

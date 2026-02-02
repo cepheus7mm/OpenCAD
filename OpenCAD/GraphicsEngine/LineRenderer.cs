@@ -72,8 +72,8 @@ namespace GraphicsEngine
 
             try
             {
-                var start = line.StartPoint;
-                var end = line.EndPoint;
+                var start = line.Start;
+                var end = line.End;
 
                 // Validate that points are not null and contain valid values
                 if (start == null || end == null)

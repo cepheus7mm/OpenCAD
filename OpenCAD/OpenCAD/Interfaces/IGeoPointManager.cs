@@ -1,5 +1,5 @@
 ﻿using OpenCAD.Geometry;
-using OpenCAD.Geometry.Helpers;
+using OpenCAD.Geometry.Helpers.GeoPoints;
 using System;
 using System.Collections.Generic;
 using System.Linq;
