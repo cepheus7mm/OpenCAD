@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Threading;
 using System.Threading.Tasks;
+using UI.Commands.Interfaces;
 using UI.Controls.Viewport;
 
 namespace UI.Commands.Editing

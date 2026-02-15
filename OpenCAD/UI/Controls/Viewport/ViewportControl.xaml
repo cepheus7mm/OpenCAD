@@ -8,5 +8,18 @@
              d:DesignHeight="450" d:DesignWidth="800">
     <Grid Background="{DynamicResource PrimaryBackgroundBrush}">
         <wpf:GLWpfControl x:Name="GlWPFControl" />
+        <Canvas x:Name="OverlayCanvas" 
+            IsHitTestVisible="False"
+            ClipToBounds="True">
+            <TextBlock x:Name="DebugTooltip"
+                   Text="{Binding DiagnosticToolTip}"
+                   Visibility="Collapsed"
+                   Background="#CC000000"
+                   Foreground="White"
+                   Padding="6,3"
+                   FontSize="11"
+                   FontFamily="Consolas"
+                   IsHitTestVisible="False" />
+        </Canvas>
     </Grid>
 </UserControl>

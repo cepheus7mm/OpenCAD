@@ -22,6 +22,8 @@ namespace OpenCAD.Settings
             ApertureSize = 15;
             GeoPointModes = GeoPointModes.Vertex | GeoPointModes.Middle | GeoPointModes.Center | GeoPointModes.Anchor;
             GripSize = 10;
+            FilletRadius = 2.0;
+            TrimMode = true;
 
             // Create and add the crosshair settings group
             var crosshairSettings = new CrosshairSettings(document);
@@ -90,6 +92,42 @@ namespace OpenCAD.Settings
                 if (value > 0)
                 {
                     SetPropertyValue(PropertyType.Integer, nameof(GripSize), OpenCADStrings.ApertureSize, value);
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets or sets the size of the geo point aperture.
+        /// Default: true
+        /// </summary>
+        [JsonIgnore, XmlIgnore]
+        public double FilletRadius
+        {
+            get => GetPropertyValue<double>(PropertyType.DoubleUnitLess, nameof(FilletRadius));
+            set
+            {
+                if (!FilletRadius.Equals(value))
+                {
+                    SetPropertyValue(PropertyType.DoubleUnitLess, nameof(FilletRadius), OpenCADStrings.FilletRadius, value);
+                    OnPropertyChanged(); 
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets or sets the size of the geo point aperture.
+        /// Default: true
+        /// </summary>
+        [JsonIgnore, XmlIgnore]
+        public bool TrimMode
+        {
+            get => GetPropertyValue<bool>(PropertyType.Boolean, nameof(TrimMode));
+            set
+            {
+                if (TrimMode != value)
+                {
+                    SetPropertyValue(PropertyType.Boolean, nameof(TrimMode), OpenCADStrings.TrimMode, value);
                     OnPropertyChanged();
                 }
             }

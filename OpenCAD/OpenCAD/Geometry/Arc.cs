@@ -28,13 +28,22 @@ namespace OpenCAD.Geometry
         /// <summary>
         /// Creates an arc with specified parameters.
         /// </summary>
-        public Arc(Point3D center, double radius, double startAngle, double endAngle, OpenCADDocument? document = null)
+        public Arc(Point3D center, double radius, double startAngle, double endAngle, OpenCADDocument? document = null, bool sweep = false)
             : base(document)
         {
             Center = center;
             Radius = Math.Max(0, radius);
             StartAngle = GeometricCalculator.NormalizeUnsigned(startAngle);
-            EndAngle = GeometricCalculator.NormalizeUnsigned(endAngle);
+            EndAngle = GeometricCalculator.NormalizeUnsigned(sweep ? startAngle + endAngle : endAngle);
+        }
+
+        public Arc(Point3D center, Point3D start, Point3D end, OpenCADDocument? document = null)
+            : base(document)
+        {
+            Center = center;
+            Radius = center.DistanceTo(start);
+            StartAngle = GeometricCalculator.NormalizeUnsigned(center.AngleTo(start));
+            EndAngle = GeometricCalculator.NormalizeUnsigned(center.AngleTo(end));
         }
 
         // ---------------------------------------------------------------------
@@ -87,7 +96,7 @@ namespace OpenCAD.Geometry
         /// Gets the start point of the arc.
         /// </summary>
         [JsonIgnore, XmlIgnore]
-        public Point3D Start => new Point3D(
+        public Point3D StartPoint => new Point3D(
             Center.X + Radius * Math.Cos(StartAngle),
             Center.Y + Radius * Math.Sin(StartAngle),
             Center.Z
@@ -97,7 +106,7 @@ namespace OpenCAD.Geometry
         /// Gets the end point of the arc.
         /// </summary>
         [JsonIgnore, XmlIgnore]
-        public Point3D End => new Point3D(
+        public Point3D EndPoint => new Point3D(
             Center.X + Radius * Math.Cos(EndAngle),
             Center.Y + Radius * Math.Sin(EndAngle),
             Center.Z
@@ -119,7 +128,7 @@ namespace OpenCAD.Geometry
 
         public override Extents GetExtents()
         {
-            return Extents.FromArc(Start, End, Center, Angle);
+            return Extents.FromArc(StartPoint, EndPoint, Center, Angle);
         }
 
         public IEnumerable<GeoPoint> GetGeoPoints(GeoPointModes geoPointType, Point3D referencePoint)
@@ -174,45 +183,47 @@ namespace OpenCAD.Geometry
 
         public double DomainEnd => 1.0;
 
+        public double SweepAngle => GetSweepAngle();
+
         public double GetParameterAtPoint(Point3D point)
         {
-            return GeometricCalculator.GetParameterAtPoint(point, Start, Center, GetSweepAngle());
+            return GeometricCalculator.GetParameterAtPoint(point, StartPoint, Center, GetSweepAngle());
         }
 
         public Point3D GetPointAtParameter(double parameter)
         {
-            return GeometricCalculator.GetPointAtParameter(parameter, Start, Center, GetSweepAngle());
+            return GeometricCalculator.GetPointAtParameter(parameter, StartPoint, Center, GetSweepAngle());
         }
 
         public Vector3D GetFirstDerivativeAtParameter(double t)
         {
-            return GeometricCalculator.GetFirstDerivative(t, Start, Center, GetSweepAngle());
+            return GeometricCalculator.GetFirstDerivative(t, StartPoint, Center, GetSweepAngle());
         }
 
         public Vector3D GetSecondDerivativeAtParameter(double t)
         {
-            return GeometricCalculator.GetSecondDerivative(t, Start, Center, GetSweepAngle());
+            return GeometricCalculator.GetSecondDerivative(t, StartPoint, Center, GetSweepAngle());
         }
 
         public double GetClosestParameter(Point3D point, bool extend = false)
         {
-            return GeometricCalculator.GetClosestParameter(point, Start, Center, GetSweepAngle(), extend);
+            return GeometricCalculator.GetClosestParameter(point, StartPoint, Center, GetSweepAngle(), extend);
         }
 
         public Point3D GetClosestPoint(Point3D point, bool extend = false)
         {
-            return GeometricCalculator.GetClosestPoint(point, Start, Center, GetSweepAngle(), extend);
+            return GeometricCalculator.GetClosestPoint(point, StartPoint, Center, GetSweepAngle(), extend);
         }
 
         public double GetLength()
         {
-            return GeometricCalculator.GetLength(Start, Center, GetSweepAngle());
+            return GeometricCalculator.GetLength(StartPoint, Center, GetSweepAngle());
         }
 
         public double GetLength(double t0, double t1)
         {
             double dt = Math.Abs(t1 - t0);
-            var fullLength = GeometricCalculator.GetLength(Start, Center, GetSweepAngle());
+            var fullLength = GeometricCalculator.GetLength(StartPoint, Center, GetSweepAngle());
             return fullLength * dt;
         }
 
@@ -231,10 +242,10 @@ namespace OpenCAD.Geometry
             double b = Math.Max(0.0, Math.Min(1.0, t1));
 
             // Evaluate new angles
-            var point = GeometricCalculator.GetPointAtParameter(a, Start, Center, GetSweepAngle());
+            var point = GeometricCalculator.GetPointAtParameter(a, StartPoint, Center, GetSweepAngle());
             var newStart = Math.Atan2(point.Y - Center.Y, point.X - Center.X);
 
-            point = GeometricCalculator.GetPointAtParameter(b, Start, Center, GetSweepAngle());
+            point = GeometricCalculator.GetPointAtParameter(b, StartPoint, Center, GetSweepAngle());
             var newEnd = Math.Atan2(point.Y - Center.Y, point.X - Center.X);
 
             // Return a new Arc segment
@@ -248,8 +259,8 @@ namespace OpenCAD.Geometry
         {
             // Transform center and endpoints
             var transformedCenter = transform.Transform(Center);
-            var transformedStart = transform.Transform(Start);
-            var transformedEnd = transform.Transform(End);
+            var transformedStart = transform.Transform(transform.IsMirror ? EndPoint : StartPoint);
+            var transformedEnd = transform.Transform(transform.IsMirror ? StartPoint : EndPoint);
 
             // Compute new radius from transformed endpoints (average to better tolerate slight non-uniform scaling)
             var distStart = transformedCenter.DistanceTo(transformedStart);
@@ -279,11 +290,19 @@ namespace OpenCAD.Geometry
 
 
             // Return a new Arc segment
-            var newArc = new Arc(Center, Radius, sAngle, eAngle, Document);
+            var newArc = new Arc(transformedCenter, newRadius, sAngle, eAngle, Document);
             newArc.SetBasicPropertiesFrom(this);
             newArc.SetNormal(tn);
 
             return newArc;
+        }
+
+        public ICurve[] GetOffsetCurves(double d)
+        {
+            return new ICurve[]
+            {
+                new Arc(Center, Radius + d, StartAngle, EndAngle, Document)
+            };
         }
 
         // ---------------------------------------------------------------------
@@ -336,7 +355,7 @@ namespace OpenCAD.Geometry
                 new Vector2((float)Center.X, (float)Center.Y),
                 (float)Radius,
                 (float)StartAngle,
-                (float)EndAngle,
+                (float)(StartAngle + SweepAngle),
                 maxSagitta,
                 geo
             );

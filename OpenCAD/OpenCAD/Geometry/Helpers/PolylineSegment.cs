@@ -76,16 +76,16 @@ namespace OpenCAD.Geometry.Helpers
         public static PolylineSegment FromLine(Line line)
         {
             return new PolylineSegment(
-                start: line.Start,
-                end: line.End
+                start: line.StartPoint,
+                end: line.EndPoint
             );
         }
 
         public static PolylineSegment FromArc(Arc arc)
         {
             return new PolylineSegment(
-                start: arc.Start,
-                end: arc.End,
+                start: arc.StartPoint,
+                end: arc.EndPoint,
                 center: arc.Center,
                 sweep: arc.Angle
             );

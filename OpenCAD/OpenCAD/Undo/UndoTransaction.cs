@@ -31,6 +31,12 @@ namespace OpenCAD.Undo
             foreach (var action in _actions)
                 action.Execute(doc);
         }
+
+        public void Execute(OpenCADDocument doc)
+        {
+            foreach (var action in _actions)
+                action.Execute(doc);
+        }
     }
 
 }

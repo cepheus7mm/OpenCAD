@@ -13,6 +13,7 @@ using System.Threading.Tasks;
 using System.Windows.Shapes;
 using UI.Commands.Editing;
 using UI.Commands.InputHelpers;
+using UI.Commands.Interfaces;
 using UI.Controls.Viewport;
 
 namespace UI.Commands
@@ -339,6 +340,63 @@ namespace UI.Commands
             }
 
             throw new InvalidOperationException("Current input helper is not GetStringInput");
+        }
+
+        protected Task<InputResult> GetEntity(string prompt, bool allowHover = false)
+        {
+            if (Context == null)
+                throw new InvalidOperationException("No command context available.");
+
+            var viewport = Context.GetActiveViewportViewModel()
+                ?? throw new InvalidOperationException("No active viewport viewmodel available.");
+
+            Context.SetCommandPrompt(prompt);
+
+            var tcs = new TaskCompletionSource<InputResult>();
+            InputResult result = new();
+
+            EventHandler<ObjectSelectedEventArgs>? clickHandler = null;
+            EventHandler<ObjectHoverEventArgs>? hoverHandler = null;
+
+            // --- CLICK HANDLER ----------------------------------------------------
+            clickHandler = (s, e) =>
+            {
+                viewport.ObjectSelected -= clickHandler;
+                if (allowHover)
+                    viewport.ObjectHovered -= hoverHandler;
+
+                result.ResultType = InputResult.InputResultType.ObjectAndPoint;
+                result.Object = e.Object;
+                result.Point = e.PickedPoint;
+
+                tcs.TrySetResult(result);
+            };
+
+            // --- HOVER HANDLER ----------------------------------------------------
+            if (allowHover)
+            {
+                hoverHandler = (s, e) =>
+                {
+                    if (e.Object != null && e.PickedPoint != Point3D.NotAPoint)
+                    {
+                        result.ResultType = InputResult.InputResultType.Hover;
+                        result.Object = e.Object;
+                        result.Point = e.PickedPoint; 
+                    }
+                    else
+                    {
+                        result.ResultType = InputResult.InputResultType.None;
+                    }
+
+                        tcs.TrySetResult(result);
+                };
+
+                viewport.ObjectHovered += hoverHandler;
+            }
+
+            viewport.ObjectSelected += clickHandler;
+
+            return tcs.Task;
         }
 
         #region Preview support (shared)

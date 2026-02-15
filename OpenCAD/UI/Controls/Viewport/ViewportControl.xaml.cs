@@ -29,6 +29,11 @@ namespace UI.Controls.Viewport
         private bool _isInitialized = false;
         private Point? _lastMousePosDip; // Track last mouse position in DIPs for delta calculation
         private Point? _currentMousePosDip; // Track current mouse position for crosshair rendering
+#if DEBUG
+        private bool _showDebugTooltip = true; // Toggle this as needed
+#else
+private bool _showDebugTooltip = false;
+#endif
 
         // Store the document directly
         private readonly OpenCADDocument _document;
@@ -71,7 +76,6 @@ namespace UI.Controls.Viewport
             
             _viewModel = new ViewportViewModel(document);
             _viewModel.SetViewportSettings(_viewportSettings); // Pass settings to ViewModel
-            _viewModel.Initialize(ScreenToWorld, WorldToScreen);
                         
             DataContext = _viewModel;
 
@@ -116,7 +120,7 @@ namespace UI.Controls.Viewport
             GlWPFControl.MouseLeave += OnMouseLeave;
 
             // Keyboard events
-            GlWPFControl.KeyDown += OnKeyDown;
+            //GlWPFControl.KeyDown += OnKeyDown;
             GlWPFControl.Focusable = true; // Make sure the control can receive keyboard focus
 
             // ✅ ADD: Verify document is fully loaded
@@ -267,6 +271,7 @@ namespace UI.Controls.Viewport
                 _renderEngine = new RenderEngine();
 
                 _renderEngine.Initialize(GlWPFControl);
+                _viewModel.Initialize(_renderEngine.Camera);
 
                 GL.Disable(EnableCap.DepthTest);
                 GL.Enable(EnableCap.Blend);
@@ -354,6 +359,8 @@ namespace UI.Controls.Viewport
                 _viewModel.RenderGrips();
 
                 RenderPostGeometry();
+
+                UpdateDebugTooltip();
             }
             catch (Exception)
             {
@@ -645,9 +652,9 @@ namespace UI.Controls.Viewport
                 return lines;
 
             // Create the center point - apply snapping if in point picking mode
-            var centerPoint = _viewModel.IsPointPickingMode && _viewModel.SnappingEnabled
-                ? _viewModel.SnapToGrid(new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z))
-                : new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z);
+            var centerPoint = //_viewModel.IsPointPickingMode && _viewModel.SnappingEnabled
+                 _viewModel.SnapToGrid(new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z));
+                //: new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z);
 
             var bounds = _cachedWorldBounds.HasValue ? _cachedWorldBounds : ComputeViewportWorldBounds();
             
@@ -715,6 +722,29 @@ namespace UI.Controls.Viewport
             }
             
             return line;
+        }
+
+        /// <summary>
+        /// Updates the debug tooltip showing grip state
+        /// </summary>
+        private void UpdateDebugTooltip()
+        {
+            if (!_showDebugTooltip || !_currentMousePosDip.HasValue)
+            {
+                DebugTooltip.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            // Get grip state from ViewModel
+//            string tooltipText = _viewModel.GetGripTooltip();
+
+            // Update text and position
+//            DebugTooltip.Text = tooltipText;
+            DebugTooltip.Visibility = Visibility.Visible;
+
+            // Position 10 pixels to the right and below cursor
+            Canvas.SetLeft(DebugTooltip, _currentMousePosDip.Value.X + 10);
+            Canvas.SetTop(DebugTooltip, _currentMousePosDip.Value.Y + 10);
         }
 
         /// <summary>
@@ -860,8 +890,11 @@ namespace UI.Controls.Viewport
                 e.Handled = true;
 
             // Ensure we capture for panning with middle/right even if VM didn't request it
-            if (result.CaptureMouse || e.ChangedButton == MouseButton.Middle || e.ChangedButton == MouseButton.Right)
+            if (result.CaptureMouse ||
+                e.ChangedButton == MouseButton.Middle)
+            {
                 GlWPFControl.CaptureMouse();
+            }
 
             if (result.NeedsRefresh)
                 Refresh();
@@ -872,33 +905,24 @@ namespace UI.Controls.Viewport
             if (_renderEngine == null) return;
 
             Point currentPosDip = e.GetPosition(GlWPFControl);
-            
+
+            if (e.MiddleButton == MouseButtonState.Pressed)
+            {
+                var dpi = VisualTreeHelper.GetDpi(GlWPFControl);
+                float dxPx = (float)((currentPosDip.X - _lastMousePosDip.Value.X) * dpi.DpiScaleX);
+                float dyPx = (float)((currentPosDip.Y - _lastMousePosDip.Value.Y) * dpi.DpiScaleY);
+                _renderEngine.Camera.Pan(new Vector2(-dxPx, -dyPx));
+                _lastMousePosDip = currentPosDip; // update last position for next delta
+                Refresh();
+                return;
+            }
+
             // Update current mouse position for crosshair rendering
             _currentMousePosDip = currentPosDip;
             
             var worldPos = ScreenToWorld(currentPosDip);
 
-            bool isShiftPressed = Keyboard.IsKeyDown(Key.LeftShift) || Keyboard.IsKeyDown(Key.RightShift);
-
             float panScale = _renderEngine.Camera.PanScale;
-
-            // Only perform hit testing if in selection mode, NOT in point picking or window selection mode, and not dragging
-            bool shouldHitTest = (_viewModel.CurrentInputMode == ViewportViewModel.InputMode.Selection ||
-                _viewModel.CurrentInputMode == ViewportViewModel.InputMode.CommandInput) &&
-                e.LeftButton != MouseButtonState.Pressed && 
-                e.MiddleButton != MouseButtonState.Pressed && 
-                e.RightButton != MouseButtonState.Pressed;
-
-            if (shouldHitTest)
-            {
-                var hitObject = _viewModel.HitTest(currentPosDip, ScreenToWorld);
-                
-                if (_viewModel.HighlightedObject != hitObject)
-                {
-                    _viewModel.HighlightedObject = hitObject;
-                    Refresh(); // Force a refresh when highlighting changes
-                }
-            }
             
             Vector3D? vector3D;
             if (worldPos.HasValue)
@@ -909,78 +933,27 @@ namespace UI.Controls.Viewport
             {
                 return; // Cannot proceed without valid world position
             }
+#if DEBUG
+            // Set diagnostic tooltip with viewport bounds information
+            var upperLeft = new Point(0, 0);
+            var lowerRight = new Point(GlWPFControl.ActualWidth, GlWPFControl.ActualHeight);
+            var center = new Point(GlWPFControl.ActualWidth / 2, GlWPFControl.ActualHeight / 2);
+
+            _viewModel.DiagnosticToolTip = $"UL: ({upperLeft.X:F0}, {upperLeft.Y:F0}) | " +
+                                            $"LR: ({lowerRight.X:F0}, {lowerRight.Y:F0}) | " +
+                                            $"Center: ({center.X:F0}, {center.Y:F0})" + Environment.NewLine;
+            _viewModel.DiagnosticToolTip += $"ScreenPos: ({currentPosDip.X:F2}, {currentPosDip.Y:F2})" + Environment.NewLine;
+            _viewModel.DiagnosticToolTip += worldPos.HasValue ? $"WorldPos: ({worldPos.Value.X:F2}, {worldPos.Value.Y:F2}, {worldPos.Value.Z:F2})" + Environment.NewLine : "WorldPos: null" + Environment.NewLine;
+#endif
 
             var result = _viewModel.HandleMouseMove(
                 currentPosDip,
                 vector3D,
                 e.MiddleButton,
                 e.RightButton,
-                isShiftPressed,
                 panScale,
                 out var cameraOp);
 
-            bool didPan = false;
-
-            // Compute framebuffer pixel delta once
-            if (_lastMousePosDip.HasValue)
-            {
-                var dpi = VisualTreeHelper.GetDpi(GlWPFControl);
-                float dxPx = (float)((currentPosDip.X - _lastMousePosDip.Value.X) * dpi.DpiScaleX);
-                float dyPx = (float)((currentPosDip.Y - _lastMousePosDip.Value.Y) * dpi.DpiScaleY);
-
-                // Preferred path: VM asked to pan -> use pixel-based ortho pan
-                if (cameraOp?.Type == CameraOperationType.Pan)
-                {
-                    if (_renderEngine.ProjectionMode == ProjectionMode.Orthographic &&
-                        e.MiddleButton == MouseButtonState.Pressed)
-                    {
-                        var worldBefore = ScreenToWorld(_lastMousePosDip.Value);
-                        var worldAfter = ScreenToWorld(currentPosDip);
-
-                        if (worldBefore.HasValue && worldAfter.HasValue)
-                        {
-                            Vector2 delta = new Vector2(
-                                worldBefore.Value.X - worldAfter.Value.X,
-                                worldBefore.Value.Y - worldAfter.Value.Y);
-
-                            _renderEngine.Camera.Pan(delta);
-                            didPan = true;
-                        }
-                    }
-                    else
-                    {
-                        _renderEngine.Camera.Pan(new Vector2(cameraOp.DeltaX, cameraOp.DeltaY));
-                        didPan = true;
-                    }
-                }
-                // Fallback: if VM didn't emit a pan op but the user is dragging with middle/right in ortho, pan anyway
-                if (_renderEngine.ProjectionMode == ProjectionMode.Orthographic &&
-                    e.MiddleButton == MouseButtonState.Pressed)
-                {
-                    var worldBefore = ScreenToWorld(_lastMousePosDip.Value);
-                    var worldAfter = ScreenToWorld(currentPosDip);
-
-                    if (worldBefore.HasValue && worldAfter.HasValue)
-                    {
-                        Vector2 delta = new Vector2(
-                            worldBefore.Value.X - worldAfter.Value.X,
-                            worldBefore.Value.Y - worldAfter.Value.Y);
-
-                        _renderEngine.Camera.Pan(delta);
-                        didPan = true;
-                    }
-                }
-            }
-
-            _lastMousePosDip = currentPosDip;
-
-            // Update camera info in status bar when panning
-            if (didPan)
-            {
-                UpdateCameraInfoInStatusBar();
-            }
-
-            // Always refresh to update crosshair position and window selection rectangle
             Refresh();
         }
 
@@ -1056,47 +1029,47 @@ namespace UI.Controls.Viewport
             Refresh();
         }
 
-        private void OnKeyDown(object sender, KeyEventArgs e)
-        {
-            //System.Diagnostics.Debug.WriteLine($"ViewportControl.OnKeyDown: Key={e.Key}, IsSelectionMode={_viewModel.IsSelectionMode}, SelectedCount={_viewModel.SelectedObjects.Count}");
+        //private void OnKeyDown(object sender, KeyEventArgs e)
+        //{
+        //    //System.Diagnostics.Debug.WriteLine($"ViewportControl.OnKeyDown: Key={e.Key}, IsSelectionMode={_viewModel.IsSelectionMode}, SelectedCount={_viewModel.SelectedObjects.Count}");
 
-            // Handle ESC key
-            if (e.Key == Key.Escape)
-            {
-                // Priority 1: Cancel point picking mode if active
-                if (_viewModel.IsPointPickingMode)
-                {
-                    //System.Diagnostics.Debug.WriteLine("ESC pressed - cancelling point picking mode");
-                    _viewModel.CancelPointPicking();
-                    e.Handled = true;
-                    return;
-                }
+        //    // Handle ESC key
+        //    if (e.Key == Key.Escape)
+        //    {
+        //        // Priority 1: Cancel point picking mode if active
+        //        if (_viewModel.IsPointPickingMode)
+        //        {
+        //            //System.Diagnostics.Debug.WriteLine("ESC pressed - cancelling point picking mode");
+        //            _viewModel.CancelPointPicking();
+        //            e.Handled = true;
+        //            return;
+        //        }
 
-                // Priority 2: Clear selection if there are selected objects
-                if (_viewModel.IsSelectionMode && _viewModel.SelectedObjects.Count > 0)
-                {
-                    //System.Diagnostics.Debug.WriteLine("ESC pressed - clearing selection");
-                    _viewModel.SelectionManager.ClearSelection();
-                    e.Handled = true;
-                    return;
-                }
-            }
+        //        // Priority 2: Clear selection if there are selected objects
+        //        if (_viewModel.IsSelectionMode && _viewModel.SelectedObjects.Count > 0)
+        //        {
+        //            //System.Diagnostics.Debug.WriteLine("ESC pressed - clearing selection");
+        //            _viewModel.SelectionManager.ClearSelection();
+        //            e.Handled = true;
+        //            return;
+        //        }
+        //    }
 
-            if (e.Key == Key.LeftShift || e.Key == Key.RightShift)
-            {
-                // Update status bar when Shift is pressed
-                _viewModel.IsShiftKeyPressed = true;
-            }
-        }
+        //    if (e.Key == Key.LeftShift || e.Key == Key.RightShift)
+        //    {
+        //        // Update status bar when Shift is pressed
+        //        _viewModel.IsShiftKeyPressed = true;
+        //    }
+        //}
 
-        private void OnKeyUp(object sender, KeyEventArgs e)
-        {
-            if (e.Key == Key.LeftShift || e.Key == Key.RightShift)
-            {
-                // Update status bar when Shift is released
-                _viewModel.IsShiftKeyPressed = false;
-            }
-        }
+        //private void OnKeyUp(object sender, KeyEventArgs e)
+        //{
+        //    if (e.Key == Key.LeftShift || e.Key == Key.RightShift)
+        //    {
+        //        // Update status bar when Shift is released
+        //        _viewModel.IsShiftKeyPressed = false;
+        //    }
+        //}
 
         #endregion
 
@@ -1108,135 +1081,136 @@ namespace UI.Controls.Viewport
 
         public Vector3? ScreenToWorld(Point screenPosDip)
         {
-            if (_renderEngine == null)
-                return null;
+            return _renderEngine?.Camera.ScreenToWorld(new System.Drawing.Point((int)screenPosDip.X, (int)screenPosDip.Y));
+            //if (_renderEngine == null)
+            //    return null;
 
-            try
-            {
-                // Convert DIPs → pixels
-                var dpi = VisualTreeHelper.GetDpi(GlWPFControl);
-                float widthPx = (float)Math.Max(1, Math.Round(GlWPFControl.ActualWidth * dpi.DpiScaleX));
-                float heightPx = (float)Math.Max(1, Math.Round(GlWPFControl.ActualHeight * dpi.DpiScaleY));
-                float mouseXpx = (float)(screenPosDip.X * dpi.DpiScaleX);
-                float mouseYpx = (float)(screenPosDip.Y * dpi.DpiScaleY);
+            //try
+            //{
+            //    // Convert DIPs → pixels
+            //    var dpi = VisualTreeHelper.GetDpi(GlWPFControl);
+            //    float widthPx = (float)Math.Max(1, Math.Round(GlWPFControl.ActualWidth * dpi.DpiScaleX));
+            //    float heightPx = (float)Math.Max(1, Math.Round(GlWPFControl.ActualHeight * dpi.DpiScaleY));
+            //    float mouseXpx = (float)(screenPosDip.X * dpi.DpiScaleX);
+            //    float mouseYpx = (float)(screenPosDip.Y * dpi.DpiScaleY);
 
-                // Screen → NDC
-                float ndcX = (mouseXpx / widthPx) * 2f - 1f;
-                float ndcY = 1f - (mouseYpx / heightPx) * 2f;
+            //    // Screen → NDC
+            //    float ndcX = (mouseXpx / widthPx) * 2f - 1f;
+            //    float ndcY = 1f - (mouseYpx / heightPx) * 2f;
 
-                // Get camera matrices fresh every time
-                float aspect = widthPx / heightPx;
+            //    // Get camera matrices fresh every time
+            //    float aspect = widthPx / heightPx;
 
-                Matrix4x4 viewMatrix;
-                Matrix4x4 projMatrix;
+            //    Matrix4x4 viewMatrix;
+            //    Matrix4x4 projMatrix;
 
-                if (_renderEngine.ProjectionMode == GraphicsEngine.ProjectionMode.Orthographic)
-                {
-                    var cam = _renderEngine.Camera;
+            //    if (_renderEngine.ProjectionMode == GraphicsEngine.ProjectionMode.Orthographic)
+            //    {
+            //        var cam = _renderEngine.Camera;
 
-                    // Your camera defines width in world units
-                    float halfWidth = cam.PanScale * 0.5f;
-                    float halfHeight = halfWidth / aspect;
+            //        // Your camera defines width in world units
+            //        float halfWidth = cam.PanScale * 0.5f;
+            //        float halfHeight = halfWidth / aspect;
 
-                    float cx = cam.Target.X;
-                    float cy = cam.Target.Y;
+            //        float cx = cam.Target.X;
+            //        float cy = cam.Target.Y;
 
-                    float worldX = cx + ndcX * halfWidth;
-                    float worldY = cy + ndcY * halfHeight;
-                    float worldZ = 0f; // your drawing plane
+            //        float worldX = cx + ndcX * halfWidth;
+            //        float worldY = cy + ndcY * halfHeight;
+            //        float worldZ = 0f; // your drawing plane
 
-                    return new Vector3(worldX, worldY, worldZ);
-                }
-                else
-                {
-                    // Perspective path
-                    viewMatrix = _renderEngine.Camera.ViewMatrix;
-                    projMatrix = _renderEngine.Camera.ProjectionMatrix;
+            //        return new Vector3(worldX, worldY, worldZ);
+            //    }
+            //    else
+            //    {
+            //        // Perspective path
+            //        viewMatrix = _renderEngine.Camera.ViewMatrix;
+            //        projMatrix = _renderEngine.Camera.ProjectionMatrix;
 
-                    Matrix4x4 pv = projMatrix * viewMatrix;
-                    if (!Matrix4x4.Invert(pv, out var invPv))
-                        return null;
+            //        Matrix4x4 pv = projMatrix * viewMatrix;
+            //        if (!Matrix4x4.Invert(pv, out var invPv))
+            //            return null;
 
-                    // System.Numerics uses row vectors → transpose
-                    Matrix4x4 invRow = Matrix4x4.Transpose(invPv);
+            //        // System.Numerics uses row vectors → transpose
+            //        Matrix4x4 invRow = Matrix4x4.Transpose(invPv);
 
-                    Vector4 nearClip = new Vector4(ndcX, ndcY, -1f, 1f);
-                    Vector4 farClip = new Vector4(ndcX, ndcY, 1f, 1f);
+            //        Vector4 nearClip = new Vector4(ndcX, ndcY, -1f, 1f);
+            //        Vector4 farClip = new Vector4(ndcX, ndcY, 1f, 1f);
 
-                    Vector4 nearWorld = Vector4.Transform(nearClip, invRow);
-                    Vector4 farWorld = Vector4.Transform(farClip, invRow);
+            //        Vector4 nearWorld = Vector4.Transform(nearClip, invRow);
+            //        Vector4 farWorld = Vector4.Transform(farClip, invRow);
 
-                    nearWorld /= nearWorld.W;
-                    farWorld /= farWorld.W;
+            //        nearWorld /= nearWorld.W;
+            //        farWorld /= farWorld.W;
 
-                    Vector3 rayOrigin = new Vector3(nearWorld.X, nearWorld.Y, nearWorld.Z);
-                    Vector3 rayEnd = new Vector3(farWorld.X, farWorld.Y, farWorld.Z);
-                    Vector3 rayDir = Vector3.Normalize(rayEnd - rayOrigin);
+            //        Vector3 rayOrigin = new Vector3(nearWorld.X, nearWorld.Y, nearWorld.Z);
+            //        Vector3 rayEnd = new Vector3(farWorld.X, farWorld.Y, farWorld.Z);
+            //        Vector3 rayDir = Vector3.Normalize(rayEnd - rayOrigin);
 
-                    // Intersect with Z=0 plane
-                    if (Math.Abs(rayDir.Z) < 1e-6f)
-                        return rayOrigin;
+            //        // Intersect with Z=0 plane
+            //        if (Math.Abs(rayDir.Z) < 1e-6f)
+            //            return rayOrigin;
 
-                    float t = -rayOrigin.Z / rayDir.Z;
-                    return rayOrigin + t * rayDir;
-                }
-            }
-            catch
-            {
-                return null;
-            }
+            //        float t = -rayOrigin.Z / rayDir.Z;
+            //        return rayOrigin + t * rayDir;
+            //    }
+            //}
+            //catch
+            //{
+            //    return null;
+            //}
         }
 
-        private System.Drawing.Point? WorldToScreen(Vector3 worldPoint)
-        {
-            var pt = WorldToScreen(new Point3D(worldPoint.X, worldPoint.Y, worldPoint.Z));
-            if (!pt.HasValue)
-                return null;
-            return new System.Drawing.Point((int)pt.Value.X, (int)pt.Value.Y);
-        }
+        //private System.Drawing.Point? WorldToScreen(Vector3 worldPoint)
+        //{
+        //    var pt = WorldToScreen(new Point3D(worldPoint.X, worldPoint.Y, worldPoint.Z));
+        //    if (!pt.HasValue)
+        //        return null;
+        //    return new System.Drawing.Point((int)pt.Value.X, (int)pt.Value.Y);
+        //}
 
-        private Point? WorldToScreen(Point3D worldPoint)
-        {
-            if (_renderEngine == null) return null;
+        //private Point? WorldToScreen(Point3D worldPoint)
+        //{
+        //    if (_renderEngine == null) return null;
 
-            try
-            {
-                var dpi = VisualTreeHelper.GetDpi(GlWPFControl);
-                float widthPx = Math.Max(1, (float)Math.Round(GlWPFControl.ActualWidth * dpi.DpiScaleX));
-                float heightPx = Math.Max(1, (float)Math.Round(GlWPFControl.ActualHeight * dpi.DpiScaleY));
+        //    try
+        //    {
+        //        var dpi = VisualTreeHelper.GetDpi(GlWPFControl);
+        //        float widthPx = Math.Max(1, (float)Math.Round(GlWPFControl.ActualWidth * dpi.DpiScaleX));
+        //        float heightPx = Math.Max(1, (float)Math.Round(GlWPFControl.ActualHeight * dpi.DpiScaleY));
 
-                // Build PV as in ScreenToWorld (projection * view)
-                var viewMatrix = _renderEngine.Camera.ViewMatrix;
-                var projectionMatrix = _renderEngine.Camera.ProjectionMatrix;
+        //        // Build PV as in ScreenToWorld (projection * view)
+        //        var viewMatrix = _renderEngine.Camera.ViewMatrix;
+        //        var projectionMatrix = _renderEngine.Camera.ProjectionMatrix;
 
-                Matrix4x4 pv = Matrix4x4.Multiply(projectionMatrix, viewMatrix);
+        //        Matrix4x4 pv = Matrix4x4.Multiply(projectionMatrix, viewMatrix);
 
-                // Use transpose to match Vector4.Transform row-vector convention (mirrors inverse used in ScreenToWorld)
-                var pvRow = Matrix4x4.Transpose(pv);
+        //        // Use transpose to match Vector4.Transform row-vector convention (mirrors inverse used in ScreenToWorld)
+        //        var pvRow = Matrix4x4.Transpose(pv);
 
-                var worldV = new Vector4((float)worldPoint.X, (float)worldPoint.Y, (float)worldPoint.Z, 1f);
-                var clip = Vector4.Transform(worldV, pvRow);
+        //        var worldV = new Vector4((float)worldPoint.X, (float)worldPoint.Y, (float)worldPoint.Z, 1f);
+        //        var clip = Vector4.Transform(worldV, pvRow);
 
-                if (Math.Abs(clip.W) < 1e-6f)
-                    return null;
+        //        if (Math.Abs(clip.W) < 1e-6f)
+        //            return null;
 
-                var ndc = clip / clip.W;
+        //        var ndc = clip / clip.W;
 
-                // Convert NDC [-1,1] to pixel coords (same convention as ScreenToWorld)
-                float px = (ndc.X + 1.0f) * 0.5f * widthPx;
-                float py = (1.0f - ndc.Y) * 0.5f * heightPx;
+        //        // Convert NDC [-1,1] to pixel coords (same convention as ScreenToWorld)
+        //        float px = (ndc.X + 1.0f) * 0.5f * widthPx;
+        //        float py = (1.0f - ndc.Y) * 0.5f * heightPx;
 
-                // Convert pixels back to DIPs for consistency with mousePosDip
-                double dipX = px / dpi.DpiScaleX;
-                double dipY = py / dpi.DpiScaleY;
+        //        // Convert pixels back to DIPs for consistency with mousePosDip
+        //        double dipX = px / dpi.DpiScaleX;
+        //        double dipY = py / dpi.DpiScaleY;
 
-                return new Point(dipX, dipY);
-            }
-            catch
-            {
-                return null;
-            }
-        }
+        //        return new Point(dipX, dipY);
+        //    }
+        //    catch
+        //    {
+        //        return null;
+        //    }
+        //}
 
         #endregion
 
@@ -1247,24 +1221,26 @@ namespace UI.Controls.Viewport
         public bool HandleEscapeKey()
         {
             //System.Diagnostics.Debug.WriteLine($"ViewportControl.HandleEscapeKey: IsPointPickingMode={_viewModel.IsPointPickingMode}, IsSelectionMode={_viewModel.IsSelectionMode}, SelectedCount={_viewModel.SelectedObjects.Count}");
-            
+            var result = _viewModel.HandleEscapeKey();
+            Refresh();
+            return result;
             // Priority 1: Cancel point picking mode if active
-            if (_viewModel.IsPointPickingMode)
-            {
-                //System.Diagnostics.Debug.WriteLine("ESC handled - cancelling point picking mode");
-                _viewModel.CancelPointPicking();
-                return true;
-            }
+            //if (_viewModel.IsPointPickingMode)
+            //{
+            //    //System.Diagnostics.Debug.WriteLine("ESC handled - cancelling point picking mode");
+            //    _viewModel.CancelPointPicking();
+            //    return true;
+            //}
             
-            // Priority 2: Clear selection if there are selected objects
-            if (_viewModel.IsSelectionMode && _viewModel.SelectedObjects.Count > 0)
-            {
-                //System.Diagnostics.Debug.WriteLine("ESC handled - clearing selection");
-                _viewModel.SelectionManager.ClearSelection();
-                return true;
-            }
+            //// Priority 2: Clear selection if there are selected objects
+            //if (_viewModel.IsSelectionMode && _viewModel.SelectedObjects.Count > 0)
+            //{
+            //    //System.Diagnostics.Debug.WriteLine("ESC handled - clearing selection");
+            //    _viewModel.SelectionManager.ClearSelection();
+            //    return true;
+            //}
             
-            return false;
+            //return false;
         }
         /// <summary>
         /// Handle Delete key press to erase selected objects (called from MainWindow PreviewKeyDown)
@@ -1299,6 +1275,11 @@ namespace UI.Controls.Viewport
         internal void SetShiftKeyState(bool isShiftPressed)
         {
             _viewModel.IsShiftKeyPressed = isShiftPressed;
+        }
+
+        internal void SetCtrlKeyState(bool isCtrlPressed)
+        {
+            _viewModel.IsCtrlKeyPressed = isCtrlPressed;
         }
 
         /// <summary>

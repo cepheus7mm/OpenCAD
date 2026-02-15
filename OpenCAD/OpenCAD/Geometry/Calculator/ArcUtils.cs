@@ -131,7 +131,7 @@ namespace OpenCAD.Geometry.Calculator
 
         public static bool IsPointOnArc(Point3D point, Arc arc)
         {
-            return IsPointOnArc(point, arc.Start, arc.Center, arc.Angle, 1e-9);
+            return IsPointOnArc(point, arc.StartPoint, arc.Center, arc.Angle, 1e-9);
         }
 
         public static void GetRawArcAnglesFromCenter(Point3D center, Point3D start, Point3D end, out double startAngle, out double endAngle)

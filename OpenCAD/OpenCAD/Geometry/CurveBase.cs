@@ -17,8 +17,8 @@ namespace OpenCAD.Geometry
         public abstract double DomainStart { get; }
         public abstract double DomainEnd { get; }
 
-        public abstract Point3D Start { get; }
-        public abstract Point3D End { get; }
+        public abstract Point3D StartPoint { get; }
+        public abstract Point3D EndPoint { get; }
 
         public abstract Point3D GetPointAtParameter(double t);
         public abstract Vector3D GetFirstDerivativeAtParameter(double t);
@@ -33,6 +33,8 @@ namespace OpenCAD.Geometry
 
         public abstract ICurve Trim(double t0, double t1);
         public abstract ICurve Transform(Matrix4D transform);
+
+        public abstract ICurve[] GetOffsetCurves(double distance);
 
     }
 }

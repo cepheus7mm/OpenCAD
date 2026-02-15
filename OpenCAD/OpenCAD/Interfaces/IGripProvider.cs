@@ -19,6 +19,7 @@ namespace OpenCAD.Interfaces
         /// <summary>
         /// Applies a delta to the specified grip and returns a new modified entity.
         /// </summary>
-        OpenCADObject ApplyGripDelta(Grip grip, Vector2 delta);
+        OpenCADObject ApplyGripDelta(Grip activeGrip, Grip targetGrip, Vector2 delta, GripEditMode gripEditMode);
+        OpenCADObject ApplyGripDelta(Grip activeGrip, OpenCADObject targetObject, Vector2 delta, GripEditMode gripEditMode);
     }
 }

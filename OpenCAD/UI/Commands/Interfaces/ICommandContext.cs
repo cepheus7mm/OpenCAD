@@ -3,7 +3,7 @@ using OpenCAD.Geometry;
 using OpenCAD.Undo;
 using UI.Controls.Viewport;
 
-namespace UI.Commands
+namespace UI.Commands.Interfaces
 {
     /// <summary>
     /// Context interface for commands to interact with the UI

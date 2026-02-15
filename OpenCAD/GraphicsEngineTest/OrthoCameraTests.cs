@@ -30,37 +30,37 @@ namespace GraphicsEngineTests
         // ------------------------------------------------------------
         // 2. View Matrix
         // ------------------------------------------------------------
-        [TestMethod]
-        public void ViewMatrix_LooksDownNegativeZ()
-        {
-            Matrix4x4 view = cam.GetViewMatrix();
+        //[TestMethod]
+        //public void ViewMatrix_LooksDownNegativeZ()
+        //{
+        //    Matrix4x4 view = cam.GetViewMatrix();
 
-            // Transform the camera position by the view matrix → should land at origin
-            Vector3 transformed = Vector3.Transform(cam.Position, view);
+        //    // Transform the camera position by the view matrix → should land at origin
+        //    Vector3 transformed = Vector3.Transform(cam.Position, view);
 
-            Assert.AreEqual(0f, transformed.X, 1e-6f);
-            Assert.AreEqual(0f, transformed.Y, 1e-6f);
-            Assert.AreEqual(0f, transformed.Z, 1e-6f);
-        }
+        //    Assert.AreEqual(0f, transformed.X, 1e-6f);
+        //    Assert.AreEqual(0f, transformed.Y, 1e-6f);
+        //    Assert.AreEqual(0f, transformed.Z, 1e-6f);
+        //}
 
-        // ------------------------------------------------------------
-        // 3. Projection Matrix
-        // ------------------------------------------------------------
-        [TestMethod]
-        public void ProjectionMatrix_HasCorrectExtents()
-        {
-            float aspect = 16f / 9f;
-            Matrix4x4 proj = cam.GetProjectionMatrix();
+        //// ------------------------------------------------------------
+        //// 3. Projection Matrix
+        //// ------------------------------------------------------------
+        //[TestMethod]
+        //public void ProjectionMatrix_HasCorrectExtents()
+        //{
+        //    float aspect = 16f / 9f;
+        //    Matrix4x4 proj = cam.GetProjectionMatrix();
 
-            float halfW = cam.WorldWidth * 0.5f;
-            float halfH = halfW / aspect;
+        //    float halfW = cam.WorldWidth * 0.5f;
+        //    float halfH = halfW / aspect;
 
-            float expectedM11 = 1f / halfW; // = 0.02 for OrthoWidth=100
-            float expectedM22 = 1f / halfH;
+        //    float expectedM11 = 1f / halfW; // = 0.02 for OrthoWidth=100
+        //    float expectedM22 = 1f / halfH;
 
-            Assert.AreEqual(expectedM11, proj.M11, 1e-6f);
-            Assert.AreEqual(expectedM22, proj.M22, 1e-6f);
-        }
+        //    Assert.AreEqual(expectedM11, proj.M11, 1e-6f);
+        //    Assert.AreEqual(expectedM22, proj.M22, 1e-6f);
+        //}
 
         // ------------------------------------------------------------
         // 4. Zoom

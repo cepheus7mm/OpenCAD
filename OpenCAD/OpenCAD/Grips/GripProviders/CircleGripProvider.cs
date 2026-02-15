@@ -12,8 +12,6 @@ namespace OpenCAD.Grips.GripProviders
 {
     public sealed class CircleGripProvider : GripProviderBase, IGripProvider
     {
-        private const double MinRadius = 1e-6;
-
         public IEnumerable<Grip> GetGrips(OpenCADObject owner)
         {
             if (owner is not Circle c)
@@ -59,40 +57,150 @@ namespace OpenCAD.Grips.GripProviders
             );
         }
 
-        public OpenCADObject? ApplyGripDelta(Grip grip, Vector2 delta)
+        public OpenCADObject ApplyGripDelta(
+            Grip activeGrip,
+            Grip targetGrip,
+            Vector2 delta,
+            GripEditMode gripEditMode)
         {
-            if (grip.Owner is not Circle c)
-                return null;
+            if (targetGrip.Owner is not Circle c)
+                return targetGrip.Owner;
 
-            // Convert delta to 2D
-            var dx = delta.X;
-            var dy = delta.Y;
+            InitializeGripEdit(activeGrip);
 
-            var center = new Vector2((float)c.Center.X, (float)c.Center.Y);
-            // 1. Center grip → move entire circle
-            if (grip.Kind == GripKind.Move)
+            return gripEditMode switch
             {
-                var newCenter = new Vector2(
-                    center.X + dx,
-                    center.Y + dy
-                );
-                var center3D = Vector2ToPoint3D(newCenter, c.Center.Z);
-                return new Circle(center3D, c.Radius, c.Document);
+                GripEditMode.Stretch => ApplyStretch(c, targetGrip, delta),
+                GripEditMode.Lengthen => ApplyStretch(c, targetGrip, delta), //Same as stretch for circles
+                _ => c
+            };
+        }
+
+        //public OpenCADObject ApplyGripDelta(
+        //    Grip activeGrip,
+        //    OpenCADObject targetObject,
+        //    Vector2 delta,
+        //    GripEditMode gripEditMode)
+        //{
+        //    if (targetObject is not Circle c)
+        //        return targetObject;
+
+        //    InitializeGripEdit(activeGrip);
+
+        //    return gripEditMode switch
+        //    {
+        //        GripEditMode.Move => ApplyMove(c, delta),
+        //        GripEditMode.Rotate => ApplyRotate(c, delta),
+        //        GripEditMode.Mirror => ApplyMirror(c, delta),
+        //        GripEditMode.Scale => ApplyScale(c, delta),
+        //        _ => c
+        //    };
+        //}
+
+        private OpenCADObject ApplyStretch(Circle c, Grip grip, Vector2 delta)
+        {
+            var center = Point3DToVector2(c.Center);
+
+            if (grip.SubIndex == 0)
+            {
+                // Move entire circle
+                center += delta;
+                return NewCircle(c, center, c.Radius);
             }
 
-            // 2. Radius grips → resize
-            // Compute new radius based on dragged grip position
-            var newGripPos = new Point3D(
-                grip.Position.X + dx,
-                grip.Position.Y + dy,
-                c.Center.Z
-            );
+            // Radius grips
+            Vector2 newGripPos = grip.Position + delta;
+            double newRadius = (newGripPos - center).Length();
 
-            double newRadius = (newGripPos - c.Center).Length;
-            if (newRadius < MinRadius)
-                newRadius = MinRadius;
+            if (newRadius < 1e-6)
+                newRadius = 1e-6;
 
-            return new Circle(c.Center, newRadius, c.Document);
+            return NewCircle(c, center, newRadius);
+        }
+
+        private OpenCADObject ApplyMove(Circle c, Vector2 delta)
+        {
+            var center = Point3DToVector2(c.Center) + delta;
+            return NewCircle(c, center, c.Radius);
+        }
+
+        private OpenCADObject ApplyRotate(Circle c, Vector2 delta)
+        {
+            Vector2 currentMouse = _pivot + delta;
+
+            Vector2 startVec = _referenceDirection;
+            Vector2 currentVec = currentMouse - _pivot;
+
+            float angle =
+                MathF.Atan2(currentVec.Y, currentVec.X) -
+                MathF.Atan2(startVec.Y, startVec.X);
+
+            float cos = MathF.Cos(angle);
+            float sin = MathF.Sin(angle);
+
+            Vector2 RotatePoint(Vector2 p)
+            {
+                Vector2 v = p - _pivot;
+                return new Vector2(
+                    v.X * cos - v.Y * sin,
+                    v.X * sin + v.Y * cos
+                ) + _pivot;
+            }
+
+            Vector2 newCenter = RotatePoint(Point3DToVector2(c.Center));
+
+            return NewCircle(c, newCenter, c.Radius);
+        }
+
+        private OpenCADObject ApplyMirror(Circle c, Vector2 delta)
+        {
+            InitializeMirror(delta);
+
+            Vector2 newCenter = ReflectPoint(Point3DToVector2(c.Center));
+            return NewCircle(c, newCenter, c.Radius);
+        }
+
+        private OpenCADObject ApplyScale(Circle c, Vector2 delta)
+        {
+            Vector2 currentMouse = _pivot + delta;
+
+            Vector2 refVec = _referenceDirection;
+            Vector2 curVec = currentMouse - _pivot;
+
+            float refLen = refVec.Length();
+            float curLen = curVec.Length();
+
+            if (refLen < 1e-12f)
+                return c;
+
+            float scale = curLen / refLen;
+
+            Vector2 ScalePoint(Vector2 p)
+            {
+                Vector2 v = p - _pivot;
+                return _pivot + v * scale;
+            }
+
+            Vector2 newCenter = ScalePoint(Point3DToVector2(c.Center));
+            double newRadius = c.Radius * scale;
+
+            if (newRadius < 1e-6)
+                newRadius = 1e-6;
+
+            return NewCircle(c, newCenter, newRadius);
+        }
+
+        private OpenCADObject NewCircle(Circle original, Vector2 center, double radius)
+        {
+            var c3 = Vector2ToPoint3D(center, original.Center.Z);
+
+            return new Circle(c3, radius, original.Document!)
+            {
+                Layer = original.Layer,
+                Color = original.Color,
+                LineTypeID = original.LineTypeID,
+                LineWeight = original.LineWeight
+            };
         }
     }
 }

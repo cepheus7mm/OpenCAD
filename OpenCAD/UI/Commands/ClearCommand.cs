@@ -1,4 +1,4 @@
-namespace UI.Commands
+namespace UI.Commands.Interfaces
 {
     /// <summary>
     /// Command to clear command history

@@ -1,6 +1,7 @@
 ﻿using OpenCAD;
 using OpenCAD.Geometry.Helpers;
 using OpenCAD.Undo;
+using UI.Commands.Interfaces;
 using UI.Controls.Viewport;
 
 namespace UI.Commands.Editing
@@ -16,7 +17,7 @@ namespace UI.Commands.Editing
 
         protected override Matrix4D GetTransformation()
         {
-            throw new NotImplementedException();
+            return Matrix4D.Identity;
         }
 
         protected override async Task OnObjectsSelected()

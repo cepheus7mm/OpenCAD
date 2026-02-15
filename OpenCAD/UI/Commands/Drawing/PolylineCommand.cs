@@ -7,6 +7,7 @@ using System.ComponentModel;
 using System.Threading;
 using System.Threading.Tasks;
 using UI.Commands.InputHelpers;
+using UI.Commands.Interfaces;
 using UI.Controls.Viewport;
 
 using ResType = UI.Commands.InputHelpers.InputResult.InputResultType;

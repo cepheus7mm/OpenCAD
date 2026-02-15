@@ -3,6 +3,7 @@ using OpenCAD.Geometry;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using UI.Commands.Interfaces;
 using UI.Controls.Viewport;
 
 namespace UI.Commands.InputHelpers

@@ -95,7 +95,7 @@ namespace OpenCAD.Geometry
             // Normalize to [0,1]
             double t = parameter - Math.Floor(parameter);
 
-            return GeometricCalculator.GetPointAtParameter(t, Start, Center, 2 * Math.PI);
+            return GeometricCalculator.GetPointAtParameter(t, StartPoint, Center, 2 * Math.PI);
         }
 
         public override Extents GetExtents()
@@ -188,40 +188,40 @@ namespace OpenCAD.Geometry
         public double DomainEnd => 1.0;
 
         [JsonIgnore, XmlIgnore]
-        public Point3D Start => new Point3D(Center.X + Radius, Center.Y, Center.Z);
+        public Point3D StartPoint => new Point3D(Center.X + Radius, Center.Y, Center.Z);
 
         [JsonIgnore, XmlIgnore]
-        public Point3D End => Start;
+        public Point3D EndPoint => StartPoint;
 
         public Vector3D GetFirstDerivativeAtParameter(double t)
         {
-            return GeometricCalculator.GetFirstDerivative(t, Start, Center, GetSweepAngle());
+            return GeometricCalculator.GetFirstDerivative(t, StartPoint, Center, GetSweepAngle());
         }
 
         public Vector3D GetSecondDerivativeAtParameter(double t)
         {
-            return GeometricCalculator.GetSecondDerivative(t, Start, Center, GetSweepAngle());
+            return GeometricCalculator.GetSecondDerivative(t, StartPoint, Center, GetSweepAngle());
         }
 
         public double GetClosestParameter(Point3D point, bool extend = false)
         {
-            return GeometricCalculator.GetClosestParameter(point, Start, Center, GetSweepAngle(), extend);
+            return GeometricCalculator.GetClosestParameter(point, StartPoint, Center, GetSweepAngle(), extend);
         }
 
         public Point3D GetClosestPoint(Point3D point, bool extend = false)
         {
-            return GeometricCalculator.GetClosestPoint(point, Start, Center, GetSweepAngle(), extend);
+            return GeometricCalculator.GetClosestPoint(point, StartPoint, Center, GetSweepAngle(), extend);
         }
 
         public double GetLength()
         {
-            return GeometricCalculator.GetLength(Start, Center, GetSweepAngle());
+            return GeometricCalculator.GetLength(StartPoint, Center, GetSweepAngle());
         }
 
         public double GetLength(double t0, double t1)
         {
             double dt = Math.Abs(t1 - t0);
-            var fullLength = GeometricCalculator.GetLength(Start, Center, GetSweepAngle());
+            var fullLength = GeometricCalculator.GetLength(StartPoint, Center, GetSweepAngle());
             return fullLength * dt;
         }
 
@@ -240,10 +240,10 @@ namespace OpenCAD.Geometry
             double b = Math.Max(0.0, Math.Min(1.0, t1));
 
             // Evaluate new angles
-            var point = GeometricCalculator.GetPointAtParameter(a, Start, Center, 2 * Math.PI);
+            var point = GeometricCalculator.GetPointAtParameter(a, StartPoint, Center, 2 * Math.PI);
             var newStart = Math.Atan2(point.Y - Center.Y, point.X - Center.X);
 
-            point = GeometricCalculator.GetPointAtParameter(b, Start, Center, 2 * Math.PI);
+            point = GeometricCalculator.GetPointAtParameter(b, StartPoint, Center, 2 * Math.PI);
             var newEnd = Math.Atan2(point.Y - Center.Y, point.X - Center.X);
 
             // Return a new Arc segment
@@ -278,11 +278,19 @@ namespace OpenCAD.Geometry
 
 
             // Return a new Arc segment
-            var newCircle = new Circle(Center, Radius, Document);
+            var newCircle = new Circle(transformedCenter, transformedRadius, Document);
             newCircle.SetBasicPropertiesFrom(this);
             newCircle.SetNormal(tn);
 
             return newCircle;
+        }
+
+        public ICurve[] GetOffsetCurves(double d)
+        {
+            return new ICurve[]
+            {
+                new Circle(Center, Radius + d, Document)
+            };
         }
 
         public IEnumerable<Segment> GetSegments(float maxSagitta)

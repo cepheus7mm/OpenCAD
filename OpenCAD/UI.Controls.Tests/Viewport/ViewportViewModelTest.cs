@@ -109,7 +109,6 @@ namespace UI.Controls.Tests.Viewport
                 new OpenCAD.Geometry.Helpers.Vector3D(endWorldPos.X, endWorldPos.Y, endWorldPos.Z),
                 MouseButtonState.Released, 
                 MouseButtonState.Released, 
-                false, 
                 1.0f, 
                 out _);
 
@@ -145,7 +144,6 @@ namespace UI.Controls.Tests.Viewport
                 new OpenCAD.Geometry.Helpers.Vector3D(25, 25, 0),
                 MouseButtonState.Released,
                 MouseButtonState.Released,
-                false,
                 1.0f,
                 out _);
 

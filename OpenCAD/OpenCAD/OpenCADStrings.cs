@@ -47,6 +47,10 @@
 
         public const string ApertureSize = "Aperture Size";
 
+        public const string FilletRadius = "Filler Radius";
+
+        public const string TrimMode = "Trim Mode";
+
         public const string GripSize = "Grip Size";
 
         public const string GeoPointModes = "GeoPoint Modes";
@@ -967,6 +971,8 @@
         public const string RotateCommandName = "rotate";
         public const string ScaleCommandName = "scale";
         public const string EraseCommandName = "erase";
+        public const string FilletCommandName = "fillet";
+
 
         /// <summary>
         /// Generic prompt format to select objects for an edit action (replace {0} with command name)

@@ -1,4 +1,5 @@
 ﻿using GraphicsEngine.Interfaces;
+using OpenCAD.Interfaces;
 using System;
 using System.Buffers;
 using System.Collections.Generic;
@@ -6,89 +7,75 @@ using System.Linq;
 using System.Numerics;
 using System.Text;
 using System.Threading.Tasks;
+using System.Windows;
 
 namespace GraphicsEngine
 {
     public sealed class OrthoCamera : ICamera
     {
-        public Vector3 Position { get; set; }   // eye in world space
-        public Vector3 Target { get; set; }     // look-at point
-        public Vector3 Up { get; set; }         // up vector
+        // -------------------------
+        // Camera state
+        // -------------------------
+        public Vector3 Position { get; set; }
+        public Vector3 Target { get; set; }
+        public Vector3 Up { get; set; }
 
-        public float WorldWidth { get; private set; } = 40.0f;  // world units across horizontally
-        public float WorldHeight { get; private set; }   // world units across vertically
+        public float WorldWidth { get; private set; } = 40f;
+        public float WorldHeight { get; private set; }
+
         public float Near = -1000f;
         public float Far = 1000f;
 
-        public float PanScale => WorldWidth;
-        public Matrix4x4 ViewMatrix => GetViewMatrix();
+        // -------------------------
+        // Viewport + DPI
+        // -------------------------
+        public float ViewportWidthPx { get; private set; }
+        public float ViewportHeightPx { get; private set; }
+        public float DpiScaleX { get; private set; } = 1f;
+        public float DpiScaleY { get; private set; } = 1f;
 
+        // -------------------------
+        // Matrices
+        // -------------------------
+        public Matrix4x4 ViewMatrix => Matrix4x4.CreateLookAt(Position, Target, Up);
         public Matrix4x4 ProjectionMatrix { get; private set; }
+        public Matrix4x4 ViewProjectionMatrix { get; private set; }
+        public Matrix4x4 InverseViewProjectionMatrix { get; private set; }
 
-        public OrthoCamera(float width)
+        public float PanScale => WorldWidth;
+
+        public OrthoCamera(float initialWidth)
         {
-            Position = new Vector3(0, 0, 10);   // looking down -Z or +Z depending on your convention
+            Position = new Vector3(0, 0, 10);
             Target = new Vector3(0, 0, 0);
             Up = new Vector3(0, 1, 0);
-            WorldWidth = width;
+
+            WorldWidth = initialWidth;
         }
 
-        public Matrix4x4 GetViewMatrix()
+        // -------------------------
+        // Viewport + DPI setters
+        // -------------------------
+        public void SetViewportSize(float widthPx, float heightPx)
         {
-            return Matrix4x4.CreateLookAt(Position, Target, Up);
+            ViewportWidthPx = Math.Max(1, widthPx);
+            ViewportHeightPx = Math.Max(1, heightPx);
+
+            float aspect = ViewportWidthPx / ViewportHeightPx;
+            WorldHeight = WorldWidth / aspect;
+
+            UpdateProjection(aspect);
         }
 
-        public void SetViewportSize(float width, float height)
+        public void SetDpi(float dpiX, float dpiY)
         {
-            WorldWidth = width;
-            WorldHeight = height;
+            DpiScaleX = dpiX;
+            DpiScaleY = dpiY;
         }
 
-        public Matrix4x4 GetProjectionMatrix()
-        {
-            var aspect = WorldWidth / WorldHeight;
-            float halfWidth = WorldWidth * 0.5f;
-            float halfHeight = halfWidth / aspect;
-
-            return Matrix4x4.CreateOrthographicOffCenter(
-                -halfWidth, halfWidth,
-                -halfHeight, halfHeight,
-                Near, Far);
-        }
-
-        public void Zoom(float zoomFactor)
-        {
-            // zoomFactor > 1 = zoom in, < 1 = zoom out
-            var minWidth = 1f;   // prevent zooming in too far
-            var maxWidth = 1000000000f; // prevent zooming out too far
-            WorldWidth /= zoomFactor;
-            WorldWidth = Math.Clamp(WorldWidth, minWidth, maxWidth);
-        }
-
-        public void Pan(Vector2 deltaPixels)
-        {
-            // Convert screen delta to NDC [-1, 1] range
-            float dxNdc = 2f * deltaPixels.X / WorldWidth;
-            float dyNdc = 2f * deltaPixels.Y / WorldHeight; // invert Y for screen → world
-
-            // Convert NDC to world units using current ortho extent
-            float halfWidth = WorldWidth * 0.5f;
-            float halfHeight = halfWidth / (WorldWidth / WorldHeight);
-
-            float dxWorld = dxNdc * halfWidth;
-            float dyWorld = dyNdc * halfHeight;
-
-            var offset = new Vector3(dxWorld, dyWorld, 0);
-
-            Position += offset;
-            Target += offset;
-        }
-        public void PanWorld(Vector3 delta)
-        {
-            Position += delta;
-            Target += delta;
-        }
-
+        // -------------------------
+        // Projection update
+        // -------------------------
         public void UpdateProjection(float aspect)
         {
             WorldHeight = WorldWidth / aspect;
@@ -99,6 +86,69 @@ namespace GraphicsEngine
                 Near,
                 Far
             );
+
+            ViewProjectionMatrix = ViewMatrix * ProjectionMatrix;
+            Matrix4x4.Invert(ViewProjectionMatrix, out var inv);
+            InverseViewProjectionMatrix = inv;
+        }
+
+        // -------------------------
+        // Camera movement
+        // -------------------------
+        public void Zoom(float zoomFactor)
+        {
+            WorldWidth /= zoomFactor;
+            WorldWidth = Math.Clamp(WorldWidth, 1f, 1e9f);
+
+            float aspect = ViewportWidthPx / ViewportHeightPx;
+            UpdateProjection(aspect);
+        }
+
+        public void Pan(Vector2 deltaPixels)
+        {
+            float dxWorld = (deltaPixels.X / ViewportWidthPx) * WorldWidth;
+            float dyWorld = -(deltaPixels.Y / ViewportHeightPx) * WorldHeight;
+
+            var offset = new Vector3(dxWorld, dyWorld, 0);
+            Position += offset;
+            Target += offset;
+
+            UpdateProjection(ViewportWidthPx / ViewportHeightPx);
+        }
+
+        public void PanWorld(Vector3 delta)
+        {
+            Position += delta;
+            Target += delta;
+            UpdateProjection(ViewportWidthPx / ViewportHeightPx);
+        }
+
+        // -------------------------
+        // Screen ↔ World transforms
+        // -------------------------
+        public Vector3 ScreenToWorld(System.Drawing.Point screenDip)
+        {
+            float px = (float)(screenDip.X * DpiScaleX);
+            float py = (float)(screenDip.Y * DpiScaleY);
+
+            float ndcX = (px / ViewportWidthPx) * 2f - 1f;
+            float ndcY = 1f - (py / ViewportHeightPx) * 2f;
+
+            var clip = new Vector4(ndcX, ndcY, 0f, 1f);
+            var world = Vector4.Transform(clip, InverseViewProjectionMatrix);
+
+            return new Vector3(world.X, world.Y, world.Z);
+        }
+
+        public System.Drawing.Point WorldToScreen(Vector3 world)
+        {
+            var clip = Vector4.Transform(new Vector4(world, 1f), ViewProjectionMatrix);
+            var ndc = clip / clip.W;
+
+            float px = (ndc.X + 1f) * 0.5f * ViewportWidthPx;
+            float py = (1f - ndc.Y) * 0.5f * ViewportHeightPx;
+
+            return new System.Drawing.Point((int)(px / DpiScaleX), (int)(py / DpiScaleY));
         }
     }
 }

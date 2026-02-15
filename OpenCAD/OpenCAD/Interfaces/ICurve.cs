@@ -14,8 +14,8 @@ namespace OpenCAD.Interfaces
         double DomainEnd { get; }
 
         // --- Endpoints (always defined, even for closed curves) ---
-        Point3D Start { get; }
-        Point3D End { get; }
+        Point3D StartPoint { get; }
+        Point3D EndPoint { get; }
 
         // --- Core evaluation ---
         Point3D GetPointAtParameter(double t);
@@ -45,5 +45,12 @@ namespace OpenCAD.Interfaces
 
         // --- Transformations ---
         ICurve Transform(Matrix4D transform);
+
+        /// <summary>
+        /// Returns one or more offset curves at the given distance.
+        /// Positive distance = left side of curve direction.
+        /// Negative distance = right side.
+        /// </summary>
+        ICurve[] GetOffsetCurves(double distance);
     }
 }

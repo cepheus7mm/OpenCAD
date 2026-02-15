@@ -124,7 +124,7 @@ namespace GraphicsEngine
 
             _viewport = new Viewport(glWPFControl) { Camera = _camera };
 
-            //_camera.SetViewportSize(_viewport.PixelWidth, _viewport.PixelHeight);
+            _camera.SetViewportSize(_viewport.PixelWidth, _viewport.PixelHeight);
 
             UpdateProjection(_viewport.PixelWidth, _viewport.PixelHeight);
             RegisterDefaultRenderers();

@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using OpenCAD;
 using OpenCAD.Geometry;
+using UI.Commands.Interfaces;
 using UI.Controls.Viewport;
 
 namespace UI.Commands.InputHelpers

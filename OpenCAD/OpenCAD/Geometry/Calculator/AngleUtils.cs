@@ -5,7 +5,7 @@ namespace OpenCAD.Geometry.Calculator
     internal static class AngleUtils
     {
         public const double Pi = Math.PI;
-        public const double TwoPi = 2.0 * Pi;
+        public const double TwoPi = 2.0 * Math.PI;
 
         public static double[] Cardinals = {0.0, Pi / 2.0, Pi, 3.0 * Pi / 2.0};
 
@@ -22,7 +22,13 @@ namespace OpenCAD.Geometry.Calculator
         public static double NormalizeUnsigned(double a)
         {
             a %= TwoPi;
-            if (a < 0) a += TwoPi;
+            if (a < 0)
+                a += TwoPi;
+
+            // Clamp 2π → 0
+            if (Math.Abs(a - TwoPi) < 1e-7)
+                a = 0;
+
             return a;
         }
 

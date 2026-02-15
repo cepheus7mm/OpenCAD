@@ -71,6 +71,9 @@ namespace OpenCAD.Geometry
 
         // --- Helpers -----------------------------------------------------------
 
+        public static Point3D MidPoint(Point3D a, Point3D b)
+            => new Point3D((a.X + b.X) / 2, (a.Y + b.Y) / 2, (a.Z + b.Z) / 2);
+
         public double DistanceTo(Point3D other)
         {
             double dx = other.X - X;

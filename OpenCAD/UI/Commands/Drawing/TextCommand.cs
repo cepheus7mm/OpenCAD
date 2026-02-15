@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using UI.Controls.Viewport;
 using Microsoft.Extensions.DependencyInjection;
 using System.Windows;
+using UI.Commands.Interfaces;
 
 namespace UI.Commands.Drawing
 {

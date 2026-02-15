@@ -6,6 +6,7 @@ using System;
 using System.ComponentModel;
 using System.Threading;
 using System.Threading.Tasks;
+using UI.Commands.Interfaces;
 using UI.Controls.Viewport;
 
 namespace UI.Commands.Drawing
@@ -220,9 +221,9 @@ namespace UI.Commands.Drawing
                     }
 
                     if (lastDrawable is Line lastLine)
-                        return lastLine.End;
+                        return lastLine.EndPoint;
                     if (lastDrawable is Arc lastArc)
-                        return lastArc.End;
+                        return lastArc.EndPoint;
 
                     // unsupported drawable type for Last
                     Context?.OutputMessage(OpenCADStrings.InvalidPointInput);

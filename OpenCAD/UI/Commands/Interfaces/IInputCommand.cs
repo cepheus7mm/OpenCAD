@@ -1,7 +1,7 @@
 using OpenCAD;
 using OpenCAD.Geometry;
 
-namespace UI.Commands
+namespace UI.Commands.Interfaces
 {
     /// <summary>
     /// Interface for all input commands

@@ -9,6 +9,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using UI.Commands.Interfaces;
 using UI.Controls.Viewport;
 
 namespace UI.Commands.Editing
@@ -23,7 +24,7 @@ namespace UI.Commands.Editing
         }
 
         private TrimPhase _currentPhase = TrimPhase.SelectCuttingEdge;
-        private IDrawable? _cuttingEdge;
+        private ICurve? _cuttingEdge;
         internal readonly List<TrimOperation> _trimOperations = new();
         private readonly List<GeoPoint> _currentIntersectionPoints = new();
         private ViewportViewModel? _viewModel;
@@ -103,7 +104,7 @@ namespace UI.Commands.Editing
 
         private void HandleCuttingEdgeClick(ObjectClickedEventArgs e)
         {
-            if (e.Object is not IDrawable drawable)
+            if (e.Object is not ICurve drawable)
             {
                 Context?.OutputMessage("Selected object cannot be used as cutting edge.");
                 return;
@@ -123,7 +124,7 @@ namespace UI.Commands.Editing
 
         private void HandleObjectToTrimClick(ObjectClickedEventArgs e)
         {
-            if (e.Object is not IDrawable objectToTrim)
+            if (e.Object is not ICurve objectToTrim)
             {
                 Context?.OutputMessage("Selected object cannot be trimmed.");
                 return;
@@ -132,7 +133,7 @@ namespace UI.Commands.Editing
             TrimObject(objectToTrim, e.PickedPoint);
         }
 
-        private void TrimObject(IDrawable objectToTrim, Point3D pickPoint)
+        private void TrimObject(ICurve objectToTrim, Point3D pickPoint)
         {
             var document = Context?.GetDocument();
             var viewport = Context?.GetActiveViewport();
@@ -141,7 +142,10 @@ namespace UI.Commands.Editing
                 return;
 
             // 1. Compute intersection
-            var (pt1, pt2) = GeometricCalculator.Intersection(_cuttingEdge, objectToTrim);
+            var pts = GeometricCalculator.Intersection(_cuttingEdge, objectToTrim);
+            var pt1 = pts.FirstOrDefault();
+            var pt2 = pts.Skip(1).FirstOrDefault();
+
             if (!pt1.IsValid)
             {
                 Context?.OutputMessage("Objects do not intersect.");
@@ -214,7 +218,7 @@ namespace UI.Commands.Editing
             viewport.AddObject(obj);
         }
 
-        private TrimOperation? CalculateTrimResult( OpenCADDocument document, IDrawable objectToTrim, Point3D pt1, Point3D pt2, Point3D pickPoint)
+        private TrimOperation? CalculateTrimResult( OpenCADDocument document, ICurve objectToTrim, Point3D pt1, Point3D pt2, Point3D pickPoint)
         {
             if (document == null)
                 return null;
@@ -280,16 +284,16 @@ namespace UI.Commands.Editing
 
             if (!pt2.IsValid)
             {
-                double distToStart = pickPoint.DistanceTo(line.Start);
-                double distToEnd = pickPoint.DistanceTo(line.End);
+                double distToStart = pickPoint.DistanceTo(line.StartPoint);
+                double distToEnd = pickPoint.DistanceTo(line.EndPoint);
 
                 if (distToStart < distToEnd)
                 {
-                    results.Add(new Line(document, pt1, line.End));
+                    results.Add(new Line(document, pt1, line.EndPoint));
                 }
                 else
                 {
-                    results.Add(new Line(document, line.Start, pt1));
+                    results.Add(new Line(document, line.StartPoint, pt1));
                 }
             }
             else
@@ -315,8 +319,8 @@ namespace UI.Commands.Editing
 
                 if (pickDist1 + pickDist2 <= totalDist + 1e-6)
                 {
-                    results.Add(new Line(document, line.Start, nearPoint));
-                    results.Add(new Line(document, farPoint, line.End));
+                    results.Add(new Line(document, line.StartPoint, nearPoint));
+                    results.Add(new Line(document, farPoint, line.EndPoint));
                 }
                 else
                 {

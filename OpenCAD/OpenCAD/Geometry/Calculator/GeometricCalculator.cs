@@ -151,8 +151,19 @@ namespace OpenCAD.Geometry.Calculator
         // ---------------------------------------------------------------------
         // Intersection / Dispatch (Misc)
         // ---------------------------------------------------------------------
-        public static (Point3D, Point3D) Intersection(IDrawable obj1, IDrawable obj2)
+        public static IEnumerable<Point3D> Intersection(ICurve obj1, ICurve obj2)
             => IntersectionUtils.Intersection(obj1, obj2);
+
+        public static bool TryIntersectInfinite(ICurve obj1, ICurve obj2, Point3D ptA, Point3D ptB, out Point3D ptI)
+        {
+            ptI = Point3D.NotAPoint;
+            if(IntersectionUtils.TryIntersectInfinite(obj1, obj2, ptA, ptB, out Point3D intersection))
+                ptI = intersection;
+            return ptI.IsValid;
+        }
+
+        public static bool TryIntersectLines(Point3D p1, Vector3D p2, Point3D p3, Vector3D p4, out Point3D intersection)
+            => IntersectionUtils.TryIntersectLines(p1, p2, p3, p4, out intersection);
 
         // ---------------------------------------------------------------------
         // Miscellaneous / Utilities
@@ -180,7 +191,7 @@ namespace OpenCAD.Geometry.Calculator
 
         public static GeoPoint Perpendicular(Point3D point, Line line)
         {
-            var projection = LineUtils.GetClosestPoint(point, line.Start, line.End);
+            var projection = LineUtils.GetClosestPoint(point, line.StartPoint, line.EndPoint);
             var geoPoint = new GeoPoint(projection, GeoPointModes.Perpendicular);
             geoPoint.RelatedGeometryId = line.ID;
             return geoPoint;
@@ -188,7 +199,7 @@ namespace OpenCAD.Geometry.Calculator
 
         public static GeoPoint Perpendicular(Point3D point, Arc arc)
         {
-            var closest = ArcUtils.GetClosestPoint(point, arc.Start, arc.Center, arc.Angle);
+            var closest = ArcUtils.GetClosestPoint(point, arc.StartPoint, arc.Center, arc.Angle);
             var geoPoint = new GeoPoint(closest, GeoPointModes.Perpendicular);
             geoPoint.RelatedGeometryId = arc.ID;
             return geoPoint;
@@ -388,5 +399,6 @@ namespace OpenCAD.Geometry.Calculator
 
         // Angle normalization facade
         public static double NormalizeUnsigned(double angle) => AngleUtils.NormalizeUnsigned(angle);
+
     }
 }

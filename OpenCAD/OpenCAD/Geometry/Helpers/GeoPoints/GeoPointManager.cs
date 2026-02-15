@@ -57,6 +57,12 @@ namespace OpenCAD.Geometry.Helpers.GeoPoints
                 foreach (var gp in provider.GetGeoPoints(obj, activeModes, cursorWorld))
                 {
                     double distSq = (gp.Position - cursorWorld).LengthSquared;
+                    if (gp.PointType == GeoPointModes.Center && gp.Owner != null)
+                    {
+                        var curve = gp.Owner as ICurve;
+                        var nearest = curve.GetClosestPoint(cursorWorld);
+                        distSq = (nearest - cursorWorld).LengthSquared;
+                    }
 
                     // Reject outside aperture
                     if (distSq > apertureSq)

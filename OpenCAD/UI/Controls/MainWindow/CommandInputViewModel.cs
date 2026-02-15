@@ -9,6 +9,7 @@ using OpenCAD;
 using OpenCAD.Geometry;
 using OpenCAD.Undo;
 using UI.Commands;
+using UI.Commands.Interfaces;
 using UI.Controls.Viewport;
 
 namespace UI.Controls.MainWindow

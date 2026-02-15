@@ -29,7 +29,7 @@ namespace OpenCAD.Grips
             new(new(0.2f, 0.6f, 1f, 1f), new(0, 0, 0, 0), 0f, 8f);
 
         public static readonly GripStyle Hover =
-            new(new(0.2f, 0.9f, 1f, 1f), new(0.2f, 0.9f, 1f, 1f), 6f, 8f);
+            new(new(0.2f, 0.9f, 1f, 1f), new(1f, 0.5f, 0f, 1f), 8f, 8f);
 
         public static readonly GripStyle Active =
             new(new(1f, 0.5f, 0f, 1f), new(1f, 0.5f, 0f, 1f), 8f, 8f);

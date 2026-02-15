@@ -26,4 +26,8 @@
     <ProjectReference Include="..\..\OpenCAD\OpenCAD.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Commands\Fillet\" />
+  </ItemGroup>
+
 </Project>

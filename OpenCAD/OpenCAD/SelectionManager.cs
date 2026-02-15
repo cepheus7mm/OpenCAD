@@ -17,7 +17,6 @@ namespace OpenCAD
         public IReadOnlyCollection<OpenCADObject> PreviewObjects => _previewObjects;
         public event EventHandler? SelectionChanged;
         public event EventHandler? SelectionPreviewChanged;
-        public event EventHandler? ObjectSelected;
 
         private Point3D? _windowStart;
         private Point3D? _windowCurrent;

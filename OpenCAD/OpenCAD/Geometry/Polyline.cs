@@ -159,9 +159,9 @@ namespace OpenCAD.Geometry
 
         public double DomainEnd => IsClosed ? VertexCount : VertexCount - 1;
 
-        public Point3D Start => GetVertex(0)?.Position ?? Point3D.NotAPoint;
+        public Point3D StartPoint => GetVertex(0)?.Position ?? Point3D.NotAPoint;
 
-        public Point3D End => IsClosed ? Start : GetOrderedVertices()?.LastOrDefault()?.Position ?? Point3D.NotAPoint;
+        public Point3D EndPoint => IsClosed ? StartPoint : GetOrderedVertices()?.LastOrDefault()?.Position ?? Point3D.NotAPoint;
 
         public double GetParameterAtPoint(Point3D point)
         {
@@ -407,6 +407,12 @@ namespace OpenCAD.Geometry
 
             return PolylineFromVerticiesAndBulges(verts, bulges);
         }
+
+        public ICurve[] GetOffsetCurves(double d)
+        {
+            throw new NotImplementedException("Offset curves not implemented for Polyline yet");
+        }
+
 
         #endregion
 

@@ -13,16 +13,20 @@ namespace OpenCAD.Geometry.Helpers.Snaps
     {
         private readonly IGeoPointProviderFactory _providerFactory;
         private readonly Func<IEnumerable<OpenCADObject>> _visibleObjectsAccessor;
+        private HashSet<OpenCADObject> _excludedObjects = new();
+        private readonly ICamera _camera;
 
         private SnapPoint? _currentObjectSnap;
         private Vector2? _forcedSnap;
 
         public SnapManager(
             IGeoPointProviderFactory providerFactory,
+            ICamera camera,
             Func<IEnumerable<OpenCADObject>> visibleObjectsAccessor)
         {
             _providerFactory = providerFactory;
             _visibleObjectsAccessor = visibleObjectsAccessor;
+            _camera = camera;
         }
 
         // ------------------------------------------------------------
@@ -33,7 +37,9 @@ namespace OpenCAD.Geometry.Helpers.Snaps
         public bool OrthoEnabled { get; set; }
         public bool PolarTrackingEnabled { get; set; }
         public double GridSize { get; set; } = 1.0;
+        public double ApertureSize { get; set; } = 15.0;
         public IReadOnlyList<double> PolarAngles { get; private set; } = new[] { 0.0, 90.0 };
+
 
         public GeoPointModes EnabledObjectSnaps { get; set; } =
             GeoPointModes.Vertex |
@@ -56,7 +62,7 @@ namespace OpenCAD.Geometry.Helpers.Snaps
         // MAIN ENTRY POINT
         // ------------------------------------------------------------
 
-        public Vector2 GetFinalSnapPoint(Vector2 rawMouseWorld)
+        public Vector2 GetFinalSnapPoint(Vector2 rawMouseWorld, bool applyCursorSnap = true, bool applyGeoSnap = true)
         {
             // 1. Forced snap overrides everything
             if (_forcedSnap.HasValue)
@@ -66,12 +72,16 @@ namespace OpenCAD.Geometry.Helpers.Snaps
             }
 
             // 2. Apply cursor snapping (grid, ortho, polar)
-            var cursorSnapped = ApplyCursorSnap(rawMouseWorld);
+            var cursorSnapped = applyCursorSnap ? ApplyCursorSnap(rawMouseWorld) : rawMouseWorld;
 
             // 3. Compute object snap
-            var osnap = ComputeObjectSnap(cursorSnapped);
+            SnapPoint? osnap = null;
+            if (applyGeoSnap)
+            {
+                ComputeObjectSnap(cursorSnapped);
 
-            UpdateCurrentObjectSnap(osnap);
+                UpdateCurrentObjectSnap(osnap); 
+            }
 
             return osnap?.Position ?? cursorSnapped;
         }
@@ -142,8 +152,14 @@ namespace OpenCAD.Geometry.Helpers.Snaps
             SnapPoint? best = null;
             double bestDist = double.MaxValue;
 
+            // Convert cursor to screen space once
+            var cursorScreen = _camera.WorldToScreen(new Vector3(cursorPos.X, cursorPos.Y, 0f));
+
             foreach (var obj in _visibleObjectsAccessor())
             {
+                if (_excludedObjects.Contains(obj) || obj == null)
+                    continue;
+
                 var provider = _providerFactory.GetProvider(obj);
                 if (provider == null)
                     continue;
@@ -152,19 +168,40 @@ namespace OpenCAD.Geometry.Helpers.Snaps
 
                 foreach (var gp in geoPoints)
                 {
-                    var pos = new Vector2((float)gp.Position.X, (float)gp.Position.Y);
-                    var dist = Vector2.Distance(cursorPos, pos);
+                    var world = new Vector2((float)gp.Position.X, (float)gp.Position.Y);
+                    var screen = _camera.WorldToScreen(new Vector3(world.X, world.Y, 0f));
 
-                    // Simple scoring: closest wins
+                    // Pixel distance
+                    var dx = screen.X - cursorScreen.X;
+                    var dy = screen.Y - cursorScreen.Y;
+                    var pixelDistSq = dx * dx + dy * dy;
+
+                    // Reject if outside aperture
+                    if (pixelDistSq > ApertureSize * ApertureSize)
+                        continue;
+
+                    // Score by world distance (or screen distance if you prefer)
+                    var dist = Vector2.Distance(cursorPos, world);
+
                     if (dist < bestDist)
                     {
                         bestDist = dist;
-                        best = new SnapPoint(pos, gp.PointType, obj);
+                        best = new SnapPoint(world, gp.PointType, obj);
                     }
                 }
             }
 
             return best;
+        }
+
+        public void SetSnapExclusions(IEnumerable<OpenCADObject> objects)
+        {
+            _excludedObjects = new HashSet<OpenCADObject>(objects);
+        }
+
+        public void ClearSnapExclusions()
+        {
+            _excludedObjects.Clear();
         }
 
         // ------------------------------------------------------------

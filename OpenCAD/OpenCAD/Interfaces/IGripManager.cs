@@ -51,12 +51,22 @@ namespace OpenCAD.Interfaces
         /// </summary>
         Grip? ActiveGrip { get; }
 
+        GripEditMode ActiveMode { get; }
+
         IReadOnlyList<Grip> SelectedGrips { get; }
+        bool IsEditing { get; }
+
+        void UpdateCopyModifier(bool shiftDown, bool ctrlDown);
 
         void SelectSingle(Grip grip);
         void AddToSelection(Grip grip);
         void ClearSelection();
         bool IsGripSelected(Grip grip);
+
+        string GetGripStateTooltip();
+
         IReadOnlyDictionary<OpenCADObject, OpenCADObject> GetPreviewObjects();
+
+        void SetActiveMode(GripEditMode mode);
     }
 }

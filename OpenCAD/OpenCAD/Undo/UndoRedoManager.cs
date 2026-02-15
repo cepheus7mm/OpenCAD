@@ -127,10 +127,15 @@ namespace OpenCAD.Undo
             return _activeTransaction;
         }
 
-        public void CommitTransaction()
+        public void CommitTransaction(bool execute = false)
         {
             if (_activeTransaction == null)
                 return;
+
+            if (execute)
+            {
+                Dispatcher.Invoke(() => { _activeTransaction.Execute(_document); }); // Ensure we are on the UI thread
+            }
 
             // Push the whole transaction as ONE undo step
             _undoStack.Push(_activeTransaction);

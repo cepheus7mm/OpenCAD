@@ -2,6 +2,7 @@ using OpenCAD;
 using OpenCAD.Geometry;
 using System.Threading;
 using System.Threading.Tasks;
+using UI.Commands.Interfaces;
 using UI.Controls.Viewport;
 
 namespace UI.Commands.Drawing
@@ -147,8 +148,8 @@ namespace UI.Commands.Drawing
 
             return string.Format(
                 OpenCADStrings.UndoCreateLine,
-                line.Start.X, line.Start.Y, line.Start.Z,
-                line.End.X, line.End.Y, line.End.Z);
+                line.StartPoint.X, line.StartPoint.Y, line.StartPoint.Z,
+                line.EndPoint.X, line.EndPoint.Y, line.EndPoint.Z);
         }
 
         public override void Cancel()

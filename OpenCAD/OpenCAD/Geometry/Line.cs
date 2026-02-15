@@ -35,8 +35,8 @@ namespace OpenCAD.Geometry
 
         public Line(OpenCADDocument doc, Point3D start, Point3D end) : base(doc)
         {
-            Start = start;
-            End = end;
+            StartPoint = start;
+            EndPoint = end;
         }
 
         // ---------------------------------------------------------------------
@@ -44,17 +44,17 @@ namespace OpenCAD.Geometry
         // ---------------------------------------------------------------------
 
         [JsonIgnore, XmlIgnore]
-        public Point3D Start
+        public Point3D StartPoint
         {
-            get => GetPropertyValue<Point3D>(PropertyType.Point, nameof(Start));
-            set => SetPropertyValue(PropertyType.Point, nameof(Start), OpenCADStrings.StartPoint, value);
+            get => GetPropertyValue<Point3D>(PropertyType.Point, nameof(StartPoint));
+            set => SetPropertyValue(PropertyType.Point, nameof(StartPoint), OpenCADStrings.StartPoint, value);
         }
 
         [JsonIgnore, XmlIgnore]
-        public Point3D End
+        public Point3D EndPoint
         {
-            get => GetPropertyValue<Point3D>(PropertyType.Point, nameof(End));
-            set => SetPropertyValue(PropertyType.Point, nameof(End), OpenCADStrings.EndPoint, value);
+            get => GetPropertyValue<Point3D>(PropertyType.Point, nameof(EndPoint));
+            set => SetPropertyValue(PropertyType.Point, nameof(EndPoint), OpenCADStrings.EndPoint, value);
         }
 
         [JsonIgnore, XmlIgnore]
@@ -63,18 +63,18 @@ namespace OpenCAD.Geometry
             get
             {
                 return new Point3D(
-                    (Start.X + End.X) / 2.0,
-                    (Start.Y + End.Y) / 2.0,
-                    (Start.Z + End.Z) / 2.0
+                    (StartPoint.X + EndPoint.X) / 2.0,
+                    (StartPoint.Y + EndPoint.Y) / 2.0,
+                    (StartPoint.Z + EndPoint.Z) / 2.0
                 );
             }
         }
 
         [JsonIgnore, XmlIgnore]
-        public override double Length => Start.DistanceTo(End);
+        public override double Length => StartPoint.DistanceTo(EndPoint);
 
         [JsonIgnore, XmlIgnore]
-        public override double Angle => Start.AngleTo(End);
+        public override double Angle => StartPoint.AngleTo(EndPoint);
 
         // ---------------------------------------------------------------------
         // Base class overrides (GeometryBase)
@@ -82,7 +82,7 @@ namespace OpenCAD.Geometry
 
         public override Extents GetExtents()
         {
-            return new Extents(Start, End);
+            return new Extents(StartPoint, EndPoint);
         }
 
         //public IEnumerable<GeoPoint> GetGeoPoints(Point3D referencePoint, GeoPointModes geoPointType)
@@ -104,37 +104,37 @@ namespace OpenCAD.Geometry
 
         public double GetParameterAtPoint(Point3D point)
         {
-            return GeometricCalculator.GetParameterAtPoint(point, Start, End);
+            return GeometricCalculator.GetParameterAtPoint(point, StartPoint, EndPoint);
         }
 
         public Point3D GetPointAtParameter(double parameter)
         {
-            return GeometricCalculator.GetPointAtParameter(parameter, Start, End);
+            return GeometricCalculator.GetPointAtParameter(parameter, StartPoint, EndPoint);
         }
 
         public Vector3D GetFirstDerivativeAtParameter(double t)
         {
-            return GeometricCalculator.GetFirstDerivative(t, Start, End);
+            return GeometricCalculator.GetFirstDerivative(t, StartPoint, EndPoint);
         }
 
         public Vector3D GetSecondDerivativeAtParameter(double t)
         {
-            return GeometricCalculator.GetSecondDerivative(t, Start, End);
+            return GeometricCalculator.GetSecondDerivative(t, StartPoint, EndPoint);
         }
 
         public double GetClosestParameter(Point3D point, bool extend = false)
         {
-            return GeometricCalculator.GetClosestParameter(point, Start, End, extend);
+            return GeometricCalculator.GetClosestParameter(point, StartPoint, EndPoint, extend);
         }
 
         public Point3D GetClosestPoint(Point3D point, bool extend = false)
         {
-            return GeometricCalculator.GetClosestPoint(point, Start, End, extend);
+            return GeometricCalculator.GetClosestPoint(point, StartPoint, EndPoint, extend);
         }
 
         public double GetLength()
         {
-            return Start.DistanceTo(End);
+            return StartPoint.DistanceTo(EndPoint);
         }
 
         public double GetLength(double t0, double t1)
@@ -170,8 +170,8 @@ namespace OpenCAD.Geometry
         public ICurve Transform(Matrix4D transform)
         {
             // Transform endpoints
-            Point3D s = Start.Transform(transform);
-            Point3D e = End.Transform(transform);
+            Point3D s = StartPoint.Transform(transform);
+            Point3D e = EndPoint.Transform(transform);
             // Update normal as well
             var tn = transform.TransformVector(_normal);
 
@@ -183,6 +183,22 @@ namespace OpenCAD.Geometry
 
             return newLine;
         }
+
+        public ICurve[] GetOffsetCurves(double d)
+        {
+            // Normal = Rotate90CCW(tangent)
+            var tan = (EndPoint - StartPoint).Normalized;
+            var normal = new Vector3D(-tan.Y, tan.X, 0);
+
+            var offset = new Line(
+                Document,
+                StartPoint + normal * d,
+                EndPoint + normal * d
+            );
+
+            return new ICurve[] { offset };
+        }
+
 
         public IEnumerable<GeoPoint> GetGeoPoints(GeoPointModes modes, Point3D referencePoint)
         {
@@ -213,8 +229,8 @@ namespace OpenCAD.Geometry
             var length = (float)Length;
             yield return new Segment(
             
-                new Vector2((float)Start.X, (float)Start.Y),
-                new Vector2((float)End.X, (float)End.Y),
+                new Vector2((float)StartPoint.X, (float)StartPoint.Y),
+                new Vector2((float)EndPoint.X, (float)EndPoint.Y),
                 lineweightMm,
                 lineweightMm,
                 0.0f,

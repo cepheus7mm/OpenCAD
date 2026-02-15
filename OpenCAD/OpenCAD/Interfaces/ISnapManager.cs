@@ -41,7 +41,7 @@ namespace OpenCAD.Interfaces
         /// Computes the final snap point given the raw mouse world position.
         /// Applies cursor snapping, then object snapping, then forced snap.
         /// </summary>
-        Vector2 GetFinalSnapPoint(Vector2 rawMouseWorld);
+        Vector2 GetFinalSnapPoint(Vector2 rawMouseWorld, bool applyCursorSnap = true, bool applyGeoSnap = true);
 
         // ------------------------------------------------------------
         // SNAP MARKER (for UI)
@@ -65,6 +65,10 @@ namespace OpenCAD.Interfaces
         /// Computes object snap candidates only (no cursor snap).
         /// </summary>
         SnapPoint? ComputeObjectSnap(Vector2 position);
+
+        void SetSnapExclusions(IEnumerable<OpenCADObject> objects);
+
+        void ClearSnapExclusions();
 
         /// <summary>
         /// Applies cursor snapping only (grid, ortho, polar).

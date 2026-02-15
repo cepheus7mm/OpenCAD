@@ -64,7 +64,8 @@ namespace UI
             
             // ADD THIS: Hook up PreviewKeyDown for global keyboard routing
             this.PreviewKeyDown += MainWindow_PreviewKeyDown;
-            
+            this.PreviewKeyUp += MainWindow_PreviewKeyUp;
+
             // Setup auto-save timer (every 5 minutes)
             _autoSaveTimer = new DispatcherTimer
             {
@@ -119,7 +120,16 @@ namespace UI
         private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
         {
             //System.Diagnostics.Debug.WriteLine($"MainWindow.PreviewKeyDown: Key={e.Key}, Modifiers={Keyboard.Modifiers}");
-            
+
+            bool shift = Keyboard.IsKeyDown(Key.LeftShift) || Keyboard.IsKeyDown(Key.RightShift);
+            bool ctrl = Keyboard.IsKeyDown(Key.LeftCtrl) || Keyboard.IsKeyDown(Key.RightCtrl);
+            var viewport = dockingArea.GetActiveViewport();
+            if (viewport != null)
+            {
+                viewport.SetShiftKeyState(shift);
+                viewport.SetCtrlKeyState(ctrl);
+            }
+
             // Handle Ctrl+S for Save
             if (e.Key == Key.S && Keyboard.Modifiers == ModifierKeys.Control)
             {
@@ -150,7 +160,6 @@ namespace UI
             // Handle ESC key - route to active viewport
             if (e.Key == Key.Escape)
             {
-                var viewport = dockingArea.GetActiveViewport();
                 if (viewport != null)
                 {
                     // Try to handle ESC in the viewport
@@ -168,7 +177,6 @@ namespace UI
             // Handle Delete key - execute the Erase command
             if (e.Key == Key.Delete)
             {
-                var viewport = dockingArea.GetActiveViewport();
                 if (viewport != null)
                 {
                     var viewModel = viewport.DataContext as ViewportViewModel;
@@ -190,16 +198,6 @@ namespace UI
                 //System.Diagnostics.Debug.WriteLine("Delete not handled - no selection");
             }
 
-            if (e.Key == Key.LeftShift || e.Key == Key.RightShift)
-            {
-                var viewport = dockingArea.GetActiveViewport();
-                if (viewport != null)
-                {
-                    viewport.SetShiftKeyState(e.IsDown);
-                    //System.Diagnostics.Debug.WriteLine("Shift key down - snapping enabled");
-                }
-            }
-            
             // Handle Ctrl+Z for Undo
             if (e.Key == Key.Z && Keyboard.Modifiers == ModifierKeys.Control)
             {
@@ -230,6 +228,18 @@ namespace UI
             
             // Add other global keyboard shortcuts here as needed
             // Example: F1 for help, Ctrl+S for save, etc.
+        }
+
+        private void MainWindow_PreviewKeyUp(object sender, KeyEventArgs e)
+        {
+            bool shift = Keyboard.IsKeyDown(Key.LeftShift) || Keyboard.IsKeyDown(Key.RightShift);
+            bool ctrl = Keyboard.IsKeyDown(Key.LeftCtrl) || Keyboard.IsKeyDown(Key.RightCtrl);
+            var viewport = dockingArea.GetActiveViewport();
+            if (viewport != null)
+            {
+                viewport.SetShiftKeyState(shift);
+                viewport.SetCtrlKeyState(ctrl);
+            }
         }
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)

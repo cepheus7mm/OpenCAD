@@ -111,5 +111,10 @@ namespace OpenCAD.Geometry.Helpers
 
         private static bool AreAlmostEqual(double a, double b, double tolerance = 1e-12)
             => Math.Abs(a - b) < tolerance;
+
+        public bool IsZeroLength()
+        {
+            return AreAlmostEqual(0, X) && AreAlmostEqual(0, Y);
+        }
     }
 }

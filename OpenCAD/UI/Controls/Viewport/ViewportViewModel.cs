@@ -15,6 +15,7 @@ using System.ComponentModel;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using UI.Controls.MainWindow;
@@ -95,6 +96,10 @@ namespace UI.Controls.Viewport
         private bool _mouseDownOnGrip;
         private bool _isDragging;
         private Vector3D? _lastWorldPos;
+        private bool _isShiftKeyPressed;
+        private bool _isCtrlKeyPressed;
+        private string _diagnosticToolTip;
+        private Point3D _pickPoint = Point3D.NotAPoint;
 
         /// <summary>
         /// Gets whether point picking mode is enabled
@@ -108,6 +113,19 @@ namespace UI.Controls.Viewport
         public bool IsSelectionMode => _inputMode == InputMode.Selection;
 
         public bool IsWindowSelectionMode => _inputMode == InputMode.WindowSelection;
+
+        public string DiagnosticToolTip
+        {
+            get => _diagnosticToolTip;
+            set
+            {
+                if (_diagnosticToolTip != value)
+                {
+                    _diagnosticToolTip = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
 
         public InputMode CurrentInputMode
         {
@@ -133,13 +151,15 @@ namespace UI.Controls.Viewport
         public OpenCADObject? HighlightedObject
         {
             get => _highlightedObject;
-            internal set  // Changed from private to internal
+            internal set
             {
                 if (_highlightedObject != value)
                 {
                     _highlightedObject = value;
                     OnPropertyChanged();
                     RefreshRequested?.Invoke(this, EventArgs.Empty);
+                    var args = new ObjectHoverEventArgs(_highlightedObject, _pickPoint);
+                    ObjectHovered?.Invoke(this, args);
                 }
             }
         }
@@ -147,7 +167,7 @@ namespace UI.Controls.Viewport
         /// <summary>
         /// Gets the list of selected objects
         /// </summary>
-        public IReadOnlyList<OpenCADObject> SelectedObjects => _selectionManager.SelectedObjects.ToList();
+        public IReadOnlyList<OpenCADObject> SelectedObjects => _selectionManager?.SelectedObjects?.ToList() ?? new List<OpenCADObject>();
 
         /// <summary>
         /// Gets the current cursor
@@ -263,7 +283,32 @@ namespace UI.Controls.Viewport
         public Point3D? WindowSelectionCurrentPoint => _selectionManager.WindowSelectionCurrent;
         public IReadOnlyList<OpenCADObject> WindowSelectionPreviewObjects => _selectionManager.PreviewObjects.ToList();
 
-        public bool IsShiftKeyPressed { get; internal set; }
+        public bool IsShiftKeyPressed 
+        { 
+            get => _isShiftKeyPressed; 
+            internal set
+            {
+                if (_isShiftKeyPressed != value)
+                {
+                    _isShiftKeyPressed = value;
+                    _gripManager.UpdateCopyModifier(_isShiftKeyPressed, _isCtrlKeyPressed);
+                }
+            } 
+        }
+
+        public bool IsCtrlKeyPressed
+        {
+            get => _isCtrlKeyPressed;
+            internal set
+            {
+                if (_isCtrlKeyPressed != value)
+                {
+                    _isCtrlKeyPressed = value;
+                    _gripManager.UpdateCopyModifier(_isShiftKeyPressed, _isCtrlKeyPressed);
+                }
+            }
+        }
+
         public int PickboxSize 
         { 
             get => _viewportSettings?.Crosshair?.PickboxSize ?? 5;
@@ -299,6 +344,7 @@ namespace UI.Controls.Viewport
             // Register grip providers here
             factory.Register<Line>(new LineGripProvider());
             factory.Register<Circle>(new CircleGripProvider());
+            factory.Register<Arc>(new ArcGripProvider());
             return factory;
         }
 
@@ -335,6 +381,11 @@ namespace UI.Controls.Viewport
         /// <summary>
         /// Event raised when an object is selected
         /// </summary>
+        public event EventHandler<ObjectHoverEventArgs>? ObjectHovered;
+
+        /// <summary>
+        /// Event raised when an object is selected
+        /// </summary>
         public event EventHandler<ObjectClickedEventArgs>? ObjectClicked;
 
         /// <summary>
@@ -355,7 +406,7 @@ namespace UI.Controls.Viewport
         /// <summary>
         /// Event raised when the selection changes (object selected or deselected)
         /// </summary>
-        public event EventHandler? SelectionChanged;
+        public event EventHandler<ObjectSelectedEventArgs>? SelectionChanged;
 
         /// <summary>
         /// Event raised to request a context menu at the given mouse position
@@ -524,7 +575,17 @@ namespace UI.Controls.Viewport
         /// </summary>
         public Point3D SnapToGrid(Point3D point)
         {
-            return new Point3D(_snapManager.GetFinalSnapPoint(new Vector2((float)point.X, (float)point.Y)));
+            var applyGridSnap = IsPointPickingMode || _gripManager.IsEditing;
+            var applyGeoSnap = IsPointPickingMode || _gripManager.IsEditing;
+            var snapped = new Point3D(_snapManager.GetFinalSnapPoint(new Vector2((float)point.X, (float)point.Y), applyGridSnap, applyGeoSnap));
+            UpdateStatusBarWithWorldCoordinates(snapped.AsVector3D());
+
+            return snapped;
+        }
+
+        public string GetGripTooltip()
+        {
+            return _gripManager.GetGripStateTooltip();
         }
 
         #endregion
@@ -689,6 +750,8 @@ namespace UI.Controls.Viewport
 
         private MouseHandlingResult HandleLeftMouseDownSelection(Point mousePos, Vector3? worldPos)
         {
+            _pickPoint = worldPos.HasValue ? new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z) : Point3D.NotAPoint;
+
             if (_gripManager.HoverGrip.HasValue)
             {
                 var grip = _gripManager.HoverGrip.Value;
@@ -717,6 +780,8 @@ namespace UI.Controls.Viewport
             if (HighlightedObject != null)
             {
                 _selectionManager.ToggleSelection(HighlightedObject);
+                var args = new ObjectSelectedEventArgs(HighlightedObject, _pickPoint);
+                ObjectSelected?.Invoke(this, args);
                 return new MouseHandlingResult { Handled = true, NeedsRefresh = true };
             }
 
@@ -760,6 +825,17 @@ namespace UI.Controls.Viewport
 
         private MouseHandlingResult HandleRightMouseDown(Point mousePos, Vector3? worldPos)
         {
+            if (_gripManager.ActiveGrip != null)
+            {
+                // Release capture BEFORE opening the menu
+                if (Mouse.Captured != null)
+                    Mouse.Capture(null);
+
+                var menu = BuildGripContextMenu();
+                menu.IsOpen = true;
+                return new MouseHandlingResult { Handled = true, NeedsRefresh = false, CaptureMouse = false };
+            }
+
             if (CurrentInputMode == InputMode.PointPicking && !IsShiftKeyPressed)
             {
                 PointPickingCancelled?.Invoke(this, EventArgs.Empty);
@@ -773,6 +849,37 @@ namespace UI.Controls.Viewport
 
             _lastMousePos = mousePos;
             return new MouseHandlingResult { Handled = false, NeedsRefresh = false, CaptureMouse = true };
+        }
+        private ContextMenu BuildGripContextMenu()
+        {
+            var menu = new ContextMenu();
+
+            var activeMode = _gripManager.ActiveMode;
+
+            void Add(string label, GripEditMode mode)
+            {
+                var item = new MenuItem { Header = label };
+                item.Click += (_, __) => _gripManager.SetActiveMode(mode);
+                item.IsCheckable = true;
+                item.IsChecked = (mode == activeMode);
+                menu.Items.Add(item);
+            }
+
+            Add("Move", GripEditMode.Move);
+            Add("Stretch", GripEditMode.Stretch);
+            Add("Rotate", GripEditMode.Rotate);
+            Add("Scale", GripEditMode.Scale);
+            Add("Mirror", GripEditMode.Mirror);
+            Add("Lengthen", GripEditMode.Lengthen);
+            Add("Copy", GripEditMode.Copy);
+
+            menu.Items.Add(new Separator());
+
+            var cancel = new MenuItem { Header = "Cancel" };
+            cancel.Click += (_, __) => _gripManager.CancelEdit();
+            menu.Items.Add(cancel);
+
+            return menu;
         }
 
         private MouseHandlingResult HandleMiddleMouse(Point mousePos, Vector3? worldPos)
@@ -793,8 +900,7 @@ namespace UI.Controls.Viewport
                     Point currentPos,
                     Vector3D? worldPos,
                     MouseButtonState middleButton,
-                    MouseButtonState rightButton,
-                    bool isShiftPressed)
+                    MouseButtonState rightButton)
         {
             if (IsWindowSelectionMode && worldPos.HasValue)
                 return MouseMoveState.WindowSelection;
@@ -806,10 +912,7 @@ namespace UI.Controls.Viewport
                 return MouseMoveState.PointPicking;
 
             if (middleButton == MouseButtonState.Pressed)
-                return isShiftPressed ? MouseMoveState.CameraOrbit : MouseMoveState.CameraPan;
-
-            if (rightButton == MouseButtonState.Pressed)
-                return MouseMoveState.CameraPan;
+                return _isShiftKeyPressed ? MouseMoveState.CameraOrbit : MouseMoveState.CameraPan;
 
             return MouseMoveState.HoverUpdate;
         }
@@ -853,12 +956,34 @@ namespace UI.Controls.Viewport
             var point = new System.Drawing.Point((int)currentPos.X, (int)currentPos.Y);
             var hitResult = _hitTester.HitTest(point);
             _gripManager.UpdateHover(hitResult);
+# if DEBUG
+            DiagnosticToolTip += $"HitResult: {hitResult.Kind}, Entity: {(hitResult.Entity != null ? hitResult.Entity.GetType().Name : "null")}, Grip: {(hitResult.Grip.HasValue ? hitResult.Grip.Value.Kind.ToString() : "null")}" + Environment.NewLine;
+            DiagnosticToolTip += _gripManager.GetGripStateTooltip() + Environment.NewLine;
+            DiagnosticToolTip += $"Forced snapping: {_snapManager.HasForcedSnap}";
+#endif
 
-            // Update object hover
+            if (worldPos.HasValue && _gripManager.HoverGrip is Grip hoverGrip)
+            {
+                var snapped = new Vector3D(hoverGrip.Position.X, hoverGrip.Position.Y, worldPos.Value.Z);
+                UpdateStatusBarWithWorldCoordinates(snapped);
+            }
+
             if (hitResult.Kind == HitResultKind.Entity && hitResult.Entity != null)
+            {
+                // 1. Update pick point FIRST
+                _pickPoint = worldPos.HasValue
+                    ? new Point3D(worldPos.Value.X, worldPos.Value.Y, worldPos.Value.Z)
+                    : Point3D.NotAPoint;
+
+                // 2. Then update highlighted object
                 HighlightedObject = hitResult.Entity;
-            else if (hitResult.Kind == HitResultKind.None && hitResult.Entity != null)
+            }
+            else
+            {
+                // Clear hover when nothing is hit
+                _pickPoint = Point3D.NotAPoint;
                 HighlightedObject = null;
+            }
 
             _lastMousePos = currentPos;
 
@@ -949,7 +1074,7 @@ namespace UI.Controls.Viewport
         /// <summary>
         /// Handle mouse move event
         /// </summary>
-        public MouseHandlingResult HandleMouseMove(Point currentPos, Vector3D? worldPos, MouseButtonState middleButton, MouseButtonState rightButton, bool isShiftPressed, float panScale, out CameraOperation? cameraOp)
+        public MouseHandlingResult HandleMouseMove(Point currentPos, Vector3D? worldPos, MouseButtonState middleButton, MouseButtonState rightButton, float panScale, out CameraOperation? cameraOp)
         {
             cameraOp = null;
 
@@ -965,7 +1090,11 @@ namespace UI.Controls.Viewport
             UpdateStatusBarWithWorldCoordinates(worldPos);
             _lastWorldPos = worldPos;
 
-            var state = GetMouseMoveState(currentPos, worldPos, middleButton, rightButton, isShiftPressed);
+            var state = GetMouseMoveState(currentPos, worldPos, middleButton, rightButton);
+
+#if DEBUG
+            DiagnosticToolTip += $"MouseMoveState: {state}" + Environment.NewLine;
+#endif
 
             return state switch
             {
@@ -1015,19 +1144,26 @@ namespace UI.Controls.Viewport
             };
         }
 
-        public void Initialize(Func<System.Drawing.Point, Vector3?> screenToWorld, Func<Vector3, System.Drawing.Point?> worldToScreen)
+        public void Initialize(ICamera camera)
         {
-            _hitTester = new HitTester(_document, GripProviderFactory, screenToWorld, worldToScreen,
+            _selectionManager = new SelectionManager(_document);
+            _hitTester = new HitTester(_document, _selectionManager, GripProviderFactory, camera,
                 () => PickboxSize,
-                () => _viewportSettings?.GripSize ?? 5);
-            _snapManager = new SnapManager(GeoPointProviderFactory, () => VisibleObjects);
+                () => _viewportSettings?.GripSize ?? 10);
+            _snapManager = new SnapManager(GeoPointProviderFactory, camera, () => VisibleObjects);
             _snapManager.GridSnapEnabled = SnappingEnabled;
             _snapManager.GridSize = SnapSize;
+            _snapManager.ApertureSize = ApertureSize;
             _snapManager.SnapPointChanged += OnSnapPointChanged;
             _geoPointManager = new GeoPointManager(GeoPointProviderFactory);
-            _gripManager = new GripManager(_document, _hitTester, GripProviderFactory, PreviewManager, _snapManager);
-            _selectionManager = new SelectionManager(_document);
-            _selectionManager.SelectionChanged += (s, e) => SelectionChanged?.Invoke(this, EventArgs.Empty);
+            _gripManager = new GripManager(_document, _hitTester, GripProviderFactory, PreviewManager, _snapManager, _selectionManager);
+            _selectionManager.SelectionChanged += OnSelectionChanged;
+        }
+
+        private void OnSelectionChanged(object? sender, EventArgs e)
+        {
+            var args = new ObjectSelectedEventArgs(_selectionManager.SelectedObjects.FirstOrDefault(), _pickPoint);
+            SelectionChanged?.Invoke(this, args);
         }
 
         private void OnSnapPointChanged(SnapPoint? point)
@@ -1343,6 +1479,28 @@ namespace UI.Controls.Viewport
             var previewObjects = _gripManager.GetPreviewObjects();
             renderEngine.Render(previewObjects.Values, new HashSet<OpenCADObject>(), new HashSet<OpenCADObject>(), RenderStyle.Preview);
         }
+
+        internal bool HandleEscapeKey()
+        {
+            _gripManager.CancelEdit();
+            // Priority 1: Cancel point picking mode if active
+            if (IsPointPickingMode)
+            {
+                //System.Diagnostics.Debug.WriteLine("ESC handled - cancelling point picking mode");
+                CancelPointPicking();
+                return true;
+            }
+
+            // Priority 2: Clear selection if there are selected objects
+            if (IsSelectionMode && SelectedObjects.Count > 0)
+            {
+                //System.Diagnostics.Debug.WriteLine("ESC handled - clearing selection");
+                SelectionManager.ClearSelection();
+                return true;
+            }
+
+            return false;
+        }
     }
 
     #region Helper Classes
@@ -1409,10 +1567,27 @@ namespace UI.Controls.Viewport
     public class ObjectSelectedEventArgs : EventArgs
     {
         public OpenCADObject Object { get; }
+        public Point3D? PickedPoint { get; }
 
-        public ObjectSelectedEventArgs(OpenCADObject obj)
+        public ObjectSelectedEventArgs(OpenCADObject obj, Point3D? pickedPoint = null)
         {
             Object = obj;
+            PickedPoint = pickedPoint;
+        }
+    }
+
+    /// <summary>
+    /// Event args for object selected event
+    /// </summary>
+    public class ObjectHoverEventArgs : EventArgs
+    {
+        public OpenCADObject Object { get; }
+        public Point3D? PickedPoint { get; }
+
+        public ObjectHoverEventArgs(OpenCADObject obj, Point3D? pickedPoint = null)
+        {
+            Object = obj;
+            PickedPoint = pickedPoint;
         }
     }
 

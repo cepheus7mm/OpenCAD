@@ -1,9 +1,9 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using System;
-using UI.Commands;
 using UI.Controls.Viewport;
 using OpenCAD.Geometry;
+using UI.Commands.Interfaces;
 
 namespace UI.Commands.Tests
 {

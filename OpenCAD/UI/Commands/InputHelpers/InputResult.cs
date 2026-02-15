@@ -1,4 +1,5 @@
-﻿using OpenCAD.Geometry;
+﻿using OpenCAD;
+using OpenCAD.Geometry;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -18,6 +19,8 @@ namespace UI.Commands.InputHelpers
             Keyword,
             Arbitrary,
             ProcessingResult,
+            ObjectAndPoint,
+            Hover,
             Cancel
         }
 
@@ -31,6 +34,7 @@ namespace UI.Commands.InputHelpers
         public double DoubleValue { get; set; }
         public Point3D? Point { get; set; }
         public string? Keyword { get; set; }
+        public OpenCADObject? Object { get; set; }
         public ProcessingResultType ProcessingResult { get; set; } = ProcessingResultType.None;
 
         public InputResultType ResultType

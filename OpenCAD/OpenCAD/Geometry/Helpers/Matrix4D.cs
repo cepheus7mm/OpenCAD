@@ -36,6 +36,25 @@ namespace OpenCAD.Geometry.Helpers
             M44 = 1
         };
 
+        public bool IsMirror
+        {
+            get
+            {
+                // Extract the 3×3 linear part
+                double a = M11, b = M12, c = M13;
+                double d = M21, e = M22, f = M23;
+                double g = M31, h = M32, i = M33;
+
+                // Compute determinant of the 3×3
+                double det =
+                    a * (e * i - f * h) -
+                    b * (d * i - f * g) +
+                    c * (d * h - e * g);
+
+                return det < 0;
+            }
+        }
+
         public Matrix4D(
             double m11, double m12, double m13, double m14,
             double m21, double m22, double m23, double m24,

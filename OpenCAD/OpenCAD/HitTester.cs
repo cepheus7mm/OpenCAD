@@ -15,26 +15,26 @@ namespace OpenCAD
     public sealed class HitTester : IHitTester
     {
         private readonly OpenCADObject _document;
-        private readonly Func<Point, Vector3?> _screenToWorld;
-        private readonly Func<Vector3, Point?> _worldToScreen;
         private readonly Func<int> _pickboxSizeProvider;
         private readonly Func<int> _gripSizeProvider;
         private readonly IGripProviderFactory _gripProviderFactory;
+        private readonly ISelectionManager _selectionManager;
+        private readonly ICamera _camera;
 
         public HitTester(
             OpenCADObject root,
+            ISelectionManager selectionManager,
             IGripProviderFactory gripProviderFactory,
-            Func<Point, Vector3?> screenToWorld,
-            Func<Vector3, Point?> worldToScreen,
+            ICamera camera,
             Func<int> pickboxSizeProvider,
             Func<int> gripSizeProvider)
         {
             _document = root;
-            _screenToWorld = screenToWorld;
-            _worldToScreen = worldToScreen;
+            _selectionManager = selectionManager;
             _pickboxSizeProvider = pickboxSizeProvider;
             _gripSizeProvider = gripSizeProvider;
             _gripProviderFactory = gripProviderFactory;
+            _camera = camera;
         }
 
         // ------------------------------------------------------------
@@ -60,10 +60,8 @@ namespace OpenCAD
         // ------------------------------------------------------------
         public OpenCADObject? HitTestEntity(Vector2 mouseWorld)
         {
-            var screenPos = _worldToScreen(new Vector3(mouseWorld.X, mouseWorld.Y, 0));
-            if (screenPos is null)
-                return null;
-            return HitTestEntity(screenPos.Value, _pickboxSizeProvider());
+            var screenPos = _camera.WorldToScreen(new Vector3(mouseWorld.X, mouseWorld.Y, 0));
+            return HitTestEntity(screenPos, _pickboxSizeProvider());
         }
 
         public OpenCADObject? HitTestEntity(Point screenPos, int boxSize)
@@ -77,27 +75,24 @@ namespace OpenCAD
             CollectCurveObjects(_document, curveObjects);
 
             var hitObjects = new List<OpenCADObject>();
-            var worldPos = _screenToWorld(screenPos);
-            if (worldPos is null || curveObjects.Count < 1)
+            var worldPos = _camera.ScreenToWorld(screenPos);
+            if (curveObjects.Count < 1)
                 return hitObjects;
 
-            var c1 = _screenToWorld(new Point(screenPos.X - boxSize, screenPos.Y - boxSize));
-            var c2 = _screenToWorld(new Point(screenPos.X + boxSize, screenPos.Y + boxSize));
-
-            if (c1 is null || c2 is null)
-                return hitObjects;
+            var c1 = _camera.ScreenToWorld(new Point(screenPos.X - boxSize, screenPos.Y - boxSize));
+            var c2 = _camera.ScreenToWorld(new Point(screenPos.X + boxSize, screenPos.Y + boxSize));
 
             foreach (var obj in curveObjects)
             {
                 if (obj is ICurve curve)
                 {
                     var pt = curve.GetClosestPoint(
-                        new Point3D(worldPos.Value.X, worldPos.Value.Y, 0));
+                        new Point3D(worldPos.X, worldPos.Y, 0));
 
                     if (pt.IsValid)
                     {
-                        if (pt.X >= c1.Value.X && pt.X <= c2.Value.X &&
-                            pt.Y <= c1.Value.Y && pt.Y >= c2.Value.Y)
+                        if (pt.X >= c1.X && pt.X <= c2.X &&
+                            pt.Y <= c1.Y && pt.Y >= c2.Y)
                         {
                             hitObjects.Add(obj);
                         }
@@ -125,14 +120,21 @@ namespace OpenCAD
         // ------------------------------------------------------------
         public HitResult? HitTestGrip(Point screenPos, double gripSizePx)
         {
-            var drawable = new List<OpenCADObject>();
-            CollectDrawableObjects(_document, drawable);
+            //if (_selectionManager.SelectedObjects.Count < 1)
+            //    return null;
+
+            //var selected = new List<OpenCADObject>();
+            ////CollectDrawableObjects(_document, selected);
+            //selected.AddRange(_selectionManager.SelectedObjects);
+
+            if (gripSizePx <= 0)
+                return null;
 
             Grip? bestGrip = null;
             OpenCADObject? bestEntity = null;
             double bestDistSq = double.MaxValue;
 
-            foreach (var obj in drawable)
+            foreach (var obj in _selectionManager.SelectedObjects)
             {
                 // Get provider from factory (new architecture)
                 var provider = _gripProviderFactory.GetProvider(obj);
@@ -142,12 +144,10 @@ namespace OpenCAD
                 foreach (var grip in provider.GetGrips(obj))
                 {
                     var world = new Vector3((float)grip.Position.X, (float)grip.Position.Y, 0f);
-                    var screen = _worldToScreen(world);
-                    if (screen is null)
-                        continue;
+                    var screen = _camera.WorldToScreen(world);
 
-                    var dx = screen.Value.X - screenPos.X;
-                    var dy = screen.Value.Y - screenPos.Y;
+                    var dx = screen.X - screenPos.X;
+                    var dy = screen.Y - screenPos.Y;
                     var distSq = dx * dx + dy * dy;
 
                     var half = gripSizePx * 0.5;
@@ -157,7 +157,7 @@ namespace OpenCAD
                         {
                             bestDistSq = distSq;
                             bestGrip = grip;
-                            bestEntity = obj;
+                            bestEntity = grip.Owner;
                         }
                     }
                 }
