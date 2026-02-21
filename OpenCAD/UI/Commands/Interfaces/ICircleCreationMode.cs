@@ -6,6 +6,7 @@ namespace UI.Commands.Interfaces
     public interface ICircleCreationMode
     {
         string Prompt { get; }
+        UserInputType UserInputType { get; }
         string[] Keywords { get; }
 
         // Called when user provides a point
@@ -24,5 +25,7 @@ namespace UI.Commands.Interfaces
         Circle CreateCircle();
 
         Point3D GetBasePoint();
+
+        void SetDistance(double distance);
     }
 }

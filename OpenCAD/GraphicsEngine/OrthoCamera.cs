@@ -137,7 +137,7 @@ namespace GraphicsEngine
             var clip = new Vector4(ndcX, ndcY, 0f, 1f);
             var world = Vector4.Transform(clip, InverseViewProjectionMatrix);
 
-            return new Vector3(world.X, world.Y, world.Z);
+            return new Vector3(world.X, world.Y, Target.Z);
         }
 
         public System.Drawing.Point WorldToScreen(Vector3 world)

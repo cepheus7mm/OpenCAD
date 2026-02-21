@@ -16,6 +16,9 @@ namespace UI.Commands.InputHelpers
         private TaskCompletionSource<InputResult?>? _tcs;
         private Action<string>? _previewCallback;
 
+        public bool AllowArbitraryInput { get; private set; }
+        public string[]? Keywords { get; private set; }
+
         public GetStringInput(ICommandContext context, ViewportViewModel? viewModel)
             : base(context, viewModel)
         {

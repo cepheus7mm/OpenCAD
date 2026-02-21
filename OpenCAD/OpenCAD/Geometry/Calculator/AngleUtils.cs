@@ -32,6 +32,21 @@ namespace OpenCAD.Geometry.Calculator
             return a;
         }
 
+        public static double NormalizeAnglePositive(double a)
+        {
+            a %= TwoPi;
+            if (a < 0) a += TwoPi;
+            return a;
+        }
+
+        public static double NormalizeAngleNegative(double a)
+        {
+            a %= TwoPi;
+            if (a > 0) a -= TwoPi;
+            return a;
+        }
+
+
         // CCW sweep: [0, 2π)
         public static double NormalizeSweepCCW(double sweep)
         {

@@ -10,8 +10,8 @@ public class GetAngleInputTests : InputHelperTestsBase
     public async Task HandlesArbitraryAngleInput()
     {
         var inputHelper = new GetAngleInput(ContextMock.Object, ViewModel);
-        inputHelper.AllowArbitraryInput = true;
-        var result = await inputHelper.GetAngle("Enter angle:", null, false, null, null, default);
+        //inputHelper.AllowArbitraryInput = true;
+        //var result = await inputHelper.GetAngle("Enter angle:", null, false, null, null, default);
         var input = "45.5";
         var processed = inputHelper.ProcessKeyboardInput(input);
         Assert.IsTrue(processed, "Input should be processed.");

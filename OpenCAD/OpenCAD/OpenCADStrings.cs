@@ -146,6 +146,11 @@
         public const string LastTextHeight = "Last text height";
 
         /// <summary>
+        /// Property name for Last text height
+        /// </summary>
+        public const string LastDistance = "Last distance";
+
+        /// <summary>
         /// Property name for layers container ID
         /// </summary>
         public const string LayersContainer = "Layers Container";

@@ -13,6 +13,7 @@ namespace UI.Commands.Drawing.CircleCommand.Modes
     {
         private Point3D? _center;
         private Point3D? _diameterPoint;
+        private double? _radius;
 
         public CenterDiameterMode(OpenCADDocument ctx)
             : base(ctx)
@@ -26,9 +27,12 @@ namespace UI.Commands.Drawing.CircleCommand.Modes
         public override string Prompt =>
             _center == null
                 ? "Specify center point"
-                : "Specify diameter point";
+                : "Specify diameter";
 
-        public override string[] Keywords => new[] { "RAD", "2PT", "3PT" };
+
+        public override string[] Keywords => _center == null ? new[] { "RAD", "2PT", "3PT" } : Array.Empty<string>();
+
+        public override UserInputType UserInputType => _center == null ? UserInputType.Point : UserInputType.Distance;
 
 
         // --- INPUT HANDLING ---------------------------------------------------
@@ -51,11 +55,16 @@ namespace UI.Commands.Drawing.CircleCommand.Modes
             // This mode does not interpret keywords internally.
         }
 
+        public override void SetDistance(double distance)
+        {
+            _radius = distance / 2;
+        }
+
 
         // --- STATE -------------------------------------------------------------
 
         public override bool IsComplete =>
-            _center != null && _diameterPoint != null;
+            _center != null && (_diameterPoint != null || _radius != null);
 
 
         // --- PREVIEW -----------------------------------------------------------
@@ -69,12 +78,11 @@ namespace UI.Commands.Drawing.CircleCommand.Modes
             //    return null;
 
             double diameter = (dragPoint - _center.Value).Length;
-            double radius = diameter / 2.0;
 
-            if (radius <= 0)
+            if (diameter <= 0)
                 return null;
 
-            return new Circle(_center.Value, radius, Document);
+            return new Circle(_center.Value, diameter / 2.0, Document);
         }
 
         public override void UpdateDynamicInput(Point3D cursor)
@@ -91,13 +99,20 @@ namespace UI.Commands.Drawing.CircleCommand.Modes
 
         public override Circle CreateCircle()
         {
-            if (_center == null || _diameterPoint == null)
+            if (_center == null || (_diameterPoint == null && _radius == null))
                 throw new InvalidOperationException("Circle creation not complete.");
 
-            double diameter = (_diameterPoint.Value - _center.Value).Length;
-            double radius = diameter / 2.0;
+            if (_diameterPoint.HasValue)
+            {
+                double diameter = (_diameterPoint.Value - _center.Value).Length;
+                _radius = diameter / 2.0; 
+            }
+            else if (!_radius.HasValue)
+            {
+                throw new InvalidOperationException("Either diameter point or radius must be specified.");
+            }
 
-            return new Circle(_center.Value, radius, Document);
+            return new Circle(_center.Value, _radius.Value, Document);
         }
     }
 }

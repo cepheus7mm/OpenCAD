@@ -38,6 +38,11 @@ namespace OpenCAD.Geometry
             double.IsFinite(Y) &&
             double.IsFinite(Z);
 
+        public bool IsNotAPoint =>
+            double.IsNaN(X) ||
+            double.IsNaN(Y) ||
+            double.IsNaN(Z);
+
         public override string ToString() => $"({X}, {Y}, {Z})";
 
         // --- Operators ---------------------------------------------------------

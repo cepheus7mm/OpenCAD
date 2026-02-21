@@ -318,6 +318,13 @@ namespace OpenCAD
             set => SetPropertyValue(PropertyType.DoubleLength, nameof(LastTextHeight), OpenCADStrings.LastTextHeight, value);
         }
 
+        [JsonIgnore, XmlIgnore]
+        public double LastDistance
+        {
+            get => GetPropertyValue<double>(PropertyType.DoubleLength, nameof(LastDistance));
+            set => SetPropertyValue(PropertyType.DoubleLength, nameof(LastDistance), OpenCADStrings.LastDistance, value);
+        }
+
         public override bool Add(OpenCADObject obj)
         {
             var added = base.Add(obj);

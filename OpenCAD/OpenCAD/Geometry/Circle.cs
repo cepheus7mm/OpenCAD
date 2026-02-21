@@ -289,7 +289,7 @@ namespace OpenCAD.Geometry
         {
             return new ICurve[]
             {
-                new Circle(Center, Radius + d, Document)
+                new Circle(Center, Radius - d, Document)
             };
         }
 

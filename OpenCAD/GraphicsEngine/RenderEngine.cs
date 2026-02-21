@@ -176,6 +176,8 @@ namespace GraphicsEngine
             foreach (var source in segmentSources)
             {
                 var segments = source.GetSegments(maxSagittaWorld);
+                if (segments == null || !segments.Any())
+                    continue;
                 var lineTypeData = source.GetLinetypeGpuData();
 
                 var mode = ComputeSegmentHighlightMode(source, highlightedSet, selectedSet);

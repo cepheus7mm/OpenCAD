@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
@@ -16,6 +16,7 @@ namespace UI.Commands.InputHelpers
         public GetAngleInput(ICommandContext context, ViewportViewModel? viewModel)
             : base(context, viewModel)
         {
+            _pointInputHelper = new GetPointInput(_context, _viewModel);
         }
 
         /// <summary>
@@ -37,88 +38,58 @@ namespace UI.Commands.InputHelpers
         /// Prompt user for an angle. Accepts numeric/keyword input (unit-aware) or a point pick.
         /// Returns InputResult.Double on success with angle in radians.
         /// </summary>
-        public async Task<InputResult> GetAngle(
-            string prompt,
-            double? defaultValue = null,  // NEW parameter (angle in radians)
-            bool allowLastPoint = false,
-            Point3D? basePoint = null,
-            string[]? keyWords = null,
-            CancellationToken cancellationToken = default)
+        public async Task<InputResult> GetAngle(InputParams inputParams)
         {
-            DefaultValue = defaultValue;  // NEW: Store default
-            
-            // NEW: Append formatted default to prompt if provided
-            if (defaultValue.HasValue)
-            {
-                prompt = $"{prompt} <{FormatDefaultForPrompt(OpenCADDocument.UnitFormatType.Angular)}>";
-            }
-
+            _inputParams = inputParams;
             // Use GetPointInput to allow picking a point or entering a keyword/text
-            _pointInputHelper = new GetPointInput(_context, _viewModel) { AllowArbitraryInput = true };
 
-            var result = await _pointInputHelper.GetPointOrKeywordAsync(
-                prompt,
-                allowLastPoint: allowLastPoint,
-                basePoint: basePoint,
-                keywords: keyWords,
-                cancellationToken: cancellationToken).ConfigureAwait(false);
+            // Reuse the unified point/keyword input system
+            var result = await _pointInputHelper.GetPointOrKeywordAsync(_inputParams);
 
-            var bad = new InputResult { ResultType = InputResult.InputResultType.None, DoubleValue = double.NaN };
-            if (result == null) return bad;
+            // Cancel
+            if (result.IsCancel)
+                return InputResult.Cancel;
 
-            if (result.ResultType == InputResult.InputResultType.Cancel)
-                return new InputResult { ResultType = InputResult.InputResultType.Cancel, DoubleValue = double.NaN };
-
-            // NEW: Check for empty input with default value
-            if (result.ResultType == InputResult.InputResultType.Keyword 
-                && string.IsNullOrWhiteSpace(result.Keyword) 
-                && defaultValue.HasValue)
+            // Empty input → use default
+            if (result.IsDefault && _inputParams.DefaultValue is double defaulDouble)
             {
-                return new InputResult 
-                { 
-                    ResultType = InputResult.InputResultType.Double, 
-                    DoubleValue = defaultValue.Value  // Already in radians
-                };
+                return InputResult.FromDouble(defaulDouble);
             }
 
-            if (result.ResultType == InputResult.InputResultType.Arbitrary && result.Keyword != null)
+            // Arbitrary text → parse as angle
+            if (result.IsArbitrary)
             {
-                // Try interpret keyword as numeric angle first
-                if (double.TryParse(result.Keyword, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed))
+                string text = result.Keyword;
+
+                // Try numeric first
+                if (double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var numeric))
+                    return InputResult.FromDouble(numeric);
+
+                // Try unit-aware parsing
+                try
                 {
-                    return new InputResult { ResultType = InputResult.InputResultType.Double, DoubleValue = parsed };
+                    double val = Document.StringToValue(text, OpenCADDocument.UnitFormatType.Angular);
+                    return InputResult.FromDouble(val);
                 }
-
-                // Existing unit-aware parsing (already correct)
-                if (Document != null)
+                catch
                 {
-                    try
-                    {
-                        var val = Document.StringToValue(result.Keyword, OpenCADDocument.UnitFormatType.Angular);
-                        return new InputResult { ResultType = InputResult.InputResultType.Double, DoubleValue = val };
-                    }
-                    catch
-                    {
-                        return bad;
-                    }
+                    return InputResult.BadDouble;
                 }
-
-                return bad;
             }
 
-            if (result.ResultType == InputResult.InputResultType.Point && result.Point.HasValue)
+            // Point picked → compute angle from basePoint
+            if (result.IsPoint &&
+                result.Point.HasValue &&
+                inputParams.BasePoint.HasValue)
             {
-                if (basePoint == null)
-                    return bad;
+                var p = result.Point.Value;
+                var b = inputParams.BasePoint.Value;
 
-                // Angle from basePoint to picked point
-                double dx = result.Point.Value.X - basePoint.Value.X;
-                double dy = result.Point.Value.Y - basePoint.Value.Y;
-                double angle = Math.Atan2(dy, dx);
-                return new InputResult { ResultType = InputResult.InputResultType.Double, DoubleValue = angle };
+                double angle = Math.Atan2(p.Y - b.Y, p.X - b.X);
+                return InputResult.FromDouble(angle);
             }
 
-            return bad;
+            return InputResult.BadDouble;
         }
     }
 }

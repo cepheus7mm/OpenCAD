@@ -1,4 +1,4 @@
-using Newtonsoft.Json.Linq;
+﻿using Newtonsoft.Json.Linq;
 using OpenCAD;
 using OpenCAD.Geometry;
 using System;
@@ -20,7 +20,6 @@ namespace UI.Commands.InputHelpers
         private EventHandler<PointPickedEventArgs>? _pointPickedHandler;
         private EventHandler? _pointPickingCancelledHandler;
         private Point3D? _basePoint; // For preview line from base point
-        private bool _allowLastPoint; // Store for keyboard input handling
         private TaskCompletionSource<InputResult>? _pointOrKeywordTaskSource;
 
         public GetPointInput(ICommandContext context, ViewportViewModel? viewModel) 
@@ -29,199 +28,38 @@ namespace UI.Commands.InputHelpers
         }
 
         /// <summary>
-        /// Get a point from the user via keyboard input or mouse click
-        /// </summary>
-        public async Task<Point3D?> GetPointAsync(
-            string prompt, 
-            bool allowLastPoint = false, 
-            Point3D? basePoint = null,
-            CancellationToken cancellationToken = default)
-        {
-            var result = await GetPointOrKeywordAsync(prompt, null, allowLastPoint, basePoint, null, cancellationToken);
-            return result.Point;
-        }
-
-        /// <summary>
         /// Get a point or keyword from the user via keyboard input or mouse click
         /// </summary>
         /// <param name="defaultValue">Optional default value (for use by composed helpers like GetDistanceInput)</param>
-        public async Task<InputResult> GetPointOrKeywordAsync(
-            string prompt,
-            object? defaultValue = null, // NEW: Accept default value (could be Point3D, double, etc.)
-            bool allowLastPoint = false,
-            Point3D? basePoint = null,
-            string[]? keywords = null,
-            CancellationToken cancellationToken = default)
+        public async Task<InputResult> GetPointOrKeywordAsync(InputParams inputParams)
         {
-            _basePoint = basePoint;
-            _allowLastPoint = allowLastPoint;
-            
-            // NEW: Store default value in base class
-            DefaultValue = defaultValue;
+            _inputParams = inputParams;
+            string formattedPrompt = PromptBuilder.Build(inputParams, _context.GetLastPoint());
 
-            // Use base.Keywords so base class can handle keyword matching
-            this.Keywords = keywords;
+            _context.PostToUI(() => _context.SetCommandPrompt(formattedPrompt));
 
-            // Build display prompt including keywords if provided
-            string displayPrompt = prompt ?? string.Empty;
-            if (keywords != null && keywords.Length > 0)
-            {
-                var kw = string.Join("/", keywords);
-                displayPrompt = $"{displayPrompt} [{kw}]";
-            }
-
-            // Build the actual prompt string shown on command pane
-            string formattedPrompt;
-            if (allowLastPoint)
-            {
-                var lastPoint = _context.GetLastPoint();
-                if (lastPoint != null)
-                {
-                    formattedPrompt = string.Format(
-                            OpenCADStrings.PromptWithLastPointFormat,
-                            displayPrompt,
-                            lastPoint.Value.X,
-                            lastPoint.Value.Y,
-                            lastPoint.Value.Z);
-                }
-                else
-                {
-                    formattedPrompt = string.Format(
-                            OpenCADStrings.PromptWithViewportFormat,
-                            displayPrompt);
-                }
-            }
-            else
-            {
-                formattedPrompt = string.Format(
-                        OpenCADStrings.PromptWithViewportFormat,
-                        displayPrompt);
-            }
-
-            // Prepare TCS (run continuations asynchronously to avoid reentrancy on UI thread)
-            _pointOrKeywordTaskSource = new TaskCompletionSource<InputResult>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-            // If viewport not available, return Cancel quickly (but still set prompt on UI)
             if (_viewModel == null)
-            {
-                // show prompt for consistency
-                _context.PostToUI(() => _context.SetCommandPrompt(formattedPrompt));
-                return new InputResult { ResultType = InputResult.InputResultType.Cancel };
-            }
+                return InputResult.Cancel;
 
-            // Show prompt and subscribe / enable picking on UI thread
-            _context.PostToUI(() =>
-            {
-                try
-                {
-                    _context.SetCommandPrompt(formattedPrompt);
+            var controller = new InputTaskController();
+            controller.AttachCancellation(_inputParams.CancellationToken);
 
-                    // Point picked handler
-                    _pointPickedHandler = (sender, e) => OnPointPicked(e.Point);
-                    _viewModel.PointPicked += _pointPickedHandler;
+            using var vp = new ViewportInteraction(
+                _viewModel,
+                _inputParams.BasePoint,
+                p => controller.CompleteWithPoint(p),
+                () => controller.CompleteWithCancel(),
+                OnPreviewPointChanged);
 
-                    // Cancelled handler
-                    _pointPickingCancelledHandler = (s, e) => _pointOrKeywordTaskSource?.TrySetResult(new InputResult { ResultType = InputResult.InputResultType.Cancel });
-                    _viewModel.PointPickingCancelled += _pointPickingCancelledHandler;
+            KeyWordHandler = kw => controller.CompleteWithKeyword(kw);
 
-                    // Enable picking mode
-                    _viewModel.EnablePointPickingMode();
+            _pointOrKeywordTaskSource = controller.TaskCompletionSource;
 
-                    // Setup preview mode if a base point was provided
-                    if (_basePoint != null)
-                    {
-                        _viewModel.ClearTempPoints();
-                        _viewModel.AddTempPoint(_basePoint.Value);
-                        _viewModel.EnablePreviewMode(OnPreviewPointChanged);
-                    }
-                }
-                catch
-                {
-                    // swallow UI setup exceptions; TCS still usable
-                }
-            });
+            var result = await controller.Task.ConfigureAwait(false);
 
-            // Build a KeyWordHandler that updates the visible prompt then completes the task.
-            KeyWordHandler = (kw) =>
-            {
-                try
-                {
-                    // Update UI prompt with chosen keyword (marshal to UI)
-                    var promptWithKeyword = $"{formattedPrompt} {kw}";
-                    _context.PostToUI(() =>
-                    {
-                        try { _context.SetCommandPrompt(promptWithKeyword); } catch { }
-                    });
+            //CleanupAfterInput();
 
-                    // Complete TCS with keyword result (TrySetResult to avoid races)
-                    _pointOrKeywordTaskSource?.TrySetResult(new InputResult
-                    {
-                        ResultType = InputResult.InputResultType.Keyword,
-                        Keyword = kw
-                    });
-                }
-                catch
-                {
-                    // ignore
-                }
-            };
-
-            try
-            {
-                // Wait for either mouse click, keyboard input, or cancellation
-                using (cancellationToken.Register(() => _pointOrKeywordTaskSource?.TrySetResult(new InputResult { ResultType = InputResult.InputResultType.Cancel })))
-                {
-                    return await _pointOrKeywordTaskSource.Task.ConfigureAwait(false);
-                }
-            }
-            finally
-            {
-                // Cleanup must happen on UI thread to safely unsubscribe and disable modes
-                _context.PostToUI(() =>
-                {
-                    try
-                    {
-                        // Disable preview mode and clear temp points
-                        if (_basePoint != null)
-                        {
-                            try { _viewModel.DisablePreviewMode(); } catch { }
-                            try { _viewModel.ClearTempPoints(); } catch { }
-                        }
-
-                        // Disable picking mode
-                        try { _viewModel.DisablePointPickingMode(); } catch { }
-
-                        // Unsubscribe handlers
-                        if (_pointPickedHandler != null)
-                        {
-                            try { _viewModel.PointPicked -= _pointPickedHandler; } catch { }
-                            _pointPickedHandler = null;
-                        }
-
-                        if (_pointPickingCancelledHandler != null)
-                        {
-                            try { _viewModel.PointPickingCancelled -= _pointPickingCancelledHandler; } catch { }
-                            _pointPickingCancelledHandler = null;
-                        }
-
-                        // Clear prompt
-                        try { _context.SetCommandPrompt(string.Empty); } catch { }
-                    }
-                    catch
-                    {
-                        // swallow cleanup exceptions
-                    }
-                    finally
-                    {
-                        _pointOrKeywordTaskSource = null;
-                        _basePoint = null;
-                        _allowLastPoint = false;
-                        DefaultValue = null; // NEW: Clear default value
-                        this.Keywords = null;
-                        KeyWordHandler = null;
-                    }
-                });
-            }
+            return result;
         }
 
         /// <summary>
@@ -229,70 +67,44 @@ namespace UI.Commands.InputHelpers
         /// </summary>
         public override bool ProcessKeyboardInput(string input)
         {
-            // If there's no pending task, return false
             if (_pointOrKeywordTaskSource == null)
                 return false;
 
-            // NEW: Check for empty input with default value (for composed helpers like GetDistanceInput)
-            if (string.IsNullOrWhiteSpace(input) && HasDefault)
-            {
-                // Signal default acceptance with empty keyword
-                // The composed helper (GetDistanceInput) will recognize this and return the default
-                _pointOrKeywordTaskSource.TrySetResult(new InputResult
-                {
-                    ResultType = InputResult.InputResultType.Keyword,
-                    Keyword = string.Empty
-                });
-                return false;
-            }
+            // Interpret the input using the unified helper
+            var result = InterpretKeyboardInput(input);
 
-            if (AllowArbitraryInput && !string.IsNullOrWhiteSpace(input))
-            {
-                // Accept any arbitrary input as a keyword
-                _pointOrKeywordTaskSource.TrySetResult(new InputResult
-                {
-                    ResultType = InputResult.InputResultType.Arbitrary,
-                    Keyword = input
-                });
-                return false;
-            }
+            // Update preview if needed
+            UpdatePreviewIfNeeded(result);
 
-            // Let base class handle keywords first
+            // Complete the task
+            _pointOrKeywordTaskSource.TrySetResult(result);
+
+            return true;
+
+        }
+
+        private InputResult InterpretKeyboardInput(string input)
+        {
+            // 1. Default acceptance
+            if (string.IsNullOrWhiteSpace(input) && _inputParams.DefaultValue != null)
+                return InputResult.Default;
+
+            // 2. Arbitrary input
+            if (_inputParams.AllowArbitraryInput && !string.IsNullOrWhiteSpace(input))
+                return InputResult.FromArbitrary(input);
+
+            // 3. Keyword input (handled by base)
             base.ProcessKeyboardInput(input);
             if (LastInputHandled)
-            {
-                // base already invoked KeyWordHandler which updated prompt and completed the TCS.
-                return true;
-            }
+                return InputResult.FromKeyword(input);
 
-            // Parse the input as a point
+            // 4. Point input
             var point = ParsePointInput(input, _allowLastPoint);
-            
-            // If we got a valid point and there's a base point (rubberband mode),
-            // set the preview point (must be on UI thread)
-            if (point != null && _basePoint != null && point != Point3D.NotAPoint)
-            {
-                _context.PostToUI(() =>
-                {
-                    try { _viewModel.SetPreviewPoint(point); } catch { }
-                });
-            }
-            if (point.HasValue && AllowArbitraryInput)
-            {
-                _pointOrKeywordTaskSource.TrySetResult(new InputResult { ResultType = InputResult.InputResultType.Arbitrary, Keyword = input });
-            }
-
-            // Complete the task with the result
             if (point.HasValue)
-            {
-                _pointOrKeywordTaskSource.TrySetResult(new InputResult { Point = point, ResultType = InputResult.InputResultType.Point });
-            }
-            else
-            {
-                _pointOrKeywordTaskSource.TrySetResult(new InputResult { ResultType = InputResult.InputResultType.Cancel });
-            }
-            
-            return true;
+                return InputResult.FromPoint(point.Value);
+
+            // 5. Invalid → cancel
+            return InputResult.Cancel;
         }
 
         /// <summary>
@@ -391,10 +203,6 @@ namespace UI.Commands.InputHelpers
                 });
 
                 _pointOrKeywordTaskSource = null;
-                _basePoint = null;
-                _allowLastPoint = false;
-                DefaultValue = null; // NEW: Clear default value
-                this.Keywords = null;
                 KeyWordHandler = null;
             }
         }
@@ -431,38 +239,7 @@ namespace UI.Commands.InputHelpers
             {
                 try { _viewModel?.SetPreviewPoint(previewPoint); } catch { }
             });
-            
-            //System.Diagnostics.Debug.WriteLine(
-            //    string.Format(
-            //        OpenCADStrings.LineCommandPreviewPointUpdated,
-            //        previewPoint.X,
-            //        previewPoint.Y,
-            //        previewPoint.Z));
         }
 
-        /// <summary>
-        /// Helper method to parse a point from input string
-        /// Format: "x y z" or "x,y,z"
-        /// </summary>
-        private Point3D? ParsePoint(string input)
-        {
-            if (string.IsNullOrWhiteSpace(input))
-                return null;
-
-            // Try space-separated format
-            string[] parts = input.Split(new[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
-            
-            if (parts.Length != 3)
-                return null;
-
-            if (double.TryParse(parts[0], out double x) &&
-                double.TryParse(parts[1], out double y) &&
-                double.TryParse(parts[2], out double z))
-            {
-                return new Point3D(x, y, z);
-            }
-
-            return null;
-        }
     }
 }

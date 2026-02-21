@@ -19,7 +19,10 @@ namespace UI.Commands.Drawing.CircleCommand.Modes
         public override string Prompt =>
             _center == null ? "Specify center point" : "Specify radius";
 
-        public override string[] Keywords => new[] { "DIA", "2PT", "3PT" };
+        public override string[] Keywords => _center == null ? new[] { "DIA", "2PT", "3PT" } : Array.Empty<string>();
+
+        public override UserInputType UserInputType => _center == null ? UserInputType.Point : UserInputType.Distance;
+
 
         public override void SetPoint(Point3D p)
         {
@@ -27,6 +30,17 @@ namespace UI.Commands.Drawing.CircleCommand.Modes
                 _center = p;
             else
                 _radius = (_center.Value - p).Length;
+        }
+
+        public override void SetKeyword(string keyword)
+        {
+            // CircleCommand will handle switching modes.
+            // This mode does not interpret keywords internally.
+        }
+
+        public override void SetDistance(double distance)
+        {
+            _radius = distance;
         }
 
         public override bool IsComplete => _center != null && _radius != null;

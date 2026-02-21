@@ -28,7 +28,9 @@ namespace UI.Commands.Drawing.CircleCommand.Modes
                 ? "Specify first point of diameter"
                 : "Specify second point of diameter";
 
-        public override string[] Keywords => new[] { "RAD", "DIA", "3PT" };
+        public override string[] Keywords => _p1 == null ? new[] { "RAD", "DIA", "3PT" } : Array.Empty<string>();
+
+        public override UserInputType UserInputType => UserInputType.Point;
 
 
         // --- INPUT HANDLING ---------------------------------------------------
@@ -40,7 +42,10 @@ namespace UI.Commands.Drawing.CircleCommand.Modes
             else
                 _p2 = p;
         }
-
+        public override void SetDistance(double distance)
+        {
+            throw new NotImplementedException();
+        }
 
         // --- STATE -------------------------------------------------------------
 

@@ -209,6 +209,17 @@ namespace UI.Controls.Viewport
                     _previewPoint = value;
                     OnPropertyChanged();
                     RefreshRequested?.Invoke(this, EventArgs.Empty);
+                    PreviewPointChanged?.Invoke(this, new PointPickedEventArgs(value.Value));
+#if DEBUG
+                    if (value.HasValue)
+                    {
+                        DiagnosticToolTip += Environment.NewLine + $"Preview Point: ({value.Value.X:F3}, {value.Value.Y:F3}, {value.Value.Z:F3})";
+                    }
+                    else
+                    {
+                        DiagnosticToolTip += Environment.NewLine + "Preview Point: None";
+                    }
+#endif
                 }
             }
         }
@@ -392,6 +403,8 @@ namespace UI.Controls.Viewport
         /// Event raised when the viewport should be refreshed
         /// </summary>
         public event EventHandler? RefreshRequested;
+
+        public event EventHandler<PointPickedEventArgs> PreviewPointChanged;
 
         /// <summary>
         /// Event raised when an object is added to the scene

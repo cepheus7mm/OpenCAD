@@ -187,7 +187,8 @@ namespace UI.Commands.Drawing
             // Route keyboard input to shared helper in base (created during Initialize)
             if (_inputHelper != null)
             {
-                return _inputHelper.ProcessKeyboardInput(input);
+                _inputHelper.ProcessKeyboardInput(input);
+                return IsCommandCompleted;
             }
 
             return false;

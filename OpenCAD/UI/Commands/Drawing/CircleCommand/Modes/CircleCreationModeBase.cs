@@ -32,6 +32,9 @@ namespace UI.Commands.Drawing.CircleCommand.Modes
 
         // --- INPUT HANDLING ---------------------------------------------------
 
+        public abstract UserInputType UserInputType { get; }
+
+
         /// <summary>
         /// Called when the user provides a point.
         /// </summary>
@@ -44,6 +47,8 @@ namespace UI.Commands.Drawing.CircleCommand.Modes
         {
             // Default: do nothing. Subclasses override if needed.
         }
+
+        public abstract void SetDistance(double distance);
 
 
         // --- STATE -------------------------------------------------------------

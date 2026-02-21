@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading.Tasks;
 using UI.Commands.Interfaces;
 using UI.Controls.Viewport;
+using UI.Helpers;
 
 namespace UI.Commands.InputHelpers
 {
@@ -15,18 +16,14 @@ namespace UI.Commands.InputHelpers
     {
         protected readonly ICommandContext _context;
         protected readonly ViewportViewModel? _viewModel;
-        
+        protected bool _allowLastPoint; // Store for keyboard input handling
+        protected InputParams _inputParams;
+
         // Cache document reference
         protected OpenCADDocument? Document { get; private set; }
         
         // Make public so composed helpers can set it
-        public object? DefaultValue { get; set; }
-        protected bool HasDefault => DefaultValue != null;
-
-        public bool AllowArbitraryInput { get; set; } = false;
-        public Point3D? BasePoint { get; set; }
         public Action<string?>? KeyWordHandler { get; set; }
-        protected string[]? Keywords { get; set; }
         protected bool LastInputHandled { get; private set; }
 
         public InputHelperBase(ICommandContext context, ViewportViewModel? viewModel)
@@ -45,16 +42,16 @@ namespace UI.Commands.InputHelpers
         /// <param name="formatType">The type of formatting to apply (Linear, Angular, etc.)</param>
         protected virtual string FormatDefaultForPrompt(OpenCADDocument.UnitFormatType formatType)
         {
-            if (DefaultValue == null || Document == null)
-                return DefaultValue?.ToString() ?? string.Empty;
+            if (_inputParams.DefaultValue == null || Document == null)
+                return _inputParams.DefaultValue?.ToString() ?? string.Empty;
             
             // Base implementation for double values
-            if (DefaultValue is double value)
+            if (_inputParams.DefaultValue is double value)
             {
                 return Document.ValueToString(value, formatType);
             }
             
-            return DefaultValue.ToString() ?? string.Empty;
+            return _inputParams.DefaultValue.ToString() ?? string.Empty;
         }
 
         /// <summary>
@@ -68,7 +65,7 @@ namespace UI.Commands.InputHelpers
             LastInputHandled = false;
 
             // NEW: Check for empty input with default value FIRST (before whitespace check)
-            if (string.IsNullOrWhiteSpace(input) && HasDefault)
+            if (string.IsNullOrWhiteSpace(input) && _inputParams.DefaultValue != null)
             {
                 // Signal that empty input with default was handled
                 HandleMatchedKeyword(string.Empty);
@@ -77,15 +74,15 @@ namespace UI.Commands.InputHelpers
             }
 
             // Now do the original whitespace check for non-default cases
-            if ((Keywords == null && !AllowArbitraryInput) || string.IsNullOrWhiteSpace(input))
+            if ((_inputParams.Keywords == null && !_inputParams.AllowArbitraryInput) || string.IsNullOrWhiteSpace(input))
                 return false;
 
             var inputUpper = input.Trim().ToUpperInvariant();
-            var matchedKeyword = Keywords?.FirstOrDefault(k =>
+            var matchedKeyword = _inputParams.Keywords?.FirstOrDefault(k =>
                 k.ToUpperInvariant() == inputUpper ||
                 k.ToUpperInvariant().StartsWith(inputUpper));
 
-            if (matchedKeyword != null || AllowArbitraryInput)
+            if (matchedKeyword != null || _inputParams.AllowArbitraryInput)
             {
                 // Let derived classes handle the matched keyword result (e.g. complete a TCS)
                 HandleMatchedKeyword((!string.IsNullOrEmpty(matchedKeyword) ? matchedKeyword : input) ?? string.Empty);
@@ -114,6 +111,88 @@ namespace UI.Commands.InputHelpers
             {
                 _context.OutputMessage($"Keyword: {keyword}");
             }
+        }
+
+        protected void UpdatePreviewIfNeeded(InputResult result)
+        {
+            if (result.ResultType == InputResult.InputResultType.Point &&
+                result.Point.HasValue &&
+                _inputParams.BasePoint.HasValue)
+            {
+                var p = result.Point.Value;
+                _context.PostToUI(() =>
+                {
+                    try { _viewModel.SetPreviewPoint(p); } catch { }
+                });
+            }
+        }
+
+        private Point3D? TryParsePoint(
+            string input,
+            Point3D? basePoint,
+            Point3D? lastPoint)
+        {
+            // 1. Empty input → last point
+            if (string.IsNullOrWhiteSpace(input))
+                return lastPoint;
+
+            // 2. Cartesian
+            var cart = ParsePoint(input);
+            if (cart.HasValue)
+                return cart;
+
+            // 3. Polar
+            var polar = new PolarInputHelper(input);
+            if (polar.IsValid)
+            {
+                var origin = basePoint ?? lastPoint ?? Point3D.Origin;
+                return origin + polar.Vector;
+            }
+
+            return null;
+        }
+
+        private Point3D? ParsePointInput(string input, bool allowLastPoint)
+        {
+            var last = allowLastPoint ? _context.GetLastPoint() : null;
+
+            var parsed = TryParsePoint(input, _inputParams.BasePoint, last);
+
+            if (parsed.HasValue)
+            {
+                _context.SetLastPoint(parsed.Value);
+                _context.OutputMessage(
+                    string.Format(OpenCADStrings.PointSelectedFormat,
+                        parsed.Value.X, parsed.Value.Y, parsed.Value.Z));
+                return parsed;
+            }
+
+            return Point3D.NotAPoint;
+        }
+
+        /// <summary>
+        /// Helper method to parse a point from input string
+        /// Format: "x y z" or "x,y,z"
+        /// </summary>
+        protected Point3D? ParsePoint(string input)
+        {
+            if (string.IsNullOrWhiteSpace(input))
+                return null;
+
+            // Try space-separated format
+            string[] parts = input.Split(new[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
+
+            if (parts.Length != 3)
+                return null;
+
+            if (double.TryParse(parts[0], out double x) &&
+                double.TryParse(parts[1], out double y) &&
+                double.TryParse(parts[2], out double z))
+            {
+                return new Point3D(x, y, z);
+            }
+
+            return null;
         }
     }
 }

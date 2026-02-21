@@ -148,15 +148,36 @@ namespace OpenCAD.Geometry.Calculator
             // Angle of projected point
             double ap = Math.Atan2(point.Y - center.Y, point.X - center.X);
 
-            // Directed angle from start → point
-            double delta = AngleUtils.NormalizeSigned(ap - a0);
+            // Raw delta
+            double delta = ap - a0;
+
+            // Align delta to the same branch/direction as sweep
+            if (sweep > 0)
+            {
+                delta = AngleUtils.NormalizeAnglePositive(delta);
+            }
+            else if (sweep < 0)
+            {
+                delta = AngleUtils.NormalizeAngleNegative(delta);
+            }
+
+            else
+            {
+                // Degenerate sweep; treat as zero
+                return 0.0;
+            }
+
+            // If not extending, clamp delta to the actual sweep range
+            if (!extend)
+            {
+                if (sweep > 0)
+                    delta = Math.Clamp(delta, 0.0, sweep);
+                else
+                    delta = Math.Clamp(delta, sweep, 0.0);
+            }
 
             // Parameter along arc
             double t = delta / sweep;
-
-            if (!extend)
-                t = Math.Clamp(t, 0.0, 1.0);
-
             return t;
         }
 

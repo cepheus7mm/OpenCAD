@@ -34,7 +34,9 @@ namespace UI.Commands
         protected IInputHelper? _inputHelper;
 
         public virtual bool IsMultiStep => false;
-        
+
+        public virtual bool IsCommandCompleted { get; protected set; } = false;
+
         /// <summary>
         /// Gets whether this command requires selection mode to be enabled.
         /// Override in derived classes for editing commands like Erase, Move, Copy, etc.
@@ -83,7 +85,11 @@ namespace UI.Commands
         {
             // Route keyboard input to shared point helper if present
             if (_inputHelper != null)
-                return _inputHelper.ProcessKeyboardInput(input);
+            {
+                _inputHelper.ProcessKeyboardInput(input);
+
+                return IsCommandCompleted;
+            }
 
             return true; // Single-step commands complete immediately
         }
@@ -158,13 +164,41 @@ namespace UI.Commands
             CurrentPrompt = prompt;
             try
             {
-                return await ((GetPointInput)_inputHelper).GetPointOrKeywordAsync(
-                    prompt,
-                    defaultValue: defaultValue,
-                    allowLastPoint: allowLastPoint,
-                    basePoint: BasePoint,
-                    keywords: keyWords,
-                    cancellationToken: _cancellationTokenSource.Token);
+                return await ((GetPointInput)_inputHelper).GetPointOrKeywordAsync(new InputParams
+                {
+                    Prompt = prompt,
+                    DefaultValue = defaultValue,
+                    AllowLastPoint = allowLastPoint,
+                    AllowArbitraryInput = BasePoint.IsValid, //if the base point is valid, allow arbitrary input for relative coordinates
+                    BasePoint = BasePoint,
+                    Keywords = keyWords,
+                    CancellationToken = _cancellationTokenSource.Token
+                });
+            }
+            catch (OperationCanceledException)
+            {
+                return badResult;
+            }
+            finally
+            {
+                CurrentPrompt = string.Empty;
+            }
+        }
+
+        protected async Task<InputResult> GetPoint(InputParams inputParams)
+        {
+            var viewModel = Context?.GetActiveViewportViewModel();
+            var badResult = new InputResult() { ResultType = InputResult.InputResultType.None, Point = null };
+            if (viewModel == null || Context == null)
+                return badResult;
+            // Ensure we have a cancellation token source for this command
+            _cancellationTokenSource ??= new CancellationTokenSource();
+            // Use shared helper if available, otherwise create a temporary one
+            _inputHelper = new GetPointInput(Context, viewModel);
+            CurrentPrompt = inputParams.Prompt;
+            try
+            {
+                return await ((GetPointInput)_inputHelper).GetPointOrKeywordAsync(inputParams);
             }
             catch (OperationCanceledException)
             {
@@ -198,17 +232,20 @@ namespace UI.Commands
 
             _cancellationTokenSource ??= new CancellationTokenSource();
 
-            _inputHelper = new GetDistanceInput(Context, viewModel, this);
+            _inputHelper = new GetDistanceInput(Context, viewModel);
 
             try
             {
-                return await ((GetDistanceInput)_inputHelper).GetDistance(
-                    prompt,
-                    defaultValue: defaultValue,
-                    allowLastPoint: allowLastPoint,
-                    basePoint: BasePoint,
-                    keyWords: keyWords,
-                    cancellationToken: _cancellationTokenSource.Token);
+                return await ((GetDistanceInput)_inputHelper).GetDistance(new InputParams
+                {
+                    Prompt = prompt,
+                    DefaultValue = defaultValue,
+                    AllowLastPoint = allowLastPoint,
+                    AllowArbitraryInput = true,
+                    BasePoint = BasePoint,
+                    Keywords = keyWords,
+                    CancellationToken = _cancellationTokenSource.Token
+                });
             }
             catch (OperationCanceledException)
             {
@@ -246,13 +283,16 @@ namespace UI.Commands
 
             try
             {
-                return await ((GetAngleInput)_inputHelper).GetAngle(
-                    prompt,
-                    defaultValue: defaultValue,
-                    allowLastPoint: allowLastPoint,
-                    basePoint: BasePoint,
-                    keyWords: keyWords,
-                    cancellationToken: _cancellationTokenSource.Token);
+                return await ((GetAngleInput)_inputHelper).GetAngle(new InputParams
+                {
+                    Prompt = prompt,
+                    DefaultValue = defaultValue,
+                    AllowLastPoint = allowLastPoint,
+                    AllowArbitraryInput = true,
+                    BasePoint = BasePoint,
+                    Keywords = keyWords,
+                    CancellationToken = _cancellationTokenSource.Token
+                });
             }
             catch (OperationCanceledException)
             {
@@ -521,6 +561,7 @@ namespace UI.Commands
         /// </summary>
         protected void CommandCompleted()
         {
+            CancelPreview();
             // Ensure point picking fully disabled
             var viewModel = Context?.GetActiveViewportViewModel();
             if (viewModel != null && viewModel.IsPointPickingMode)

@@ -5,21 +5,20 @@ using System.Threading;
 using System.Threading.Tasks;
 using UI.Commands.Interfaces;
 using UI.Controls.Viewport;
+using static UI.Commands.InputHelpers.InputResult;
 
 namespace UI.Commands.InputHelpers
 {
     public class GetDistanceInput : InputHelperBase
     {
-        private CommandBase _command;
-        private GetPointInput? _pointInputHelper;
+        private GetPointInput _pointInputHelper;
 
         public GetDistanceInput(
             ICommandContext context,
-            ViewportViewModel? viewModel,
-            CommandBase command)
+            ViewportViewModel? viewModel)
             : base(context, viewModel)
         {
-            _command = command;
+            _pointInputHelper = new GetPointInput(_context, _viewModel);
         }
 
         /// <summary>
@@ -37,231 +36,43 @@ namespace UI.Commands.InputHelpers
             return base.ProcessKeyboardInput(input);
         }
 
-        public async Task<InputResult> GetDistance(
-            string prompt,
-            double? defaultValue = null,
-            bool allowLastPoint = false,
-            Point3D? basePoint = null,
-            string[]? keyWords = null,
-            CancellationToken cancellationToken = default)
+        public async Task<InputResult> GetDistance(InputParams parameters)
         {
-            AllowArbitraryInput = true;
-            DefaultValue = defaultValue;
-            
-            // Append formatted default to prompt if provided
-            if (defaultValue.HasValue)
+            _inputParams = parameters;
+
+            //
+            // CASE A — basePoint is provided
+            //
+            if (_inputParams.BasePoint.HasValue && _inputParams.BasePoint.Value.IsValid)
+                return await GetDistanceFromBasePoint(_inputParams);
+
+            //
+            // CASE B — no basePoint: first input determines the flow
+            //
+            var first = await _pointInputHelper.GetPointOrKeywordAsync(_inputParams);
+
+            // Try to parse directly (numeric, default, unit-aware)
+            var parsed = ParseDistanceInput(first, null, parameters.DefaultValue as double?);
+
+            if (parsed.ResultType == InputResultType.Double)
+                return parsed;
+
+            // Otherwise first was a point → ask for second
+            if (first.ResultType == InputResultType.Point && first.Point.HasValue)
             {
-                prompt = $"{prompt} <{FormatDefaultForPrompt(OpenCADDocument.UnitFormatType.Linear)}>";
+                _inputParams.BasePoint = first.Point.Value;
+                _inputParams.Prompt = "Specify second point";
+                return await GetDistanceFromBasePoint(_inputParams);
             }
-            
-            _pointInputHelper = new GetPointInput(_context, _viewModel) { AllowArbitraryInput = true };
-            
-            // Pass the default value to the nested helper so it knows a default exists
-            _pointInputHelper.DefaultValue = defaultValue;
 
-            try
-            {
-                InputResult? first = null;
-                var secondDefault = defaultValue;
-                // If basePoint is provided, skip to getting the second point
-                if (basePoint == null)
-                {
-                    first = await _pointInputHelper.GetPointOrKeywordAsync(
-                                        prompt,
-                                        allowLastPoint: allowLastPoint,
-                                        basePoint: null,
-                                        keywords: keyWords,
-                                        cancellationToken: cancellationToken);
-                    prompt = OpenCADStrings.SecondPointPrompt ?? "Specify second point:";
-                    secondDefault = null;
-                }
-                else
-                {
-                    first = new InputResult 
-                    { 
-                        ResultType = InputResult.InputResultType.Point, 
-                        Point = basePoint 
-                    };
-                }
-
-                if (first == null || first.ResultType == InputResult.InputResultType.Cancel)
-                {
-                    return CreateCancelResult();
-                }
-
-                // Check for empty keyword (signal from default acceptance)
-                if (first.ResultType == InputResult.InputResultType.Keyword 
-                    && string.IsNullOrWhiteSpace(first.Keyword) 
-                    && defaultValue.HasValue)
-                {
-                    return CreateDoubleResult(defaultValue.Value);
-                }
-
-                // Check for keyword or numeric input
-                if (first.ResultType == InputResult.InputResultType.Keyword && first.Keyword != null)
-                {
-                    return ProcessKeywordInput(first.Keyword);
-                }
-
-                // User picked a point - prompt for second point to calculate distance
-                if (first.ResultType == InputResult.InputResultType.Point && first.Point != null)
-                {
-                    BasePoint = first.Point;
-                    _command.BeginPreview();
-
-                    try
-                    {
-                        var second = await _pointInputHelper!.GetPointOrKeywordAsync(
-                            prompt,
-                            defaultValue: secondDefault,
-                            allowLastPoint: allowLastPoint,
-                            basePoint: BasePoint,
-                            keywords: keyWords,
-                            cancellationToken: cancellationToken);
-
-                        if (second?.ResultType == InputResult.InputResultType.Point && second.Point.HasValue)
-                        {
-                            return CreateDoubleResult(BasePoint.Value.DistanceTo(second.Point.Value));
-                        }
-                        if (second?.ResultType == InputResult.InputResultType.Keyword && second.Keyword != null && second.Keyword.Length == 0)
-                        {
-                            return CreateDoubleResult((double)DefaultValue);
-                        }
-                        if (second?.ResultType == InputResult.InputResultType.Arbitrary && second.Keyword != null)
-                        {
-                            if (double.TryParse(second.Keyword, out double distanceFromInput))
-                            {
-                                return CreateDoubleResult(distanceFromInput);
-                            }
-                            if (Document != null)
-                            {
-                                try
-                                {
-                                    var val = Document.StringToValue(second.Keyword, OpenCADDocument.UnitFormatType.Linear);
-                                    return new InputResult { ResultType = InputResult.InputResultType.Double, DoubleValue = val };
-                                }
-                                catch
-                                {
-                                    return CreateCancelResult();
-                                }
-                            }
-                        }
-
-                        return CreateCancelResult();
-                    }
-                    finally
-                    {
-                        _command.CommitPreview();
-                        BasePoint = null;
-                    }
-                }
-
-                // Arbitrary input fallback
-                if (first.ResultType == InputResult.InputResultType.Arbitrary && double.TryParse(first.Keyword, out double distance))
-                {
-                    return CreateDoubleResult(distance);
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                return CreateCancelResult();
-            }
-            
-            return CreateCancelResult();
+            return InputResult.BadDouble;
         }
 
-        /// <summary>
-        /// Get distance by prompting for a second point and calculating distance from basePoint.
-        /// </summary>
-        private async Task<InputResult> GetDistanceFromTwoPoints(
-            Point3D basePoint,
-            bool allowLastPoint,
-            string[]? keyWords,
-            CancellationToken cancellationToken)
+        private async Task<InputResult> GetDistanceFromBasePoint(InputParams inputParams)
         {
-            BasePoint = basePoint;
-            _command.BeginPreview();
-            
-            try
-            {
-                var secondPrompt = OpenCADStrings.SecondPointPrompt ?? "Specify second point:";
+            var second = await _pointInputHelper!.GetPointOrKeywordAsync(inputParams);
 
-                var second = await _pointInputHelper!.GetPointOrKeywordAsync(
-                    secondPrompt,
-                    allowLastPoint: allowLastPoint,
-                    basePoint: BasePoint,
-                    keywords: keyWords,
-                    cancellationToken: cancellationToken);
-
-                if (second?.ResultType == InputResult.InputResultType.Point && second.Point != null)
-                {
-                    return CreateDoubleResult(BasePoint.Value.DistanceTo(second.Point.Value));
-                }
-
-                return CreateCancelResult();
-            }
-            finally
-            {
-                _command.CommitPreview();
-                BasePoint = null;
-            }
-        }
-
-        /// <summary>
-        /// Process keyword input - try to parse as numeric or unit-aware distance.
-        /// </summary>
-        private InputResult ProcessKeywordInput(string keyword)
-        {
-            // Check for keyword handler first
-            if (KeyWordHandler != null)
-            {
-                try { KeyWordHandler(keyword); }
-                catch { }
-                return CreateCancelResult();
-            }
-
-            // Try simple numeric parse
-            if (double.TryParse(keyword, out var parsed))
-            {
-                return CreateDoubleResult(parsed);
-            }
-
-            // Try unit-aware parsing
-            if (Document != null)
-            {
-                try
-                {
-                    return CreateDoubleResult(Document.StringToValue(keyword, OpenCADDocument.UnitFormatType.Linear));
-                }
-                catch
-                {
-                    return new InputResult 
-                    { 
-                        ResultType = InputResult.InputResultType.None, 
-                        DoubleValue = double.NaN 
-                    };
-                }
-            }
-
-            return CreateCancelResult();
-        }
-
-        private static InputResult CreateDoubleResult(double value)
-        {
-            return new InputResult 
-            { 
-                ResultType = InputResult.InputResultType.Double, 
-                DoubleValue = value 
-            };
-        }
-
-        private static InputResult CreateCancelResult()
-        {
-            return new InputResult 
-            { 
-                ResultType = InputResult.InputResultType.Cancel, 
-                DoubleValue = double.NaN 
-            };
+            return ParseDistanceInput(second, inputParams.BasePoint, null);
         }
 
         protected override void HandleMatchedKeyword(string? keyword)
@@ -275,6 +86,59 @@ namespace UI.Commands.InputHelpers
             {
                 base.HandleMatchedKeyword(keyword);
             }
+        }
+
+        private InputResult ParseDistanceInput(
+            InputResult input,
+            Point3D? basePoint,
+            double? defaultValue)
+        {
+            // Cancel
+            if (input.IsCancel)
+                return input;
+
+            // Empty keyword → default
+            if (input.ResultType == InputResult.InputResultType.Keyword &&
+                string.IsNullOrWhiteSpace(input.Keyword) &&
+                defaultValue.HasValue)
+            {
+                return InputResult.FromDouble(defaultValue.Value);
+            }
+
+            // Arbitrary numeric
+            if (input.ResultType == InputResult.InputResultType.Arbitrary &&
+                double.TryParse(input.Keyword, out double numeric))
+            {
+                return InputResult.FromDouble(numeric);
+            }
+
+            // Arbitrary unit-aware
+            if (input.IsArbitrary)
+            {
+                try
+                {
+                    double val = Document.StringToValue(
+                        input.Arbitrary,
+                        OpenCADDocument.UnitFormatType.Linear);
+
+                    return InputResult.FromDouble(val);
+                }
+                catch
+                {
+                    return InputResult.BadDouble;
+                }
+            }
+
+            // Point input → compute distance
+            if (input.ResultType == InputResult.InputResultType.Point &&
+                input.Point.HasValue &&
+                basePoint.HasValue)
+            {
+                double d = basePoint.Value.DistanceTo(input.Point.Value);
+                return InputResult.FromDouble(d);
+            }
+
+            return InputResult.BadDouble;
         }
     }
 }

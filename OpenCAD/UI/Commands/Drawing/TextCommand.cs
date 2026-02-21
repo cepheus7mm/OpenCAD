@@ -160,9 +160,10 @@ namespace UI.Commands.Drawing
         {
             if (_inputHelper != null)
             {
-                return _inputHelper.ProcessKeyboardInput(input);
+                _inputHelper.ProcessKeyboardInput(input);
+                return IsCommandCompleted;
             }
-            
+
             return false;
         }
 

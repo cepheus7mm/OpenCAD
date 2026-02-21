@@ -67,6 +67,7 @@ namespace OpenCAD.Geometry.Calculator
             Point3D start,
             Point3D? end = null,
             Point3D? center = null,
+            Point3D? second = null,
             double? radius = null,
             double? includedAngle = null, // radians
             double? arcLength = null,
@@ -105,6 +106,33 @@ namespace OpenCAD.Geometry.Calculator
 
                 FillFromStartEndBulge(ref sol);
                 return sol;
+            }
+
+            // ---------------------------
+            // 1a. Case: second point + end → solve center from three points
+            // ---------------------------
+            if (second.HasValue && end.HasValue)
+            {
+                if (TryComputeCenterFromThreePoints(start, second.Value, end.Value, out Point3D computedCenter))
+                {
+                    sol.Center = computedCenter;
+                    return SolveArc(
+                        start,
+                        end: end,
+                        center: sol.Center,
+                        radius: null,
+                        includedAngle: null,
+                        arcLength: null,
+                        direction: null,
+                        bulge: null);
+                }
+                 else
+                {
+                    // Points are collinear; treat as straight segment
+                    sol.End = end.Value;
+                    sol.ChordLength = GeometricCalculator.GetChordLength(start, sol.End);
+                    return MakeStraightSolution(sol);
+                }
             }
 
             // ---------------------------
@@ -676,6 +704,43 @@ namespace OpenCAD.Geometry.Calculator
             s.EndTangent = new Vector3D(
                 -Math.Sin(s.EndAngle),
                  Math.Cos(s.EndAngle), 0);
+        }
+
+        public static bool TryComputeCenterFromThreePoints(
+            Point3D start,
+            Point3D second,
+            Point3D end,
+            out Point3D center)
+        {
+            center = Point3D.NotAPoint;
+
+            double x1 = start.X, y1 = start.Y;
+            double x2 = second.X, y2 = second.Y;
+            double x3 = end.X, y3 = end.Y;
+
+            // Determinant (twice the signed area of triangle)
+            double d = 2 * (x1 * (y2 - y3) +
+                            x2 * (y3 - y1) +
+                            x3 * (y1 - y2));
+
+            // Collinear or nearly collinear
+            if (Math.Abs(d) < 1e-12)
+                return false;
+
+            double x1sq = x1 * x1 + y1 * y1;
+            double x2sq = x2 * x2 + y2 * y2;
+            double x3sq = x3 * x3 + y3 * y3;
+
+            double ux = (x1sq * (y2 - y3) +
+                         x2sq * (y3 - y1) +
+                         x3sq * (y1 - y2)) / d;
+
+            double uy = (x1sq * (x3 - x2) +
+                         x2sq * (x1 - x3) +
+                         x3sq * (x2 - x1)) / d;
+
+            center = new Point3D(ux, uy, start.Z);
+            return true;
         }
     }
 }

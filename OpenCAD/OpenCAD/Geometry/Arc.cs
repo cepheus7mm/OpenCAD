@@ -45,6 +45,18 @@ namespace OpenCAD.Geometry
             StartAngle = GeometricCalculator.NormalizeUnsigned(center.AngleTo(start));
             EndAngle = GeometricCalculator.NormalizeUnsigned(center.AngleTo(end));
         }
+        public Arc(Point3D center, Point3D start, double sweep, OpenCADDocument? document = null)
+            : base(document)
+        {
+            Center = center;
+            Radius = center.DistanceTo(start);
+            var angle1 = GeometricCalculator.NormalizeUnsigned(center.AngleTo(start));
+            var angle2 = angle1 + sweep;
+            StartAngle = sweep >= 0 ? angle1 : angle2;
+            EndAngle = sweep >= 0 ? angle2 : angle1;
+        }
+
+        public static Arc Empty => new Arc(Point3D.Origin, 0, 0, 0);
 
         // ---------------------------------------------------------------------
         // Base class overrides (GeometryBase)
@@ -301,7 +313,7 @@ namespace OpenCAD.Geometry
         {
             return new ICurve[]
             {
-                new Arc(Center, Radius + d, StartAngle, EndAngle, Document)
+                new Arc(Center, Radius - d, StartAngle, EndAngle, Document)
             };
         }
 
