@@ -49,7 +49,7 @@ namespace UI.Controls.Tests.Viewport
             var worldPos = new Vector3(10, 10, 0);
 
             // Add an object to the document and highlight it
-            var testObject = new Line(_document, new Point3D(100,100,0), new Point3D(100, 101, 0));
+            var testObject = new Line(new Point3D(100, 100, 0), new Point3D(100, 101, 0), _document);
             _viewModel.AddObject(testObject);
             _viewModel.HighlightedObject = testObject;
 
@@ -83,9 +83,9 @@ namespace UI.Controls.Tests.Viewport
         public void WindowSelection_ShouldHighlightAllObjectsInsideRectangle()
         {
             // Arrange - Create objects at known positions
-            var line1 = new Line(_document, new Point3D(5, 5, 0), new Point3D(5, 10, 0));   // Inside
-            var line2 = new Line(_document, new Point3D(15, 15, 0), new Point3D(15, 20, 0)); // Inside
-            var line3 = new Line(_document, new Point3D(50, 50, 0), new Point3D(50, 55, 0)); // Outside
+            var line1 = new Line(new Point3D(5, 5, 0), new Point3D(5, 10, 0), _document);   // Inside
+            var line2 = new Line(new Point3D(15, 15, 0), new Point3D(15, 20, 0), _document); // Inside
+            var line3 = new Line(new Point3D(50, 50, 0), new Point3D(50, 55, 0), _document); // Outside
             
             _viewModel.AddObject(line1);
             _viewModel.AddObject(line2);
@@ -129,8 +129,8 @@ namespace UI.Controls.Tests.Viewport
         public void WindowSelection_OnMouseUp_ShouldSelectHighlightedObjects()
         {
             // Arrange - Create objects inside selection rectangle
-            var line1 = new Line(_document, new Point3D(5, 5, 0), new Point3D(5, 10, 0));
-            var line2 = new Line(_document, new Point3D(15, 15, 0), new Point3D(15, 20, 0));
+            var line1 = new Line(new Point3D(5, 5, 0), new Point3D(5, 10, 0), _document);
+            var line2 = new Line(new Point3D(15, 15, 0), new Point3D(15, 20, 0), _document);
             
             _viewModel.AddObject(line1);
             _viewModel.AddObject(line2);

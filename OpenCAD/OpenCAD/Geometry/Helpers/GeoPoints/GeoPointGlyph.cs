@@ -385,7 +385,7 @@ namespace OpenCAD.Geometry.Helpers.GeoPoints
         /// </summary>
         private void AddLine(Point3D start, Point3D end, Color color)
         {
-            var line = new Line(Document, start, end);
+            var line = new Line(start, end, Document);
             line.Color = color;
             line.LineWeight = LineWeight.LineWeight015;
             Add(line);

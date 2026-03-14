@@ -32,7 +32,7 @@ namespace OpenCAD.Geometry
             _verticies = new VertexCache(this);
         }
 
-        public Polyline(OpenCADDocument doc) : base(doc)
+        public Polyline(OpenCADDocument? doc) : base(doc)
         {
             _segments = new PolylineSegmentCache(this);
             _verticies = new VertexCache(this);
@@ -410,7 +410,66 @@ namespace OpenCAD.Geometry
 
         public ICurve[] GetOffsetCurves(double d)
         {
-            throw new NotImplementedException("Offset curves not implemented for Polyline yet");
+            var segs = _segments.Items;
+
+            // 1. Convert to real curves
+            var curves = new List<ICurve>();
+            foreach (var s in segs)
+                curves.Add(s.ToCurve());
+
+            // 2. Offset each curve
+            var offsets = new List<ICurve>();
+            foreach (var c in curves)
+                offsets.Add(c.GetOffsetCurves(d)[0]); // each returns exactly one curve
+
+            // 3. Trim/extend consecutive offset curves to meet
+            for (int i = 0; i < offsets.Count - 1; i++)
+            {
+                var a = offsets[i];
+                var b = offsets[i + 1];
+
+                var pts = GeometricCalculator.Intersection(a, b);
+                if (!pts.Any())
+                    continue;
+
+                var p = pts.First();
+                var ta = a.ProjectPoint(p).Parameter; // UNCLAMPED
+                var tb = b.ProjectPoint(p).Parameter; // UNCLAMPED
+
+                offsets[i] = a.Trim(a.DomainStart, ta);
+                offsets[i + 1] = b.Trim(tb, b.DomainEnd);
+            }
+
+            // 4. Convert trimmed curves back into a polyline
+            var verts = new List<Point3D>();
+            var bulges = new List<double>();
+
+            foreach (var c in offsets)
+            {
+                var ps = PolylineSegment.FromCurve(c);
+                verts.Add(ps.Start);
+                bulges.Add(ps.Bulge);
+            }
+
+            // Add final vertex
+            var last = PolylineSegment.FromCurve(offsets[^1]);
+            verts.Add(last.End);
+
+            var pl = new Polyline(Document);
+            pl.SetVertices(verts, bulges);
+
+            return new ICurve[] { pl };
+        }
+
+        private void SetVertices(List<Point3D> verts, List<double> bulges)
+        {
+            ClearVertices();
+            for (int i = 0; i < bulges.Count; i++)
+            {
+                AddVertex(verts[i], bulges[i]);
+            }
+            // Add final vertex with zero bulge
+            AddVertex(verts[^1], 0.0);
         }
 
 
@@ -773,17 +832,20 @@ namespace OpenCAD.Geometry
             var geo = new List<GeoSegment>();
             var v1 = children[_verticies[0]] as PolylineVertex;
             var cumulative = 0f;
+
             for (int i = 1; i < _verticies.Count; i++)
             {
                 var v2 = children[_verticies[i]] as PolylineVertex;
                 var widthA = MathF.Max((float)v1.StartWidth, widthMm);
                 var widthB = MathF.Max((float)v2.EndWidth, widthMm);
+
                 if (Math.Abs(v1.Bulge) <= 1e-12)
                 {
                     // Line segment
                     var a = new Vector2((float)v1.Position.X, (float)v1.Position.Y);
                     var b = new Vector2((float)v2.Position.X, (float)v2.Position.Y);
                     float len = Vector2.Distance(a, b);
+
                     yield return new Segment
                     (
                         a: a,
@@ -795,20 +857,25 @@ namespace OpenCAD.Geometry
                         lineTypeId: 0,
                         color: ColorVector
                     );
+
                     cumulative += len;
                     v1 = v2;
                     continue;
                 }
-                // Arc segement
+
+                // Arc segment
+                geo.Clear(); // IMPORTANT: avoid re-yielding segments from previous arcs
+
                 var pSegment = BulgeUtils.GetPolylineSegment(v1.Position, v2.Position, v1.Bulge);
                 CurveTessellator.TessellateArc(
                     new Vector2((float)pSegment.Center.X, (float)pSegment.Center.Y),
                     (float)pSegment.Radius,
                     (float)pSegment.StartAngle,
-                    (float)pSegment.EndAngle,
+                    (float)pSegment.Sweep,
                     maxSagitta,
                     geo
                 );
+
                 foreach (var g in geo)
                 {
                     float len = Vector2.Distance(g.A, g.B);
@@ -826,9 +893,20 @@ namespace OpenCAD.Geometry
 
                     cumulative += len;
                 }
+
                 v1 = v2;
             }
 
+        }
+
+        public ProjectionResult ProjectPoint(Point3D point)
+        {
+            throw new NotImplementedException();
+        }
+
+        public ICurve ExtendTo(Point3D point)
+        {
+            throw new NotImplementedException();
         }
 
         #endregion

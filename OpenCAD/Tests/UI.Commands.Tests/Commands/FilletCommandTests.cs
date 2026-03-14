@@ -14,8 +14,8 @@ public class FilletCommandTests
     public void FilletSolver_HorizontalVerticalLines_Radius2()
     {
         // Arrange
-        var lineA = new Line(_document, new Point3D(0, 0, 0), new Point3D(10, 0, 0));   // horizontal
-        var lineB = new Line(_document, new Point3D(10, 0, 0), new Point3D(10, 10, 0)); // vertical
+        var lineA = new Line(new Point3D(0, 0, 0), new Point3D(10, 0, 0), _document);   // horizontal
+        var lineB = new Line(new Point3D(10, 0, 0), new Point3D(10, 10, 0), _document); // vertical
 
         var pickA = new Point3D(5, 0, 0);   // somewhere on line A
         var pickB = new Point3D(10, 5, 0);  // somewhere on line B

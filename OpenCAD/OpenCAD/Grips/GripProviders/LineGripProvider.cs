@@ -261,7 +261,7 @@ namespace OpenCAD.Grips.GripProviders
         {
             var start3d = Vector2ToPoint3D(start, line.StartPoint.Z);
             var end3d = Vector2ToPoint3D(end, line.EndPoint.Z);
-            return new Line(line.Document!, start3d, end3d)
+            return new Line(start3d, end3d, line.Document)
             {
                 Layer = line.Layer,
                 Color = line.Color,

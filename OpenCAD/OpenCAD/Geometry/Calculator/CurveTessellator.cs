@@ -29,11 +29,11 @@ namespace OpenCAD.Geometry.Calculator
             Vector2 center,
             float radius,
             float startAngle,
-            float endAngle,
+            float sweep,
             float maxSagitta,              // in world units
             List<GeoSegment> output)
         {
-            float sweep = endAngle - startAngle;
+            //float sweep = endAngle - startAngle;
             float absSweep = MathF.Abs(sweep);
 
             if (absSweep < 1e-6f || radius <= 0f)

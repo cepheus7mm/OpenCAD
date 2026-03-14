@@ -37,29 +37,22 @@ namespace UI.Commands.Editing.Fillet
 
         public override async Task Execute()
         {
-            try
-            {
-                // --- STEP 1: Prompt for radius ------------------------------------
-                await PromptRadius();
+            // --- STEP 1: Prompt for radius ------------------------------------
+            await PromptRadius();
 
-                // --- STEP 2: Select first object ----------------------------------
-                await SelectFirstObject();
+            // --- STEP 2: Select first object ----------------------------------
+            await SelectFirstObject();
 
-                // --- STEP 3: Hover second object (dynamic preview) ----------------
-                await HoverSecondObject();
+            // --- STEP 3: Hover second object (dynamic preview) ----------------
+            await HoverSecondObject();
 
-                // --- STEP 4: Select second object ---------------------------------
-                await SelectSecondObject();
+            // --- STEP 4: Select second object ---------------------------------
+            await SelectSecondObject();
 
-                // --- STEP 5: Commit fillet ----------------------------------------
-                CommitFillet();
+            // --- STEP 5: Commit fillet ----------------------------------------
+            CommitFillet();
 
-                RaiseCommandCompleted();
-            }
-            catch (OperationCanceledException)
-            {
-                Cancel();
-            }
+            RaiseCommandCompleted();
         }
 
         // -------------------------------------------------------------------------

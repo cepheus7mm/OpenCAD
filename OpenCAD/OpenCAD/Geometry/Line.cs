@@ -6,6 +6,7 @@ using OpenCAD.Interfaces;
 using OpenCAD.SegmentSource;
 using OpenCAD.Settings;
 using System.Numerics;
+using System.Runtime.Intrinsics;
 using System.Security.Principal;
 using System.Text.Json.Serialization;
 using System.Xml.Serialization;
@@ -33,7 +34,7 @@ namespace OpenCAD.Geometry
         {
         }
 
-        public Line(OpenCADDocument doc, Point3D start, Point3D end) : base(doc)
+        public Line(Point3D start, Point3D end, OpenCADDocument? doc = null) : base(doc)
         {
             StartPoint = start;
             EndPoint = end;
@@ -153,18 +154,46 @@ namespace OpenCAD.Geometry
             }
 
             // Clamp to domain if needed (optional)
-            double a = Math.Max(DomainStart, Math.Min(DomainEnd, t0));
-            double b = Math.Max(DomainStart, Math.Min(DomainEnd, t1));
+            //double a = Math.Max(DomainStart, Math.Min(DomainEnd, t0));
+            //double b = Math.Max(DomainStart, Math.Min(DomainEnd, t1));
 
             // Evaluate endpoints
-            Point3D p0 = GetPointAtParameter(a);
-            Point3D p1 = GetPointAtParameter(b);
+            Point3D p0 = GetPointAtParameter(t0);
+            Point3D p1 = GetPointAtParameter(t1);
 
             // Return a new line segment
-            var newLine = new Line(Document, p0, p1);
+            var newLine = new Line(p0, p1, Document);
             newLine.SetBasicPropertiesFrom(this);
 
             return newLine;
+        }
+
+        public ICurve ExtendTo(Point3D pt)
+        {
+            // Decide which end to extend based on closer endpoint
+            var proj = ProjectPoint(pt);
+            var t = proj.Parameter;
+
+            // If t <= 0, extend at Start side
+            // If t >= 1, extend at End side
+            // If inside, you could choose a policy; here we extend the nearer end.
+            if (t <= DomainStart)
+            {
+                return Trim(t, DomainEnd);
+            }
+            if (t >= DomainEnd)
+            {
+                return Trim(DomainStart, t);
+            }
+
+            // Inside domain: choose closer end
+            var distToStart = Math.Abs(t - DomainStart);
+            var distToEnd = Math.Abs(t - DomainEnd);
+
+            if (distToStart < distToEnd)
+                return Trim(t, DomainEnd);
+            else
+                return Trim(DomainStart, t);
         }
 
         public ICurve Transform(Matrix4D transform)
@@ -177,7 +206,7 @@ namespace OpenCAD.Geometry
 
 
             // Return a new line curve
-            var newLine = new Line(Document, s, e);
+            var newLine = new Line(s, e, Document);
             newLine.SetBasicPropertiesFrom(this);
             newLine._normal = tn;
 
@@ -191,14 +220,35 @@ namespace OpenCAD.Geometry
             var normal = new Vector3D(-tan.Y, tan.X, 0);
 
             var offset = new Line(
-                Document,
                 StartPoint + normal * d,
-                EndPoint + normal * d
+                EndPoint + normal * d,
+                Document
             );
 
             return new ICurve[] { offset };
         }
 
+        public ProjectionResult ProjectPoint(Point3D pt)
+        {
+            var v = EndPoint - StartPoint;
+            var w = pt - StartPoint;
+
+            var vv = Vector3D.Dot(v, v);
+            if (vv == 0.0)
+            {
+                // Degenerate line: treat as a point
+                var dist = Math.Sqrt(Vector3D.Dot(w, w));
+                return new ProjectionResult(0.0, StartPoint, dist);
+            }
+
+            var t = Vector3D.Dot(w, v) / vv; // UNCLAMPED parameter on infinite line
+            var cp = GetPointAtParameter(t);
+            var diff = pt - cp;
+            var d2 = Vector3D.Dot(diff, diff);
+            var distCp = Math.Sqrt(d2);
+
+            return new ProjectionResult(t, cp, distCp);
+        }
 
         public IEnumerable<GeoPoint> GetGeoPoints(GeoPointModes modes, Point3D referencePoint)
         {

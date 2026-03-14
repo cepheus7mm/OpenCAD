@@ -12,9 +12,17 @@ namespace OpenCAD.Geometry.Calculator
         // Principal angle: (-π, π]
         public static double NormalizeSigned(double a)
         {
+            const double eps = 1e-14;
+
             a %= TwoPi;
+
+            // Snap near-boundary values
+            if (Math.Abs(a - Pi) < eps) return Pi;
+            if (Math.Abs(a + Pi) < eps) return Pi;   // never return -Pi
+
             if (a > Pi) a -= TwoPi;
             if (a <= -Pi) a += TwoPi;
+
             return a;
         }
 
@@ -142,6 +150,23 @@ namespace OpenCAD.Geometry.Calculator
 
                 return NormalizeUnsigned(a);
             }
+        }
+
+        public static double GetIncludedAngle(double startAngle, double arcAngle, double endAngle)
+        {
+            // Rotate so startAngle becomes 0
+            double a_s = NormalizeUnsigned(startAngle);
+            double a_m = NormalizeUnsigned(arcAngle - startAngle);
+            double a_e = NormalizeUnsigned(endAngle - startAngle);
+
+            // If the arc point lies between 0 and endAngle in CCW direction → CCW sweep
+            if (a_m > 0 && a_m < a_e)
+            {
+                return a_e; // CCW sweep
+            }
+
+            // Otherwise → CW sweep (long way around)
+            return a_e - TwoPi;
         }
     }
 }

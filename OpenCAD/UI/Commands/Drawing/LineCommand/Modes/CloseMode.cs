@@ -31,7 +31,7 @@ namespace UI.Commands.Drawing.LineCommand.Modes
 
         public IEnumerable<OpenCADObject> GetPreview(Point3D cursor)
         {
-            yield return new Line(_document, _current, _first);
+            yield return new Line(_current, _first, _document);
         }
 
         public ILineCreationMode Apply(LineCommand command)

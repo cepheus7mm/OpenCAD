@@ -120,13 +120,6 @@ namespace OpenCAD
         // ------------------------------------------------------------
         public HitResult? HitTestGrip(Point screenPos, double gripSizePx)
         {
-            //if (_selectionManager.SelectedObjects.Count < 1)
-            //    return null;
-
-            //var selected = new List<OpenCADObject>();
-            ////CollectDrawableObjects(_document, selected);
-            //selected.AddRange(_selectionManager.SelectedObjects);
-
             if (gripSizePx <= 0)
                 return null;
 

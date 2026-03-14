@@ -109,5 +109,10 @@ namespace OpenCAD.Geometry
 
             return new Point3D(x, y, z);
         }
+
+        public Point3D GetClosest(Point3D a, Point3D b)
+        {
+            return this.DistanceTo(a) > this.DistanceTo(b) ? b : a;
+        }
     }
 }

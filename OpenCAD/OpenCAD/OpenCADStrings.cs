@@ -868,7 +868,7 @@
         /// <summary>
         /// Prompt format for point input with viewport click option
         /// </summary>
-        public const string PromptWithViewportFormat = "{0} (or click in viewport):";
+        public const string PromptWithViewportFormat = "{0}:"; //"{0} (or click in viewport):"
 
         /// <summary>
         /// Message format when a point is selected

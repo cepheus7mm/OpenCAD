@@ -22,11 +22,8 @@ namespace OpenCAD.Geometry.Calculator
 
         public static Point3D GetPointAtParameter(double t, Point3D a, Point3D b)
         {
-            return new Point3D(
-                a.X + (b.X - a.X) * t,
-                a.Y + (b.Y - a.Y) * t,
-                a.Z + (b.Z - a.Z) * t
-            );
+            var ab = b - a;
+            return a + ab * t;
         }
 
         public static Point3D GetClosestPoint(Point3D point, Point3D start, Point3D end, bool extend = false)

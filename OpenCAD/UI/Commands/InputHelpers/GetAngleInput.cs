@@ -59,7 +59,7 @@ namespace UI.Commands.InputHelpers
             // Arbitrary text → parse as angle
             if (result.IsArbitrary)
             {
-                string text = result.Keyword;
+                string text = result.Arbitrary;
 
                 // Try numeric first
                 if (double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var numeric))

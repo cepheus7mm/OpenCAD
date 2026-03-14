@@ -77,6 +77,7 @@ namespace UI.Commands
                     }
                 };
             }
+            document = Context?.GetDocument();
         }
 
         public abstract Task Execute();
@@ -97,10 +98,27 @@ namespace UI.Commands
         public virtual void Cancel()
         {
             Context?.OutputMessage("Command cancelled.");
-            CurrentPrompt = string.Empty;
+            PostCommandCleanup();
+        }
 
+        protected virtual void PostCommandCleanup()
+        {
             // Ensure preview stopped if any command cancels
             CancelPreview();
+
+            // Ensure point picking fully disabled
+            var viewModel = Context?.GetActiveViewportViewModel();
+            if (viewModel != null && viewModel.IsPointPickingMode)
+            {
+                // Disable on UI thread
+                Context?.PostToUI(() => viewModel.DisablePointPickingMode());
+            }
+
+            CurrentPrompt = string.Empty;
+            SelectedObjects = null;
+            _cancellationTokenSource?.Cancel();
+            BasePoint = Point3D.NotAPoint;
+            TargetPoint = Point3D.NotAPoint;
         }
 
         /// <summary>
@@ -172,7 +190,8 @@ namespace UI.Commands
                     AllowArbitraryInput = BasePoint.IsValid, //if the base point is valid, allow arbitrary input for relative coordinates
                     BasePoint = BasePoint,
                     Keywords = keyWords,
-                    CancellationToken = _cancellationTokenSource.Token
+                    CancellationToken = _cancellationTokenSource.Token,
+                    Context = Context
                 });
             }
             catch (OperationCanceledException)
@@ -196,6 +215,8 @@ namespace UI.Commands
             // Use shared helper if available, otherwise create a temporary one
             _inputHelper = new GetPointInput(Context, viewModel);
             CurrentPrompt = inputParams.Prompt;
+            if (inputParams.Context == null)
+                inputParams.Context = Context;
             try
             {
                 return await ((GetPointInput)_inputHelper).GetPointOrKeywordAsync(inputParams);
@@ -244,8 +265,36 @@ namespace UI.Commands
                     AllowArbitraryInput = true,
                     BasePoint = BasePoint,
                     Keywords = keyWords,
-                    CancellationToken = _cancellationTokenSource.Token
+                    CancellationToken = _cancellationTokenSource.Token,
+                    Context = Context,
+                    UnitFormatType = OpenCADDocument.UnitFormatType.Linear
                 });
+            }
+            catch (OperationCanceledException)
+            {
+                return badResult;
+            }
+            finally
+            {
+                CurrentPrompt = string.Empty;
+            }
+        }
+
+        protected async Task<InputResult> GetDistance(InputParams inputParams)
+        {
+            var viewModel = Context?.GetActiveViewportViewModel();
+            var badResult = new InputResult() { ResultType = InputResult.InputResultType.None, DoubleValue = double.NaN };
+            if (viewModel == null || Context == null)
+                return badResult;
+            _cancellationTokenSource ??= new CancellationTokenSource();
+            _inputHelper = new GetDistanceInput(Context, viewModel);
+            if (inputParams.Context == null)
+                inputParams.Context = Context;
+            if (inputParams.UnitFormatType == null)
+                inputParams.UnitFormatType = OpenCADDocument.UnitFormatType.Linear;
+            try
+            {
+                return await ((GetDistanceInput)_inputHelper).GetDistance(inputParams);
             }
             catch (OperationCanceledException)
             {
@@ -291,8 +340,36 @@ namespace UI.Commands
                     AllowArbitraryInput = true,
                     BasePoint = BasePoint,
                     Keywords = keyWords,
-                    CancellationToken = _cancellationTokenSource.Token
+                    CancellationToken = _cancellationTokenSource.Token,
+                    Context = Context,
+                    UnitFormatType = OpenCADDocument.UnitFormatType.Angular
                 });
+            }
+            catch (OperationCanceledException)
+            {
+                return badResult;
+            }
+            finally
+            {
+                CurrentPrompt = string.Empty;
+            }
+        }
+
+        public async Task<InputResult> GetAngle(InputParams inputParams)
+        {
+            var viewModel = Context?.GetActiveViewportViewModel();
+            var badResult = new InputResult() { ResultType = InputResult.InputResultType.None, DoubleValue = double.NaN };
+            if (viewModel == null || Context == null)
+                return badResult;
+            _cancellationTokenSource ??= new CancellationTokenSource();
+            _inputHelper = new GetAngleInput(Context, viewModel);
+            if (inputParams.Context == null)
+                inputParams.Context = Context;
+            if (inputParams.UnitFormatType == null)
+                inputParams.UnitFormatType = OpenCADDocument.UnitFormatType.Angular;
+            try
+            {
+                return await ((GetAngleInput)_inputHelper).GetAngle(inputParams);
             }
             catch (OperationCanceledException)
             {
@@ -328,6 +405,7 @@ namespace UI.Commands
             _inputHelper = new GetStringInput(Context, viewModel);
 
             CurrentPrompt = prompt;
+
             try
             {
                 var res = await ((GetStringInput)_inputHelper).GetStringAsync(
@@ -491,6 +569,7 @@ namespace UI.Commands
         protected void CancelPreview()
         {
             PreviewManager?.Clear();
+            Context!.GetActiveViewportViewModel()!.PropertyChanged -= _previewHandler;
         }
 
         /// <summary>
@@ -559,18 +638,12 @@ namespace UI.Commands
         /// <summary>
         /// Call this to finish the command: ensure point picking disabled and raise completion.
         /// </summary>
-        protected void CommandCompleted()
+        public virtual Task CommandCompleted()
         {
-            CancelPreview();
-            // Ensure point picking fully disabled
-            var viewModel = Context?.GetActiveViewportViewModel();
-            if (viewModel != null && viewModel.IsPointPickingMode)
-            {
-                // Disable on UI thread
-                Context?.PostToUI(() => viewModel.DisablePointPickingMode());
-            }
+            PostCommandCleanup();
             RaiseCommandCompleted();
             System.Diagnostics.Debug.WriteLine("CommandBase: Raised Command Completed");
+            return Task.CompletedTask;
         }
 
         /// <summary>
@@ -622,5 +695,19 @@ namespace UI.Commands
 
             Context?.OutputMessage(createString);
         }
+
+#if DEBUG
+        public void AppendDiagnosticInfo(string message)
+        {
+            Context?.PostToUI(() =>
+            {
+                var viewmodel = Context?.GetActiveViewportViewModel();
+                if (viewmodel != null)
+                {
+                    viewmodel.AppendDiagnosticInfo(message);
+                }
+            });
+        }
+#endif
     }
 }

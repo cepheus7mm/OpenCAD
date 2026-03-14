@@ -76,7 +76,7 @@ namespace UI.Controls.Viewport
         // Cursor state
         private Cursor _cursor = Cursors.Arrow;
 
-        private ViewportSettings? _viewportSettings;
+        private ViewportSettings _viewportSettings;
 
         private IGeoPointManager _geoPointManager;
         private ISelectionManager _selectionManager;
@@ -99,6 +99,7 @@ namespace UI.Controls.Viewport
         private bool _isShiftKeyPressed;
         private bool _isCtrlKeyPressed;
         private string _diagnosticToolTip;
+        private string _appendedDiagnosticToolTip = string.Empty;
         private Point3D _pickPoint = Point3D.NotAPoint;
 
         /// <summary>
@@ -122,6 +123,7 @@ namespace UI.Controls.Viewport
                 if (_diagnosticToolTip != value)
                 {
                     _diagnosticToolTip = value;
+                    _diagnosticToolTip += _appendedDiagnosticToolTip;
                     OnPropertyChanged();
                 }
             }
@@ -448,6 +450,7 @@ namespace UI.Controls.Viewport
             PreviewManager.PreviewRemoved += obj => RemoveObject(obj);
             PreviewManager.OriginalHidden += obj => RemoveObject(obj);
             PreviewManager.OriginalRestored += obj => AddObject(obj);
+            _viewportSettings = objectToDisplay.GetViewportSettings();
         }
 
         #endregion
@@ -667,6 +670,14 @@ namespace UI.Controls.Viewport
 
             // When an existing object is mutated, simply refresh the viewport.
             RefreshRequested?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void OnSnapSettingsPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(SnapSettings.SnapEnabled) && _snapManager != null)
+            {
+                _snapManager.GridSnapEnabled = _viewportSettings!.Snap!.SnapEnabled;
+            }
         }
 
         #endregion
@@ -1171,6 +1182,7 @@ namespace UI.Controls.Viewport
             _geoPointManager = new GeoPointManager(GeoPointProviderFactory);
             _gripManager = new GripManager(_document, _hitTester, GripProviderFactory, PreviewManager, _snapManager, _selectionManager);
             _selectionManager.SelectionChanged += OnSelectionChanged;
+            _viewportSettings.Snap.PropertyChanged += OnSnapSettingsPropertyChanged;
         }
 
         private void OnSelectionChanged(object? sender, EventArgs e)
@@ -1432,6 +1444,13 @@ namespace UI.Controls.Viewport
         {
             _statusBar?.UpdateCameraInfo(camPos, tarPos);
         }
+
+#if DEBUG
+        public void AppendDiagnosticInfo(string info)
+        {
+            _appendedDiagnosticToolTip = string.Empty; // Environment.NewLine + info + Environment.NewLine;
+        }
+#endif
 
         internal void RenderGrips()
         {

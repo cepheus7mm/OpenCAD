@@ -43,9 +43,13 @@ namespace GraphicsEngine
         // ------------------------------------------------------------
         public void UpdateDpi()
         {
-            _dpiScale = VisualTreeHelper.GetDpi(_glControl);
-            DpiScaleX = (float)_dpiScale.DpiScaleX;
-            DpiScaleY = (float)_dpiScale.DpiScaleY;
+            var source = PresentationSource.FromVisual(_glControl);
+            if (source?.CompositionTarget != null)
+            {
+                var m = source.CompositionTarget.TransformToDevice;
+                DpiScaleX = (float)m.M11;
+                DpiScaleY = (float)m.M22;
+            }
         }
 
         public void UpdatePixelSize()

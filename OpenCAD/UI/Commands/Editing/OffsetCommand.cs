@@ -73,7 +73,6 @@ namespace UI.Commands.Editing
                 tx.AddAction(action);
             }
             document.GetUndoRedoManager()?.CommitTransaction(true);
-            CommandCompleted();
         }
 
         protected override Matrix4D GetTransformation()

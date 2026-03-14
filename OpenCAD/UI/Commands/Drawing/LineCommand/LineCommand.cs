@@ -62,8 +62,6 @@ namespace UI.Commands.Drawing.LineCommand
                         mode = mode.Apply(this);
                 }
             }
-
-            CommandCompleted();
         }
 
         public override bool ProcessInput(string input)
@@ -83,7 +81,7 @@ namespace UI.Commands.Drawing.LineCommand
             Line line;
 
             var document = Context?.GetDocument();
-                line = new Line(document!, start, end);
+                line = new Line(start, end, document);
 
             CreateObject(line);
         }
@@ -99,13 +97,13 @@ namespace UI.Commands.Drawing.LineCommand
                 line.EndPoint.X, line.EndPoint.Y, line.EndPoint.Z);
         }
 
-        public override void Cancel()
-        {
-            base.Cancel();
-            _cancellationTokenSource?.Cancel();
-            _firstStartPoint = null;
-            CurrentPrompt = string.Empty;
-        }
+        //public override void Cancel()
+        //{
+        //    base.Cancel();
+        //    _cancellationTokenSource?.Cancel();
+        //    _firstStartPoint = null;
+        //    CurrentPrompt = string.Empty;
+        //}
 
         private ILineCreationMode HandleKeyword(ILineCreationMode mode, string keyword)
         {

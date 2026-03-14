@@ -39,6 +39,11 @@ namespace UI.Commands.Drawing.ArcCommand
                     UserInputType.Angle => await GetAngle(_mode.Prompt),
                     _ => new InputResult { ResultType = InputResult.InputResultType.Cancel }
                 };
+                 
+                if (input.IsCancel)
+                {
+                    return;
+                }
 
                 if (input.IsKeyword)
                 {

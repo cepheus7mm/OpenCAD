@@ -337,6 +337,7 @@ namespace UI.Controls.MainWindow
                 bool isComplete = _activeCommand!.ProcessInput(input);
                 if (isComplete)
                 {
+                    _activeCommand.CommandCompleted().GetAwaiter();
                     CompleteActiveCommand();
                 }
             }
@@ -392,8 +393,16 @@ namespace UI.Controls.MainWindow
             _activeCommand.PromptChanged += OnCommandPromptChanged;
             _activeCommand.CommandCompletedEvent += OnCommandCompleted;
 
-            await command.Initialize(_commandContext);
-            await command.Execute();
+            try
+            {
+                await command.Initialize(_commandContext);
+                await command.Execute();
+                await command.CommandCompleted();
+            }
+            catch (Exception)
+            {
+                command.Cancel();
+            }
         }
 
         private IInputCommand? CreateCommandInstance(Type commandType)
@@ -436,6 +445,8 @@ namespace UI.Controls.MainWindow
         // Extracted core logic so it can be invoked directly on UI thread
         private void CompleteActiveCommandCore()
         {
+            if (_activeCommand == null)
+                return; 
             System.Diagnostics.Debug.WriteLine("CommandInputViewModel: CompleteActiveCommandCoreEntered");
             UnsubscribeFromActiveCommand();
             _activeCommand = null;

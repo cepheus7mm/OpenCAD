@@ -133,6 +133,9 @@ namespace OpenCAD.Geometry.Calculator
         public static double GetBulgeFromCenter(Point3D startPoint, Point3D endPoint, Point3D center)
             => BulgeUtils.GetBulgeFromCenter(startPoint, endPoint, center);
 
+        public static double GetBulgeFromCenterFull(Point3D startPoint, Point3D endPoint, Point3D center, bool IsCCW)
+            => BulgeUtils.GetBulgeFromCenterFull(startPoint, endPoint, center, IsCCW);
+
         public static (double radius, double startAngle, double endAngle, Point3D center) GetArcParametersFromBulge(Point3D startPoint, Point3D endPoint, double bulge)
             => BulgeUtils.GetArcParametersFromBulge(startPoint, endPoint, bulge);
 
@@ -208,8 +211,11 @@ namespace OpenCAD.Geometry.Calculator
         public static bool TryGetCircleThroughThreePoints(Point3D p1, Point3D p2, Point3D p3, out Point3D center, out double radius)
         {
             // Keep self-contained implementation here (unchanged)
-            center = Point3D.Origin;
+            center = Point3D.NotAPoint;
             radius = double.NaN;
+
+            if (AreColinearXY(p1, p2, p3))
+                return false;
 
             double x1 = p1.X, y1 = p1.Y;
             double x2 = p2.X, y2 = p2.Y;
@@ -236,6 +242,20 @@ namespace OpenCAD.Geometry.Calculator
                 return false;
 
             return true;
+        }
+
+        public static bool AreColinearXY(Point3D p1, Point3D p2, Point3D p3, double tolerance = 1e-10)
+        {
+            // Use the area of the triangle in XY via cross product of (p2 - p1) and (p3 - p1)
+            double x1 = p2.X - p1.X;
+            double y1 = p2.Y - p1.Y;
+            double x2 = p3.X - p1.X;
+            double y2 = p3.Y - p1.Y;
+
+            // 2 * area = cross.z = x1*y2 - y1*x2
+            double cross = x1 * y2 - y1 * x2;
+
+            return Math.Abs(cross) <= tolerance;
         }
 
         /// <summary>
@@ -400,5 +420,10 @@ namespace OpenCAD.Geometry.Calculator
         // Angle normalization facade
         public static double NormalizeUnsigned(double angle) => AngleUtils.NormalizeUnsigned(angle);
 
+        // Angle normalization facade
+        public static double NormalizeSigned(double angle) => AngleUtils.NormalizeSigned(angle);
+
+        // Included angle
+        public static double GetIncludedAngle(double startAngle, double arcAngle, double endAngle) => AngleUtils.GetIncludedAngle(startAngle, arcAngle, endAngle);
     }
 }

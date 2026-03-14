@@ -12,47 +12,49 @@ namespace UI.Commands.Interfaces
         /// Gets whether this is a multi-step command that requires multiple inputs
         /// </summary>
         bool IsMultiStep { get; }
-        
+
         /// <summary>
         /// Gets whether this command requires selection mode to be enabled
         /// </summary>
         bool RequiresSelection { get; }
-        
+
         /// <summary>
         /// Gets the current prompt for multi-step commands
         /// </summary>
         string CurrentPrompt { get; }
-        
+
         /// <summary>
         /// Event raised when the prompt changes
         /// </summary>
         event EventHandler? PromptChanged;
-        
+
         /// <summary>
         /// Event raised when the command completes
         /// </summary>
         event EventHandler? CommandCompletedEvent;
-        
+
         /// <summary>
         /// Initialize the command with context
         /// </summary>
         Task Initialize(ICommandContext context);
-        
+
         /// <summary>
         /// Execute the command
         /// </summary>
         Task Execute();
-        
+
         /// <summary>
         /// Process input for multi-step commands
         /// </summary>
         /// <param name="input">User input</param>
         /// <returns>True if command is complete, false if waiting for more input</returns>
         bool ProcessInput(string input);
-        
+
         /// <summary>
         /// Cancel the command
         /// </summary>
         void Cancel();
+
+        Task CommandCompleted();
     }
 }

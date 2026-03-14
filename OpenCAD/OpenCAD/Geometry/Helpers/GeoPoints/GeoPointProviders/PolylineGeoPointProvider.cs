@@ -30,7 +30,13 @@ namespace OpenCAD.Geometry.Helpers.GeoPoints.GeoPointProviders
                 results.AddRange(segment.GetGeoPoints(referencePoint, modes));
             }
 
-            yield return (GeoPoint)results.Select(gp => gp.WithOwner(pl));
+            if (results.Any())
+            {
+                foreach (var gp in results)
+                    yield return gp.WithOwner(pl);
+            }
+            else
+                yield break;
         }
 
         public IEnumerable<GeoPoint> GetGeoPoints(GeoPointModes modes, Point3D referencePoint)

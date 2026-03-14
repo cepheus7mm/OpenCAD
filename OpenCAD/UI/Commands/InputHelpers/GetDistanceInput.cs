@@ -54,7 +54,7 @@ namespace UI.Commands.InputHelpers
             // Try to parse directly (numeric, default, unit-aware)
             var parsed = ParseDistanceInput(first, null, parameters.DefaultValue as double?);
 
-            if (parsed.ResultType == InputResultType.Double)
+            if (parsed.IsDouble)
                 return parsed;
 
             // Otherwise first was a point → ask for second
@@ -98,8 +98,7 @@ namespace UI.Commands.InputHelpers
                 return input;
 
             // Empty keyword → default
-            if (input.ResultType == InputResult.InputResultType.Keyword &&
-                string.IsNullOrWhiteSpace(input.Keyword) &&
+            if (input.IsDefault &&
                 defaultValue.HasValue)
             {
                 return InputResult.FromDouble(defaultValue.Value);

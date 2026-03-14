@@ -385,6 +385,7 @@ namespace GraphicsEngine
 
         public void ResizeViewport(int width, int height)
         {
+
             UpdateProjection(width, height);
             UpdateViewMatrix();
         }

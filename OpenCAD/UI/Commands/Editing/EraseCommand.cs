@@ -39,7 +39,6 @@ namespace UI.Commands.Editing
                 if (document == null || viewport == null)
                 {
                     Context?.OutputMessage(UnableToActOnObjectsMissingContext);
-                    Cancel();
                     return;
                 }
 
@@ -57,14 +56,12 @@ namespace UI.Commands.Editing
                     foreach (var obj in SelectedObjects)
                     {
                         document.Remove(obj);
-                        viewport.RemoveObject(obj);
                     }
                     Context?.OutputMessage(string.Format(OpenCADStrings.ObjectsErasedNoUndoFormat, SelectedObjects.Count));
                 }
                 var viewModel = viewport.DataContext as ViewportViewModel;
                 viewModel?.SelectionManager.ClearSelection();
                 viewport.Refresh();
-                CommandCompleted();
             });
         }
     }

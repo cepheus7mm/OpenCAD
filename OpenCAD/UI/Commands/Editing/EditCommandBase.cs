@@ -64,7 +64,6 @@ namespace UI.Commands.Editing
             if (viewModel == null)
             {
                 Context?.OutputMessage(OpenCADStrings.UnableToAccessViewport);
-                Cancel();
                 return;
             }
 
@@ -117,7 +116,6 @@ namespace UI.Commands.Editing
                 if (viewmodel == null || viewmodel.SelectedObjects.Count == 0)
                 {
                     Context?.OutputMessage(NoObjectsMessage);
-                    Cancel();
                     return false;
                 }
 
@@ -135,13 +133,9 @@ namespace UI.Commands.Editing
             return false;
         }
 
-        public override void Cancel()
+        protected override void PostCommandCleanup()
         {
-            base.Cancel();
-
-            // Ensure preview stopped and preview objects removed
-            CancelPreview();
-
+            base.PostCommandCleanup();
             Context?.PostToUI(() =>
             {
                 var viewmodel = Context.GetActiveViewportViewModel();
@@ -151,14 +145,8 @@ namespace UI.Commands.Editing
                     viewmodel.SelectionManager.ClearSelection();
                 }
             });
-
-            CurrentPrompt = string.Empty;
-            SelectedObjects = null;
             _needsSelection = false;
             _initialSelectionCount = 0;
-            _cancellationTokenSource?.Cancel();
-            BasePoint = Point3D.NotAPoint;
-            TargetPoint = Point3D.NotAPoint;
         }
 
         /// <summary>
@@ -169,61 +157,51 @@ namespace UI.Commands.Editing
             if (SelectedObjects == null || SelectedObjects.Count == 0)
             {
                 Context?.OutputMessage(NoObjectsMessage);
-                Cancel();
                 return;
             }
 
             _cancellationTokenSource = new CancellationTokenSource();
 
+            // Prompt for base point using shared GetPoint on CommandBase
+            BasePoint = Point3D.NotAPoint;
+            var result = await GetPoint(BasePointPrompt, null);
+
+            if (result != null && result.Point is OpenCAD.Geometry.Point3D basePoint)
+            {
+                BasePoint = basePoint;
+            }
+            else
+            {
+                return;
+            }
+
+            // Start unified preview support (now provided by CommandBase)
+            BeginPreview();
+
             try
             {
-                // Prompt for base point using shared GetPoint on CommandBase
-                BasePoint = Point3D.NotAPoint;
-                var result = await GetPoint(BasePointPrompt, null);
-
-                if (result != null && result.Point is OpenCAD.Geometry.Point3D basePoint)
+                do
                 {
-                    BasePoint = basePoint;
-                }
-                else
-                {
-                    Cancel();
-                    return;
-                }
-
-                // Start unified preview support (now provided by CommandBase)
-                BeginPreview();
-
-                try
-                {
-                    do
+                    // Prompt for target point using shared GetPoint on CommandBase
+                    result = await GetPoint(TargetPointPrompt);
+                    if (result != null && result.Point is OpenCAD.Geometry.Point3D targetPoint)
                     {
-                        // Prompt for target point using shared GetPoint on CommandBase
-                        result = await GetPoint(TargetPointPrompt);
-                        if (result != null && result.Point is OpenCAD.Geometry.Point3D targetPoint)
-                        {
-                            TargetPoint = targetPoint;
-                        }
+                        TargetPoint = targetPoint;
+                    }
 
-                        else
-                        {
-                            Cancel();
-                            return;
-                        }
+                    else
+                    {
+                        return;
+                    }
 
-                        // Perform the transformation WHILE cached providers are still available
-                        TransformSelectedObjects();
-                    } while (_isRepeatable);
-                }
-                finally
-                {
-                    // Ensure preview is cleaned up if something goes wrong
-                    CommitPreview();
-                } 
+                    // Perform the transformation WHILE cached providers are still available
+                    TransformSelectedObjects();
+                } while (_isRepeatable);
             }
-            catch (OperationCanceledException)
+            finally
             {
-                Cancel();
+                // Ensure preview is cleaned up if something goes wrong
+                CommitPreview();
             }
         }
 
@@ -268,7 +246,6 @@ namespace UI.Commands.Editing
             if (document == null || viewport == null)
             {
                 Context?.OutputMessage(UnableToActOnObjectsMissingContext);
-                Cancel();
                 return;
             }
 

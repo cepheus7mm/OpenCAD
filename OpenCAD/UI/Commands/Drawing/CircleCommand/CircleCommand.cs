@@ -69,11 +69,6 @@ namespace UI.Commands.Drawing.CircleCommand
                 var circle = _mode.CreateCircle();
                 CreateObject(circle);
             }
-            else
-            {
-                Cancel();
-            }
-            CommandCompleted();
         }
 
         private ICircleCreationMode SwitchMode(ICircleCreationMode currentMode, string keyword, OpenCADDocument document)

@@ -1,4 +1,6 @@
 using OpenCAD.Geometry;
+using UI.Commands.Interfaces;
+using static OpenCAD.OpenCADDocument;
 
 namespace UI.Commands.InputHelpers
 {
@@ -11,5 +13,8 @@ namespace UI.Commands.InputHelpers
         public Point3D? BasePoint { get; set; }
         public string[]? Keywords { get; set; }
         public CancellationToken CancellationToken { get; set; } = default;
+        public ICommandContext? Context { get; set; } = null;
+        public UnitFormatType? UnitFormatType { get; set; }
+
     }
 }

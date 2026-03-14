@@ -36,12 +36,17 @@ namespace OpenCAD.Interfaces
         // Returns parameter t for a point that lies exactly on the curve (if possible)
         double GetParameterAtPoint(Point3D point);
 
+        ProjectionResult ProjectPoint(Point3D point);
+
         // --- Length ---
         double GetLength();
         double GetLength(double t0, double t1);
 
         // --- Trimming ---
         ICurve Trim(double t0, double t1);
+
+        // Extend to a point using unclamped projection
+        ICurve ExtendTo(Point3D point);
 
         // --- Transformations ---
         ICurve Transform(Matrix4D transform);

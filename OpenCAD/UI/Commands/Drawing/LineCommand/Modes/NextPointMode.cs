@@ -23,8 +23,8 @@ namespace UI.Commands.Drawing.LineCommand.Modes
             _document = document;
         }
 
-        public string Prompt => "Specify next point or [Close/Undo]";
-        public string[] Keywords => new[] { "CLOSE", "C", "UNDO", "U" };
+        public string Prompt => "Specify next point";
+        public string[] Keywords => new[] { "CLOSE", "UNDO" };
         public bool IsComplete => _end.HasValue;
 
         public void SetPoint(Point3D p) => _end = p;
@@ -32,7 +32,7 @@ namespace UI.Commands.Drawing.LineCommand.Modes
 
         public IEnumerable<OpenCADObject> GetPreview(Point3D cursor)
         {
-            yield return new Line(_document, _start, cursor);
+            yield return new Line(_start, cursor, _document);
         }
 
         public ILineCreationMode Apply(LineCommand command)

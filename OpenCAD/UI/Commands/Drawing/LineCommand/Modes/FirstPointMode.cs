@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using UI.Commands.Drawing.PolylineCreation.Modes;
 using UI.Commands.Interfaces;
 
 namespace UI.Commands.Drawing.LineCommand.Modes

@@ -1,6 +1,8 @@
 ﻿using OpenCAD.Geometry.Calculator;
 using OpenCAD.Geometry.Helpers.GeoPoints;
+using OpenCAD.Interfaces;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -70,6 +72,28 @@ namespace OpenCAD.Geometry.Helpers
                 Center = center.Value;
                 Sweep = sweep;
                 Radius = (start - center.Value).Length;
+            }
+        }
+
+        public PolylineSegment(PolylineVertex vertex1, PolylineVertex vertex2)
+        {
+            Start = vertex1.Position;
+            End = vertex2.Position;
+            if (Math.Abs(vertex1.Bulge) < 1e-12)
+            {
+                // Line segment
+                IsLine = true;
+                Center = default;
+                Sweep = 0;
+                Radius = 0;
+            }
+            else
+            {
+                // Arc segment
+                IsLine = false;
+                Center = GeometricCalculator.GetCenterFromBulge(Start, End, vertex1.Bulge);
+                Sweep = GeometricCalculator.GetAngleFromBulge(vertex1.Bulge);
+                Radius = (Start - Center).Length;
             }
         }
 
@@ -483,6 +507,25 @@ namespace OpenCAD.Geometry.Helpers
                     Start.Z
                 );
             }
+        }
+
+        internal ICurve ToCurve()
+        {
+            if (IsLine)
+                return new Line(Start, End, null);
+            return new Arc(Center, Start, End);
+        }
+
+        internal static PolylineSegment FromCurve(ICurve c)
+        {
+            if (c is Line line)
+                return FromLine(line);
+            else if (c is Arc arc)
+                return FromArc(arc);
+            else if (c is Circle circle)
+                return FromCircle(circle);
+            else
+                throw new ArgumentException("Unsupported curve type for polyline segment");
         }
     }
 }

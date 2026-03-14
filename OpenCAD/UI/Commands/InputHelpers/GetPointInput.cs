@@ -137,9 +137,9 @@ namespace UI.Commands.InputHelpers
             if (parsedPoint == null) 
             {
                 var polarInputHelper = new PolarInputHelper(input);
-                if(polarInputHelper.IsValid)
+                if(polarInputHelper.IsValid && _inputParams.BasePoint.HasValue)
                 {
-                    Point3D basePoint = _basePoint ?? _context.GetLastPoint() ?? new Point3D(0, 0, 0);
+                    Point3D basePoint = _inputParams.BasePoint.Value;
                     parsedPoint = basePoint + polarInputHelper.Vector;
                 }
             }

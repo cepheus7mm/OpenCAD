@@ -1,5 +1,6 @@
 ﻿using OpenCAD.Geometry.Helpers;
 using System;
+using System.Drawing;
 
 namespace OpenCAD.Geometry.Calculator
 {
@@ -40,43 +41,31 @@ namespace OpenCAD.Geometry.Calculator
             return bulge;
         }
 
-        public static double GetBulgeFromThreePoints(Point3D start, Point3D arc, Point3D end)
+        public static double GetBulgeFromThreePoints(Point3D startPoint, Point3D arcPoint, Point3D endPoint)
         {
-            double x1 = start.X, y1 = start.Y;
-            double x2 = arc.X, y2 = arc.Y;
-            double x3 = end.X, y3 = end.Y;
+            var bulge = double.NaN;
+            var center = Point3D.NotAPoint;
+            var radius = double.NaN;
 
-            double a = x1 * (y2 - y3) - y1 * (x2 - x3) + x2 * y3 - x3 * y2;
-            if (Math.Abs(a) < 1e-12)
-                return 0.0; // collinear → no arc
+            if (!GeometricCalculator.TryGetCircleThroughThreePoints(startPoint, arcPoint, endPoint, out center, out radius))
+            {
+                return  0.0;
+            }
+            var startAngle = center.AngleTo(startPoint);
+            var arcAngle = center.AngleTo(arcPoint);
+            var endAngle = center.AngleTo(endPoint);
+            var includedAngle = GeometricCalculator.GetIncludedAngle(startAngle, arcAngle, endAngle);
+            return Math.Tan(includedAngle / 4);
+        }
 
-            double b = (x1 * x1 + y1 * y1) * (y3 - y2)
-                        + (x2 * x2 + y2 * y2) * (y1 - y3)
-                        + (x3 * x3 + y3 * y3) * (y2 - y1);
+        // ----------------- small 2D struct -----------------
 
-            double c = (x1 * x1 + y1 * y1) * (x2 - x3)
-                        + (x2 * x2 + y2 * y2) * (x3 - x1)
-                        + (x3 * x3 + y3 * y3) * (x1 - x2);
-
-            double cx = -b / (2.0 * a);
-            double cy = -c / (2.0 * a);
-
-            double dx = x1 - cx;
-            double dy = y1 - cy;
-            double radius = Math.Sqrt(dx * dx + dy * dy);
-            if (radius < 1e-12)
-                return 0.0;
-
-            double startAngle = Math.Atan2(y1 - cy, x1 - cx);
-            double midAngle = Math.Atan2(y2 - cy, x2 - cx);
-            double endAngle = Math.Atan2(y3 - cy, x3 - cx);
-
-            double theta1 = AngleUtils.NormalizeSigned(midAngle - startAngle);
-            double theta2 = AngleUtils.NormalizeSigned(endAngle - midAngle);
-            double theta = theta1 + theta2; // signed included angle
-
-            double bulge = Math.Tan(theta / 4.0);
-            return bulge;
+        private readonly struct Vector2D
+        {
+            public double X { get; }
+            public double Y { get; }
+            public Vector2D(double x, double y) { X = x; Y = y; }
+            public static Vector2D operator -(Vector2D a, Vector2D b) => new Vector2D(a.X - b.X, a.Y - b.Y);
         }
 
         public static Point3D GetMidpointFromBulge(Point3D startPoint, Point3D endPoint, double bulge)
@@ -161,6 +150,32 @@ namespace OpenCAD.Geometry.Calculator
 
             return Math.Tan(includedAngle / 4.0);
         }
+
+        public static double GetBulgeFromCenterFull(Point3D startPoint, Point3D endPoint, Point3D center, bool IsCCW)
+        {
+            // Vectors from center to points
+            var v1 = (startPoint - center).Normalized;
+            var v2 = (endPoint - center).Normalized;
+
+            // Signed angle between v1 and v2, full range [-2π, +2π]
+            double angle = Math.Atan2(
+                v1.X * v2.Y - v1.Y * v2.X,   // cross
+                v1.X * v2.X + v1.Y * v2.Y    // dot
+            );
+
+            // DO NOT normalize to [-π, π]
+            // Let the angle be whatever it is (major or minor arc)
+
+            if (IsCCW && angle < 0)
+                angle += 2 * Math.PI;   // CCW major arc
+
+            if (!IsCCW && angle > 0)
+                angle -= 2 * Math.PI;   // CW major arc
+
+
+            return Math.Tan(angle / 4.0);
+        }
+
 
         public static (double radius, double startAngle, double endAngle, Point3D center) GetArcParametersFromBulge(Point3D startPoint, Point3D endPoint, double bulge)
         {

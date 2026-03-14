@@ -116,5 +116,29 @@ namespace OpenCAD.Geometry.Helpers
         {
             return AreAlmostEqual(0, X) && AreAlmostEqual(0, Y);
         }
+        public static double SignedAngleBetween(Vector3D v1, Vector3D v2, Vector3D normal)
+        {
+            // Normalize input vectors
+            v1 = v1.Normalized;
+            v2 = v2.Normalized;
+            normal = normal.Normalized;
+
+            // Unsigned angle
+            double dot = Clamp(v1.Dot(v2), -1.0, 1.0);
+            double angle = Math.Acos(dot);
+
+            // Signed direction using cross product
+            Vector3D cross = Cross(v1, v2);
+
+            double sign = Math.Sign(normal.Dot(cross));
+            return angle * sign;
+        }
+
+        private static double Clamp(double value, double min, double max)
+        {
+            if (value < min) return min;
+            if (value > max) return max;
+            return value;
+        }
     }
 }

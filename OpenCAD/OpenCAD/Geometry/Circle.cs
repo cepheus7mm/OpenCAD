@@ -325,5 +325,15 @@ namespace OpenCAD.Geometry
                 cumulative += len;
             }
         }
+
+        public ProjectionResult ProjectPoint(Point3D point)
+        {
+            throw new NotImplementedException();
+        }
+
+        public ICurve ExtendTo(Point3D point)
+        {
+            throw new NotImplementedException();
+        }
     }
 }

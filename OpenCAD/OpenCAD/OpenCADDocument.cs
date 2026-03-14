@@ -256,9 +256,9 @@ namespace OpenCAD
         }
 
         [JsonIgnore]
-        public Guid? CurrentViewportSettingsID
+        public Guid CurrentViewportSettingsID
         {
-            get => GetPropertyValue<Guid?>(PropertyType.ID, nameof(CurrentViewportSettingsID));
+            get => GetPropertyValue<Guid>(PropertyType.ID, nameof(CurrentViewportSettingsID));
             private set => SetPropertyValue(PropertyType.ID, nameof(CurrentViewportSettingsID), OpenCADStrings.CurrentViewportSettingsID, value);
         }
 
@@ -732,13 +732,9 @@ namespace OpenCAD
             return GetChild(TextStylesContainerID) as OpenCADTextStyles;
         }
 
-        public ViewportSettings? GetViewportSettings()
+        public ViewportSettings GetViewportSettings()
         {
-            if (CurrentViewportSettingsID.HasValue)
-            {
-                return GetChild(CurrentViewportSettingsID.Value) as ViewportSettings;
-            }
-            return null;
+                return GetChild(CurrentViewportSettingsID) as ViewportSettings;
         }
 
         public string ValueToString(double value, UnitFormatType type)

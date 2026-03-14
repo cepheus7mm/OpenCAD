@@ -289,11 +289,11 @@ namespace UI.Commands.Editing
 
                 if (distToStart < distToEnd)
                 {
-                    results.Add(new Line(document, pt1, line.EndPoint));
+                    results.Add(new Line(pt1, line.EndPoint, document));
                 }
                 else
                 {
-                    results.Add(new Line(document, line.StartPoint, pt1));
+                    results.Add(new Line(line.StartPoint, pt1, document));
                 }
             }
             else
@@ -319,12 +319,12 @@ namespace UI.Commands.Editing
 
                 if (pickDist1 + pickDist2 <= totalDist + 1e-6)
                 {
-                    results.Add(new Line(document, line.StartPoint, nearPoint));
-                    results.Add(new Line(document, farPoint, line.EndPoint));
+                    results.Add(new Line(line.StartPoint, nearPoint, document));
+                    results.Add(new Line(farPoint, line.EndPoint, document));
                 }
                 else
                 {
-                    results.Add(new Line(document, nearPoint, farPoint));
+                    results.Add(new Line(nearPoint, farPoint, document));
                 }
             }
 

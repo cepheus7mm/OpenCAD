@@ -5,6 +5,8 @@ using OpenCAD.Interfaces;
 using OpenCAD.SegmentSource;
 using System.Drawing;
 using System.Numerics;
+using System.Reflection;
+using System.Runtime.Intrinsics;
 using System.Text.Json.Serialization;
 using System.Xml.Serialization;
 
@@ -250,14 +252,14 @@ namespace OpenCAD.Geometry
             }
 
             // Clamp to domain [0,1]
-            double a = Math.Max(0.0, Math.Min(1.0, t0));
-            double b = Math.Max(0.0, Math.Min(1.0, t1));
+            //double a = Math.Max(0.0, Math.Min(1.0, t0));
+            //double b = Math.Max(0.0, Math.Min(1.0, t1));
 
             // Evaluate new angles
-            var point = GeometricCalculator.GetPointAtParameter(a, StartPoint, Center, GetSweepAngle());
+            var point = GeometricCalculator.GetPointAtParameter(t0, StartPoint, Center, GetSweepAngle());
             var newStart = Math.Atan2(point.Y - Center.Y, point.X - Center.X);
 
-            point = GeometricCalculator.GetPointAtParameter(b, StartPoint, Center, GetSweepAngle());
+            point = GeometricCalculator.GetPointAtParameter(t1, StartPoint, Center, GetSweepAngle());
             var newEnd = Math.Atan2(point.Y - Center.Y, point.X - Center.X);
 
             // Return a new Arc segment
@@ -392,6 +394,54 @@ namespace OpenCAD.Geometry
 
                 cumulative += len;
             }
+        }
+
+        public ProjectionResult ProjectPoint(Point3D point)
+        {
+            // Vector from center to point
+            var v = point - Center;
+
+            // Angle of point relative to center
+            var ang = Math.Atan2(v.Y, v.X);
+
+            // Normalize angle into same CCW frame as arc
+            var rel = GeometricCalculator.NormalizeUnsigned(ang - StartAngle);
+
+            // Unclamped parameter
+            var t = rel / SweepAngle;
+
+            // Closest point ON THE CIRCLE (not the arc)
+            var cp = new Point3D(
+                Center.X + Radius * Math.Cos(ang),
+                Center.Y + Radius * Math.Sin(ang),
+                Center.Z
+            );
+
+            var diff = point - cp;
+            var dist = Math.Sqrt(Vector3D.Dot(diff, diff));
+
+            return new ProjectionResult(t, cp, dist);
+        }
+
+        public ICurve ExtendTo(Point3D point)
+        {
+            var proj = ProjectPoint(point);
+            var t = proj.Parameter;
+
+            if (t <= DomainStart)
+                return Trim(t, DomainEnd);
+
+            if (t >= DomainEnd)
+                return Trim(DomainStart, t);
+
+            // Inside domain: extend whichever end is closer
+            var distToStart = Math.Abs(t - DomainStart);
+            var distToEnd = Math.Abs(t - DomainEnd);
+
+            if (distToStart < distToEnd)
+                return Trim(t, DomainEnd);
+            else
+                return Trim(DomainStart, t);
         }
     }
 }
