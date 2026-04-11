@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 
 namespace OpenCAD.Grips.GripProviders
 {
+    [GripProvider(typeof(Arc))]
     public sealed class ArcGripProvider : GripProviderBase, IGripProvider
     {
         public IEnumerable<Grip> GetGrips(OpenCADObject owner)

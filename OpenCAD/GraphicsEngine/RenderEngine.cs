@@ -1,5 +1,6 @@
 ﻿using GraphicsEngine.Interfaces;
 using OpenCAD;
+using OpenCAD.Dimensions;
 using OpenCAD.Geometry;
 using OpenCAD.Interfaces;
 using OpenCAD.SegmentSource;
@@ -25,16 +26,13 @@ namespace GraphicsEngine
     /// </summary>
     public class RenderEngine
     {
-        private readonly List<IRenderer> _renderers = new();
-        //private ICamera _camera;
         private ICamera _camera;
         private Matrix4x4 _projectionMatrix;
         private Matrix4x4 _viewMatrix;
         private ShaderProgram? _shaderProgram;
-        private PolylineShaderProgram? _polylineShaderProgram;
         private FillShaderProgram? _fillShaderProgram;
-        private PolygonRenderer? _polygonRenderer;  // ADD THIS LINE
         private WorldPolygonRenderer? _worldPolygonRenderer;
+        private TextRenderer? _textRenderer;
         private ProjectionMode _projectionMode = ProjectionMode.Orthographic; // Default to orthographic for CAD
         private int _viewportWidth;
         private int _viewportHeight;
@@ -48,15 +46,12 @@ namespace GraphicsEngine
 
         public RenderEngine(ITextMetricsProvider? textMetrics = null)
         {
-            //_camera = new Camera();
             _camera = new OrthoCamera(40f);
             _textMetrics = textMetrics;
         }
 
         public Matrix4x4 ViewMatrix => _viewMatrix;
         public Matrix4x4 ProjectionMatrix => _projectionMatrix;
-
-        //public ICamera Camera => _camera;
 
         public Viewport Viewport => _viewport;
 
@@ -75,13 +70,7 @@ namespace GraphicsEngine
                 if (_projectionMode != value)
                 {
                     _projectionMode = value;
-
-                    // Lock axes when entering orthographic
-                    //if (_projectionMode == ProjectionMode.Orthographic)
-                    //    AlignCameraForOrthographic();
-
                     UpdateProjection(_viewportWidth, _viewportHeight);
-                    //System.Diagnostics.Debug.WriteLine($"Projection mode changed to: {_projectionMode}");
                 }
             }
         }
@@ -100,17 +89,16 @@ namespace GraphicsEngine
 
             // Create shader program
             _shaderProgram = new ShaderProgram();
-            _polylineShaderProgram = new PolylineShaderProgram();
             _fillShaderProgram = new FillShaderProgram();
 
             _shader = new Shader(UnifiedSegmentShaders.VertexShader, UnifiedSegmentShaders.FragmentShader);
 
-            // Initialize polygon renderer used for filled overlays (window selection)
-            // This was missing previously which caused RenderFilledPolygon to be a no-op.
-            _polygonRenderer = new PolygonRenderer(_fillShaderProgram);
+            // Initialize polygon renderer used for filled overlays (window selection + polygon geometry)
             _worldPolygonRenderer = new WorldPolygonRenderer(_fillShaderProgram);
 
-
+            // Initialize text renderer when a font provider is available
+            if (_textMetrics != null)
+                _textRenderer = new TextRenderer(_shaderProgram, _textMetrics);
 
             // Set baseline GL state
             GL.Enable(EnableCap.DepthTest);
@@ -119,7 +107,6 @@ namespace GraphicsEngine
             GL.ClearColor(0.08f, 0.08f, 0.08f, 1.0f);
 
             // Enable debug output and log context info
-           // GLDiag.TryEnableDebugOutput();
             GLDiag.LogContextInfo();
 
             _viewport = new Viewport(glWPFControl) { Camera = _camera };
@@ -127,51 +114,86 @@ namespace GraphicsEngine
             _camera.SetViewportSize(_viewport.PixelWidth, _viewport.PixelHeight);
 
             UpdateProjection(_viewport.PixelWidth, _viewport.PixelHeight);
-            RegisterDefaultRenderers();
 
             GLDiag.Check("Initialize end");
-            //System.Diagnostics.Debug.WriteLine($"RenderEngine initialized with {_projectionMode} projection");
-        }
-
-        /// <summary>
-        /// Register default renderers for geometry types
-        /// </summary>
-        private void RegisterDefaultRenderers()
-        {
-            if (_shaderProgram == null || _polylineShaderProgram == null)
-                throw new InvalidOperationException("ShaderProgram must be initialized before registering renderers");
-
-            _renderers.Clear();
-            _renderers.Add(new LineRenderer(_shaderProgram));
-            _renderers.Add(new ArcRenderer(_shaderProgram));
-            _renderers.Add(new PolylineRenderer(_polylineShaderProgram));
-
-            // Register TextRenderer when metrics are available (lazy)
-            if (_textMetrics != null)
-            {
-                _renderers.Add(new TextRenderer(_shaderProgram, _textMetrics));
-            }
-
-            System.Diagnostics.Debug.WriteLine($"Registered {_renderers.Count} renderer(s)");
         }
 
         /// <summary>
         /// Render a collection of OpenCADObjects with optional highlighting and selection
         /// </summary>
-        public void Render(IEnumerable<OpenCADObject> objects, 
-                            HashSet<OpenCADObject> highlightedSet, 
+        public void Render(IEnumerable<OpenCADObject> objects,
+                            HashSet<OpenCADObject> highlightedSet,
                             HashSet<OpenCADObject>? selectedSet = null,
                             RenderStyle renderStyle = RenderStyle.Normal)
         {
-
-
             var segmentSources = objects.OfType<ISegmentSource>().ToList();
-            
+
+            // Also include geometry from IDrawableSource objects
+            var drawableSources = objects.OfType<IDrawableSource>().ToList();
+
+            // Collect objects that are neither ISegmentSource nor IDrawableSource
+            var remainingObjects = objects
+                .Where(o => o is not ISegmentSource && o is not IDrawableSource)
+                .ToList();
+
+            foreach (var source in drawableSources)
+            {
+                var highlighted = highlightedSet.Contains((OpenCADObject)source);
+                var selected = selectedSet != null && selectedSet.Contains((OpenCADObject)source);
+    
+                foreach (var drawable in source.GenerateGeometry())
+                {
+                    if (drawable is null)
+                        continue;
+                    if (highlighted)
+                        highlightedSet.Add((OpenCADObject)drawable);
+                    if (selected)
+                        selectedSet?.Add((OpenCADObject)drawable);
+
+                    if (drawable is ISegmentSource segmentSource)
+                    {
+                        segmentSources.Add(segmentSource);
+                        continue;
+                    }
+                    remainingObjects.Add((OpenCADObject)drawable);
+                }
+            }
+
+            RenderSegments(segmentSources, highlightedSet, selectedSet);
+            RenderObjects(remainingObjects, highlightedSet, selectedSet);
+
+            GLDiag.Check("End of Render");
+        }
+
+        /// <summary>
+        /// Render non-segment objects with highlighting and selection support
+        /// </summary>
+        private void RenderObjects(List<OpenCADObject> objects,
+                                    HashSet<OpenCADObject> highlightedSet,
+                                    HashSet<OpenCADObject>? selectedSet)
+        {
+            foreach (var obj in objects)
+            {
+                var context = new RenderContext
+                {
+                    ViewMatrix = _viewMatrix,
+                    ProjectionMatrix = _projectionMatrix,
+                    IsHighlighted = highlightedSet.Contains(obj),
+                    IsSelected = selectedSet != null && selectedSet.Contains(obj),
+                };
+                RenderObject(obj, context);
+            }
+        }
+
+        /// <summary>
+        /// Render segment sources with highlighting and selection support
+        /// </summary>
+        private void RenderSegments(List<ISegmentSource> segmentSources,
+                                    HashSet<OpenCADObject> highlightedSet,
+                                    HashSet<OpenCADObject>? selectedSet)
+        {
             float maxSagittaWorld = _viewport.PixelsToWorld(0.5f); // e.g. 0.5px tolerance
 
-            // -------------------------------
-            // PASS 1: Normal geometry
-            // -------------------------------
             _segmentRenderer.BeginFrame(_viewport, _viewport.ProjectionMatrix);
             foreach (var source in segmentSources)
             {
@@ -185,8 +207,6 @@ namespace GraphicsEngine
                 _segmentRenderer.DrawSegments(segments, _viewport, lineTypeData, mode);
             }
             _segmentRenderer.EndFrame();
-
-            GLDiag.Check("End of Render");
         }
 
         private HighlightMode ComputeSegmentHighlightMode(ISegmentSource source, HashSet<OpenCADObject> highlightedSet, HashSet<OpenCADObject> selectedSet)
@@ -231,19 +251,121 @@ namespace GraphicsEngine
         }
 
         /// <summary>
-        /// Render a single OpenCADObject with context
+        /// Route a single OpenCADObject to its dedicated render method
         /// </summary>
         private void RenderObject(OpenCADObject obj, RenderContext context)
         {
-            var renderer = _renderers.FirstOrDefault(r => r.CanRender(obj));
-            if (renderer != null)
+            switch (obj)
             {
-                renderer.Render(obj, context);
+                case Polygon polygon:
+                    RenderPolygon(polygon, context);
+                    break;
+                case SText text:
+                    RenderSText(text, context);
+                    break;
             }
-            else
+        }
+
+        /// <summary>
+        /// Render a Polygon: filled interior via WorldPolygonRenderer, edges via SegmentRenderer
+        /// </summary>
+        private void RenderPolygon(Polygon polygon, RenderContext context)
+        {
+            var vertices = polygon.Vertices;
+            if (vertices.Length < 3)
+                return;
+
+            if (!EnsureFullPolygonRenderers())
+                return;
+
+            // 1. Fill
+            if (_worldPolygonRenderer != null)
             {
-                //System.Diagnostics.Debug.WriteLine($"No renderer found for type {obj.GetType().FullName}");
+                var points = vertices
+                    .Select(v => new Vector3((float)v.X, (float)v.Y, (float)v.Z))
+                    .ToArray();
+
+                var worldPolygon = new WorldPolygon(points, polygon.FillColor);
+                _worldPolygonRenderer.Render(worldPolygon, _camera.ViewMatrix, _camera.ProjectionMatrix);
             }
+
+            // 2. Edges
+            var segments = PolygonToSegments(vertices, polygon.ColorVector);
+            var lineTypeData = polygon.GetLinetypeGpuData();
+            var mode = HighlightModeFromContext(context);
+
+            _segmentRenderer.BeginFrame(_viewport, _viewport.ProjectionMatrix);
+            _segmentRenderer.DrawSegments(segments, _viewport, lineTypeData, mode);
+            _segmentRenderer.EndFrame();
+        }
+
+        private bool EnsureFullPolygonRenderers()
+        {
+            if (_fillShaderProgram == null || _segmentRenderer == null)
+                return false;
+
+            _worldPolygonRenderer ??= new WorldPolygonRenderer(_fillShaderProgram!);
+
+            return _worldPolygonRenderer != null;
+        }
+
+        /// <summary>
+        /// Render an SText object via the cached TextRenderer
+        /// </summary>
+        private void RenderSText(SText text, RenderContext context)
+        {
+            if (!EnsureTextRenderer())
+                return;
+
+            _textRenderer?.Render(text, context);
+        }
+
+        private bool EnsureTextRenderer()
+        {
+            if (_textMetrics == null || _shaderProgram == null)
+                return false;
+
+            _textRenderer ??= new TextRenderer(_shaderProgram!, _textMetrics);
+
+            return _textRenderer != null;
+        }
+
+        /// <summary>
+        /// Convert polygon vertices to closed-loop segments for edge rendering
+        /// </summary>
+        private static IEnumerable<Segment> PolygonToSegments(Point3D[] vertices, Vector4 color)
+        {
+            int n = vertices.Length;
+            float cumDist = 0f;
+
+            for (int i = 0; i < n; i++)
+            {
+                var a = vertices[i];
+                var b = vertices[(i + 1) % n];
+                var va = new Vector2((float)a.X, (float)a.Y);
+                var vb = new Vector2((float)b.X, (float)b.Y);
+
+                float len = Vector2.Distance(va, vb);
+                float d0 = cumDist;
+                float d1 = cumDist + len;
+                cumDist = d1;
+
+                yield return new Segment(va, vb, 0f, 0f, d0, d1, 0, color);
+            }
+        }
+
+        /// <summary>
+        /// Derive HighlightMode from a RenderContext
+        /// </summary>
+        private static HighlightMode HighlightModeFromContext(RenderContext context)
+        {
+            return (context.IsHighlighted, context.IsSelected) switch
+            {
+                (true, true) => HighlightMode.HoverSelected,
+                (true, false) => HighlightMode.Hover,
+                (false, true) => HighlightMode.Selected,
+                _ => HighlightMode.None,
+            };
         }
 
         /// <summary>
@@ -285,12 +407,6 @@ namespace GraphicsEngine
                 // Use the new OrthoCamera zoom
                 _camera.Zoom(zoomFactor);
             }
-            //if (_projectionMode == ProjectionMode.Orthographic)
-            //{
-            //    // Decrease scale to zoom in, increase to zoom out
-            //    OrthographicScale += delta;
-            //    //System.Diagnostics.Debug.WriteLine($"Orthographic scale: {_orthographicScale:F2}");
-            //}
         }
 
         /// <summary>
@@ -370,17 +486,13 @@ namespace GraphicsEngine
         /// </summary>
         public void RenderFilledPolygon(Point3D[] vertices, System.Drawing.Color fillColor)
         {
-            if (_polygonRenderer == null) return;
+            if (_worldPolygonRenderer == null) return;
             
             // Convert OpenCAD.Geometry.Point3D array to System.Numerics.Vector3 array
             var points = vertices.Select(v => new Vector3((float)v.X, (float)v.Y, (float)v.Z)).ToArray();
 
-
-            // Render as a filled polygon
-            //_polygonRenderer.RenderFilled(points, fillColor, _viewMatrix, _projectionMatrix);
             var worldPolygon = new WorldPolygon(points, fillColor);
-
-            _worldPolygonRenderer?.Render(worldPolygon, _camera.ViewMatrix, _camera.ProjectionMatrix);
+            _worldPolygonRenderer.Render(worldPolygon, _camera.ViewMatrix, _camera.ProjectionMatrix);
         }
 
         public void ResizeViewport(int width, int height)

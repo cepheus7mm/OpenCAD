@@ -37,6 +37,7 @@ namespace OpenCAD
         SystemOfUnits,
         LinearUnits,
         AngularUnits,
+        PointArray,
     }
 
     public class Property
@@ -145,6 +146,12 @@ namespace OpenCAD
                 case PropertyType.Vector:
                     value = (Vector3D)_value;
                     break;
+                case PropertyType.PointArray:
+                    var src = (Point3D[])_value;
+                    var copy = new Point3D[src.Length];
+                    Array.Copy(src, copy, src.Length);
+                    value = copy;
+                    break;
                 case PropertyType.Curve:
                     throw new NotImplementedException();
                 case PropertyType.Surface:
@@ -250,6 +257,7 @@ public class PropertyJsonConverter : JsonConverter<Property>
                                 : (AngularType)Enum.Parse(typeof(AngularType), reader.GetString()!),
                             PropertyType.Point => JsonSerializer.Deserialize<Point3D>(ref reader, options),
                             PropertyType.Vector => JsonSerializer.Deserialize<Vector3D>(ref reader, options),
+                            PropertyType.PointArray => JsonSerializer.Deserialize<Point3D[]>(ref reader, options),
                             // Add more cases as needed for other types
                             _ => JsonSerializer.Deserialize<object>(ref reader, options)
                         };
@@ -314,6 +322,9 @@ public class PropertyJsonConverter : JsonConverter<Property>
                     break;
                 case PropertyType.Vector:
                     JsonSerializer.Serialize(writer, (Vector3D)value.Value, options);
+                    break;
+                case PropertyType.PointArray:
+                    JsonSerializer.Serialize(writer, (Point3D[])value.Value, options);
                     break;
                 // Add more cases as needed for other types
                 default:

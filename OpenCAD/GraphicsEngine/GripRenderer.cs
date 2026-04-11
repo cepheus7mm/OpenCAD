@@ -162,6 +162,7 @@ namespace GraphicsEngine
         private void BuildQuadVertices(GripVisual grip, bool glow, List<float> verts)
         {
             float sizePx = glow ? grip.Style.GlowRadius + 4f : grip.Style.SizePx;
+            sizePx *= _viewport.DpiScaleX;
             float half = sizePx * 0.5f;
 
             Vector2 screen = _viewport.WorldToScreen(grip.WorldPosition);

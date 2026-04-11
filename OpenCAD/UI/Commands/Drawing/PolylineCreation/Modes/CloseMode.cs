@@ -13,11 +13,13 @@ namespace UI.Commands.Drawing.PolylineCreation.Modes
     {
         private readonly Point3D _lastPoint;
         private readonly Point3D _firstPoint;
+        private readonly bool _isArcMode;
 
-        public CloseMode(Point3D lastPoint, Point3D firstPoint)
+        public CloseMode(Point3D lastPoint, Point3D firstPoint, bool isArcMode)
         {
             _lastPoint = lastPoint;
             _firstPoint = firstPoint;
+            _isArcMode = isArcMode;
         }
 
         public override string Prompt => string.Empty;
@@ -32,10 +34,10 @@ namespace UI.Commands.Drawing.PolylineCreation.Modes
         public override IPolylineCreationMode Apply(PolylineCommand command)
         {
             // Add the closing segment
-            command.AddVertex(_firstPoint);
+            //command.AddVertex(_firstPoint);
 
             // Mark the polyline as closed
-            command.SetClosed(true);
+            command.SetClosed(_isArcMode);
 
             // Transition to FinishedMode
             return new FinishedMode();

@@ -45,6 +45,8 @@ namespace OpenCAD.Geometry
 
         public override string ToString() => $"({X}, {Y}, {Z})";
 
+        public Vector2 ToVector2() => new Vector2((float)X, (float)Y);
+
         // --- Operators ---------------------------------------------------------
 
         // Point + Vector = Point

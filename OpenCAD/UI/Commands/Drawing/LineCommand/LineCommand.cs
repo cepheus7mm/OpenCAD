@@ -111,7 +111,7 @@ namespace UI.Commands.Drawing.LineCommand
 
             if ((keyword == "C" || keyword == "CLOSE") && FirstStartPoint.HasValue)
             {
-                var closeMode = new CloseMode(mode.GetBasePoint(), FirstStartPoint.Value, document);
+                var closeMode = new CloseMode(mode.GetBasePoint(), FirstStartPoint.Value, Document);
                 return closeMode.Apply(this);
             }
 
@@ -123,8 +123,8 @@ namespace UI.Commands.Drawing.LineCommand
 
         internal OpenCADDocument GetDocument()
         {
-            if (document != null)
-                return document;
+            if (Document != null)
+                return Document;
             if (Context != null)
                 return Context.GetDocument()!;
             throw new InvalidOperationException("No document available");

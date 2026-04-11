@@ -77,7 +77,7 @@ namespace UI.Commands
                     }
                 };
             }
-            document = Context?.GetDocument();
+            Document = Context?.GetDocument();
         }
 
         public abstract Task Execute();
@@ -532,7 +532,7 @@ namespace UI.Commands
 
         // Cached providers captured when preview starts (so awaits won't lose them)
         protected ViewportControl? viewport { get; private set; }
-        protected OpenCADDocument? document { get; private set; }
+        protected OpenCADDocument? Document { get; private set; }
         protected UndoRedoManager? CachedUndoManager { get; private set; }
 
         protected ViewportViewModel? CachedViewModel { get; private set; }

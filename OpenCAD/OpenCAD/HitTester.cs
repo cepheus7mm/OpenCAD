@@ -71,47 +71,58 @@ namespace OpenCAD
 
         public IEnumerable<OpenCADObject> HitTestEntities(Point screenPos, int boxSize)
         {
-            var curveObjects = new List<OpenCADObject>();
-            CollectCurveObjects(_document, curveObjects);
+            var candidates = new List<OpenCADObject>();
+            CollectHittableObjects(_document, candidates);
 
             var hitObjects = new List<OpenCADObject>();
-            var worldPos = _camera.ScreenToWorld(screenPos);
-            if (curveObjects.Count < 1)
+            if (candidates.Count < 1)
                 return hitObjects;
 
+            var worldPos = _camera.ScreenToWorld(screenPos);
             var c1 = _camera.ScreenToWorld(new Point(screenPos.X - boxSize, screenPos.Y - boxSize));
             var c2 = _camera.ScreenToWorld(new Point(screenPos.X + boxSize, screenPos.Y + boxSize));
 
-            foreach (var obj in curveObjects)
-            {
-                if (obj is ICurve curve)
-                {
-                    var pt = curve.GetClosestPoint(
-                        new Point3D(worldPos.X, worldPos.Y, 0));
+            var ctx = new HitTestContext(
+                new Point3D(worldPos.X, worldPos.Y, 0),
+                new Point3D(c1.X, c1.Y, 0),
+                new Point3D(c2.X, c2.Y, 0));
 
-                    if (pt.IsValid)
-                    {
-                        if (pt.X >= c1.X && pt.X <= c2.X &&
-                            pt.Y <= c1.Y && pt.Y >= c2.Y)
-                        {
-                            hitObjects.Add(obj);
-                        }
-                    }
+            foreach (var obj in candidates)
+            {
+                if (obj is IHitTestable hitTestable)
+                {
+                    var result = hitTestable.HitTest(ctx);
+                    if (result.Kind != HitResultKind.None)
+                        hitObjects.Add(obj);
+                }
+                else if (obj is ICurve curve)
+                {
+                    var pt = curve.GetClosestPoint(ctx.WorldPosition);
+                    if (ctx.IsInsidePickBox(pt))
+                        hitObjects.Add(obj);
                 }
             }
 
             return hitObjects;
         }
 
-        private void CollectCurveObjects(OpenCADObject parent, List<OpenCADObject> list)
+        private void CollectHittableObjects(OpenCADObject parent, List<OpenCADObject> list)
         {
             var children = parent.GetChildren();
             foreach (var child in children)
             {
-                if (child is ICurve)
+                if (child is IHitTestable)
+                {
+                    // Composite object – it handles its own sub-geometry
                     list.Add(child);
+                }
+                else
+                {
+                    if (child is ICurve)
+                        list.Add(child);
 
-                CollectCurveObjects(child, list);
+                    CollectHittableObjects(child, list);
+                }
             }
         }
 

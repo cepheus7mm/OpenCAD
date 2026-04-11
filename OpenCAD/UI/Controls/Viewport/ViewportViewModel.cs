@@ -337,40 +337,40 @@ namespace UI.Controls.Viewport
 
         public IGripProviderFactory GripProviderFactory
         {
-            get => _gripProviderFactory ??= RegisterGripProviders();
+            get => _gripProviderFactory ??= new GripProviderFactory();
             set => _gripProviderFactory ??= value
                 ?? throw new ArgumentNullException(nameof(value));
         }
 
         public IGeoPointProviderFactory GeoPointProviderFactory
         {
-            get => _geoPointProviderFactory ??= RegisterGeoPointProviders();
+            get => _geoPointProviderFactory ??= new GeoPointProviderFactory();
             set => _geoPointProviderFactory ??= value
                 ?? throw new ArgumentNullException(nameof(value));
         }
 
         public OpenCADDocument Document => _document;
 
-        private IGripProviderFactory RegisterGripProviders()
-        {
-            var factory = new GripProviderFactory();
-            // Register grip providers here
-            factory.Register<Line>(new LineGripProvider());
-            factory.Register<Circle>(new CircleGripProvider());
-            factory.Register<Arc>(new ArcGripProvider());
-            return factory;
-        }
+        //private IGripProviderFactory RegisterGripProviders()
+        //{
+        //    var factory = new GripProviderFactory();
+        //    // Register grip providers here
+        //    factory.Register<Line>(new LineGripProvider());
+        //    factory.Register<Circle>(new CircleGripProvider());
+        //    factory.Register<Arc>(new ArcGripProvider());
+        //    return factory;
+        //}
 
-        private IGeoPointProviderFactory RegisterGeoPointProviders()
-        {
-            var factory = new GeoPointProviderFactory();
-            // Register geo point providers here
-            factory.Register<Line>(new LineGeoPointProvider());
-            factory.Register<Arc>(new ArcGeoPointProvider());
-            factory.Register<Circle>(new CircleGeoPointProvider());
-            factory.Register<Polyline>(new PolylineGeoPointProvider());
-            return factory;
-        }
+        //private IGeoPointProviderFactory RegisterGeoPointProviders()
+        //{
+        //    var factory = new GeoPointProviderFactory();
+        //    // Register geo point providers here
+        //    factory.Register<Line>(new LineGeoPointProvider());
+        //    factory.Register<Arc>(new ArcGeoPointProvider());
+        //    factory.Register<Circle>(new CircleGeoPointProvider());
+        //    factory.Register<Polyline>(new PolylineGeoPointProvider());
+        //    return factory;
+        //}
 
         #endregion
 
@@ -1371,8 +1371,9 @@ namespace UI.Controls.Viewport
             if (!worldPos.HasValue)
                 return null;
 
-            var aperture = _viewportSettings?.ApertureSize ?? 15;
-            var hitObjects = _hitTester!.HitTestEntities(new System.Drawing.Point((int)screenPos.X, (int)screenPos.Y), aperture); // HitTest(screenPos, screenToWorld, aperture);
+            float aperture = _viewportSettings?.ApertureSize ?? 15;
+            aperture *= _renderEngine.Viewport.DpiScaleX;
+            var hitObjects = _hitTester!.HitTestEntities(new System.Drawing.Point((int)screenPos.X, (int)screenPos.Y), (int)aperture); // HitTest(screenPos, screenToWorld, aperture);
 
             var point = new Point3D(_snapManager.GetFinalSnapPoint(new (worldPos.Value.X, worldPos.Value.Y)));
 

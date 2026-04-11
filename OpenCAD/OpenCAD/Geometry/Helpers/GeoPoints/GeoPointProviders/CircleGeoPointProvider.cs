@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 
 namespace OpenCAD.Geometry.Helpers.GeoPoints.GeoPointProviders
 {
+    [GeoPointProvider(typeof(Circle))]
     public sealed class CircleGeoPointProvider : IGeoPointProvider
     {
         public IEnumerable<GeoPoint> GetGeoPoints(Circle circle, GeoPointModes modes, Vector2 refPt)

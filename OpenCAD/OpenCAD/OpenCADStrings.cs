@@ -322,6 +322,24 @@
 
         public const string Index = "Index";
 
+        public const string DimArrow = "Arrow";
+        public const string DimArrowSize = "Arrow Size";
+        public const string DimTextStyleID = "Text Style ID";
+        public const string DimTextHeight = "Text Height";
+        public const string DimOffset = "Offset";
+        public const string DimExtensionLength = "Extension Length";
+        public const string DimExtensionOffset = "Extension Offset";
+        public const string DimExtensionBeyond = "Extension Beyond";
+
+        public const string DefaultDimensionStyleName = "Standard";
+
+        public const string DimensionStylesContainer = "DimensionStyles Container";
+
+        public const string DimensionStylesContainerID = "DimensionStyles Container ID";
+
+        public const string CurrentDimensionStyleID = "Current DimensionStyle ID";
+        public const string DimScale = "Scale";
+
         #endregion
 
         #region Default Layer Names

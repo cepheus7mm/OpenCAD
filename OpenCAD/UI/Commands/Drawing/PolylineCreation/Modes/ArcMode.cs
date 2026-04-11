@@ -29,7 +29,7 @@ namespace UI.Commands.Drawing.PolylineCreation.Modes
 
         public override string[] Keywords =>
             _secondPoint is null
-                ? new[] { "Direction", "Radius", "Angle", "Length", "Second", "Continue" }
+                ? new[] { "Direction", "Radius", "Angle", "Length", "Second", "Continue", "Close" }
                 : Array.Empty<string>();
 
         public override bool AllowLastPoint => true;

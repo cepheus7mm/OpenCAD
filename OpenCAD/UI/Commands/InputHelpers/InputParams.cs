@@ -16,5 +16,12 @@ namespace UI.Commands.InputHelpers
         public ICommandContext? Context { get; set; } = null;
         public UnitFormatType? UnitFormatType { get; set; }
 
+        /// <summary>
+        /// Optional custom projection for converting a picked point into a distance.
+        /// When set, <see cref="GetDistanceInput"/> calls this instead of
+        /// <c>basePoint.DistanceTo(pickedPoint)</c>, allowing callers to project
+        /// onto a specific axis or normal.
+        /// </summary>
+        public Func<Point3D, Point3D, double>? DistanceProjection { get; set; }
     }
 }

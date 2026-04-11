@@ -133,7 +133,9 @@ namespace UI.Commands.InputHelpers
                 input.Point.HasValue &&
                 basePoint.HasValue)
             {
-                double d = basePoint.Value.DistanceTo(input.Point.Value);
+                double d = _inputParams?.DistanceProjection != null
+                    ? _inputParams.DistanceProjection(basePoint.Value, input.Point.Value)
+                    : basePoint.Value.DistanceTo(input.Point.Value);
                 return InputResult.FromDouble(d);
             }
 

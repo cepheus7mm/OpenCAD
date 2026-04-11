@@ -70,6 +70,11 @@ namespace UI.Controls.MainWindow
         /// </summary>
         public TextStylesControl TextStylesPanel => textStylesControl;
 
+        /// <summary>
+        /// Gets the DimensionStylesControl for programmatic access
+        /// </summary>
+        public DimensionStylesControl DimensionStylesPanel => dimensionStylesControl;
+
         public PropertiesViewModel PropertiesViewModelInstance { get; }
         public SettingsViewModel SettingsViewModelInstance { get; }
 
@@ -542,6 +547,7 @@ private void SetupCommandStateTracking()
 			layersControl.UpdateFromViewport(viewport);
 			SettingsViewModelInstance.UpdateFromViewport(viewport);
             textStylesControl.UpdateFromViewport(viewport);
+            dimensionStylesControl.UpdateFromViewport(viewport);
         }
 
 		private void OnLoaded(object sender, RoutedEventArgs e)
@@ -555,6 +561,9 @@ private void SetupCommandStateTracking()
 			{
 				//System.Diagnostics.Debug.WriteLine($"Failed to load layout: {ex.Message}");
 			}
+
+			// Ensure any newly added panels exist in the loaded layout
+			EnsurePanelsExist();
 
 			// Cache the layers anchorable reference after layout is loaded
 			_layersAnchorable = FindLayoutAnchorable("layers");
@@ -615,40 +624,31 @@ private void SetupCommandStateTracking()
 					{
 						case "commandInput":
 							args.Content = commandInputControl;
-							//System.Diagnostics.Debug.WriteLine("Restored commandInput");
 							break;
 						case "properties":
 							args.Content = propertiesControl;
-							//System.Diagnostics.Debug.WriteLine("Restored properties");
 							break;
                         case "settings":
                             args.Content = settingsControl;
-                            //System.Diagnostics.Debug.WriteLine("Restored settings");
                             break;
                         case "layers":
 							args.Content = layersControl;
-							//System.Diagnostics.Debug.WriteLine("Restored layers");
 							break;
                         case "textstyles":
                             args.Content = textStylesControl;
-                            //System.Diagnostics.Debug.WriteLine("Restored textstyles");
+                            break;
+                        case "dimstyles":
+                            args.Content = dimensionStylesControl;
                             break;
                         case "solutionExplorer":
 						case "output":
 						case "errorList":
-							// Keep default content for these
-							//System.Diagnostics.Debug.WriteLine($"Keeping default content for {args.Model.ContentId}");
 							break;
 						default:
-							// ✅ CHANGED: Don't cancel document deserialization
-							// Instead, let it fail silently - the document won't be restored
-							// but the layout panels will still work
 							if (args.Model is LayoutDocument)
 							{
-								// Just don't set args.Content - this allows the layout to load
-								// but the document won't be restored (which is what we want)
-								//System.Diagnostics.Debug.WriteLine($"Skipping document restoration for: {args.Model.ContentId}");
-								// DON'T set args.Cancel = true
+								// Don't set args.Content - document won't be restored
+								// but layout panels will still work
 							}
 							break;
 					}
@@ -736,8 +736,7 @@ private void SetupCommandStateTracking()
             if (settingsAnchorable == null)
             {
                 // Find the right-side anchorable pane (where properties/layers are)
-                var rootPanel = dockingManager.Layout?.RootPanel;
-                var rightPane = FindRightAnchorablePane(rootPanel);
+                var rightPane = FindRightAnchorablePane();
 
                 if (rightPane != null)
                 {
@@ -789,8 +788,7 @@ private void SetupCommandStateTracking()
             if (textStylesAnchorable == null)
             {
                 // Find the right-side anchorable pane (where properties/layers are)
-                var rootPanel = dockingManager.Layout?.RootPanel;
-                var rightPane = FindRightAnchorablePane(rootPanel);
+                var rightPane = FindRightAnchorablePane();
 
                 if (rightPane != null)
                 {
@@ -809,28 +807,126 @@ private void SetupCommandStateTracking()
             textStylesAnchorable?.Show();
         }
 
-        // Helper to find the right anchorable pane (where properties/layers are)
-        private LayoutAnchorablePane? FindRightAnchorablePane(ILayoutContainer? container)
+        /// <summary>
+        /// Shows or hides the dimension styles panel
+        /// </summary>
+        public void ShowDimensionStylesPanel(bool show)
         {
-            if (container == null) return null;
-            foreach (var child in container.Children)
+            var anchorable = FindLayoutAnchorable("dimstyles");
+
+            if (anchorable != null)
             {
-                if (child is LayoutAnchorablePane pane)
+                if (show)
+                    anchorable.Show();
+                else
+                    anchorable.Hide();
+            }
+            else
+            {
+                EnsureDimensionStylesPanelVisible();
+            }
+        }
+
+        private void EnsureDimensionStylesPanelVisible()
+        {
+            var anchorable = FindLayoutAnchorable("dimstyles");
+            if (anchorable == null)
+            {
+                var rightPane = FindRightAnchorablePane();
+
+                if (rightPane != null)
                 {
-                    // Heuristic: look for a pane that already contains properties/layers
-                    if (pane.Children.OfType<LayoutAnchorable>().Any(a =>
-                        a.ContentId == "properties" || a.ContentId == "layers"))
+                    anchorable = new LayoutAnchorable
                     {
-                        return pane;
-                    }
-                }
-                if (child is ILayoutContainer childContainer)
-                {
-                    var found = FindRightAnchorablePane(childContainer);
-                    if (found != null) return found;
+                        ContentId = "dimstyles",
+                        Title = "Dimension Styles",
+                        CanClose = true,
+                        CanHide = true,
+                        Content = dimensionStylesControl
+                    };
+                    rightPane.Children.Add(anchorable);
                 }
             }
-            return null;
+
+            anchorable?.Show();
         }
-    }
+
+        /// <summary>
+		/// Registry of all expected anchorable panels. When adding a new panel,
+		/// add an entry here and it will automatically appear even if the saved
+		/// layout.xml predates it.
+		/// </summary>
+		private IReadOnlyList<(string ContentId, string Title, Func<UIElement> GetControl)> ExpectedPanels =>
+		[
+			("commandInput",    "Command Input",    () => commandInputControl),
+			("properties",      "Properties",       () => propertiesControl),
+			("settings",        "Settings",         () => settingsControl),
+			("layers",          "Layers",           () => layersControl),
+			("textstyles",      "Text Styles",      () => textStylesControl),
+			("dimstyles",       "Dimension Styles",  () => dimensionStylesControl),
+		];
+
+		/// <summary>
+		/// After layout deserialization, inject any panels that are missing
+		/// from the saved layout.xml (e.g., newly added panels).
+		/// </summary>
+		private void EnsurePanelsExist()
+		{
+			foreach (var (contentId, title, getControl) in ExpectedPanels)
+			{
+				if (FindLayoutAnchorable(contentId) != null)
+					continue;
+
+				// Panel is missing from the loaded layout — inject it
+				var anchorable = new LayoutAnchorable
+				{
+					ContentId = contentId,
+					Title = title,
+					CanHide = true,
+					CanClose = false,
+					Content = getControl()
+				};
+
+				// Try to add to the right-side pane (where properties/layers live)
+				var targetPane = FindRightAnchorablePane();
+				if (targetPane != null)
+				{
+					targetPane.Children.Add(anchorable);
+					System.Diagnostics.Debug.WriteLine($"Injected missing panel '{contentId}' into layout");
+				}
+			}
+		}
+
+		/// <summary>
+		/// Finds the right-side LayoutAnchorablePane (the one containing "properties")
+		/// as the default target for injected panels.
+		/// </summary>
+		private LayoutAnchorablePane? FindRightAnchorablePane()
+		{
+			// Look for the pane that contains the "properties" panel — that's the right pane
+			var propertiesAnchorable = FindLayoutAnchorable("properties");
+			if (propertiesAnchorable?.Parent is LayoutAnchorablePane pane)
+				return pane;
+
+			// Fallback: find any anchorable pane
+			return FindFirstAnchorablePane(dockingManager.Layout?.RootPanel);
+		}
+
+		private LayoutAnchorablePane? FindFirstAnchorablePane(ILayoutContainer? container)
+		{
+			if (container == null) return null;
+			if (container is LayoutAnchorablePane pane) return pane;
+
+			foreach (var child in container.Children)
+			{
+				if (child is LayoutAnchorablePane found) return found;
+				if (child is ILayoutContainer childContainer)
+				{
+					var result = FindFirstAnchorablePane(childContainer);
+					if (result != null) return result;
+				}
+			}
+			return null;
+		}
+	}
 }

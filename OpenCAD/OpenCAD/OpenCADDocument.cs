@@ -1,4 +1,5 @@
 ﻿using OpenCAD.Containers;
+using OpenCAD.Dimensions;
 using OpenCAD.Geometry;
 using OpenCAD.Geometry.Helpers;
 using OpenCAD.Interfaces;
@@ -12,6 +13,7 @@ using System.Runtime.Serialization;
 using System.Text.Json.Serialization;
 using System.Xml.Serialization;
 using OpenCAD.Undo;
+using OpenCAD.Styles;
 
 namespace OpenCAD
 {
@@ -75,6 +77,12 @@ namespace OpenCAD
             var lineTypesContainer = new OpenCADLineTypes(this);
             Add(lineTypesContainer);
             LineTypesContainerID = lineTypesContainer.ID;
+
+            // Add the dimension styles container
+            var dimensionStylesContainer = new OpenCADDimensionStyles(this);
+            Add(dimensionStylesContainer);
+            DimensionStylesContainerID = dimensionStylesContainer.ID;
+            CurrentDimensionStyle = dimensionStylesContainer.GetDefaultDimStyle();
 
             var undoRedoManager = new UndoRedoManager(this);
             Add(undoRedoManager);
@@ -160,6 +168,18 @@ namespace OpenCAD
                         //System.Diagnostics.Debug.WriteLine($"  Text Style: {textStyle.Name} (ID: {textStyle.ID})");
                         // Restore document reference
                         textStyle.Document = this;
+                    }
+                }
+
+                // Rebuild the dimension style cache in the dimension styles container
+                var dimensionStylesContainer = GetDimensionStylesContainer();
+                if (dimensionStylesContainer != null)
+                {
+                    dimensionStylesContainer.RebuildCache();
+
+                    foreach (var dimStyle in dimensionStylesContainer.GetDimensionStyles())
+                    {
+                        dimStyle.Document = this;
                     }
                 }
                 
@@ -328,14 +348,20 @@ namespace OpenCAD
         public override bool Add(OpenCADObject obj)
         {
             var added = base.Add(obj);
-            if (added && obj is ICurve)
+            if ( !added)
+            {
+                return false;
+            }
+            if (obj is ICurve)
             {
                 LastGeometricChild = obj.ID;
-
-                // Notify listeners that an object was added
+            }
+            if (obj is IDrawable)
+            { 
+                // Notify listeners that a drawable object was added
                 ObjectAdded?.Invoke(this, new DocumentObjectEventArgs(obj));
             }
-            return added;
+            return true;
         }
 
         /// <summary>
@@ -496,6 +522,8 @@ namespace OpenCAD
 
         #region Text Style Management - Delegates to OpenCADTextStyles Container
 
+        public OpenCADTextStyles TextStyles => GetTextStylesContainer() ?? new OpenCADTextStyles(this);
+
         /// <summary>
         /// Adds a new text style to the document.
         /// </summary>
@@ -580,6 +608,143 @@ namespace OpenCAD
         }
 
         #endregion
+
+        #region Dimension Style Management - Delegates to OpenCADDimensionStyles Container
+
+        /// <summary>
+        /// Gets the dimension styles container.
+        /// </summary>
+        private OpenCADDimensionStyles? GetDimensionStylesContainer()
+        {
+            return GetChild(DimensionStylesContainerID) as OpenCADDimensionStyles;
+        }
+
+        public OpenCADDimensionStyles DimensionStyles => GetDimensionStylesContainer() ?? new OpenCADDimensionStyles(this);
+
+        /// <summary>
+        /// Adds a new dimension style to the document.
+        /// </summary>
+        /// <param name="dimStyle">The dimension style to add.</param>
+        /// <returns>True if the dimension style was added successfully, false if a dimension style with the same name already exists.</returns>
+        public bool AddDimensionStyle(OpenCADDimensionStyle dimStyle)
+        {
+            var container = GetDimensionStylesContainer();
+            return container?.AddDimensionStyle(dimStyle) ?? false;
+        }
+
+        /// <summary>
+        /// Creates and adds a new dimension style to the document.
+        /// </summary>
+        /// <param name="name">The name of the new dimension style.</param>
+        /// <param name="arrow">The arrow type for dimension lines.</param>
+        /// <param name="arrowSize">The size of the arrows.</param>
+        /// <param name="textStyleId">The ID of the text style for dimension text.</param>
+        /// <param name="textHeight">The height of the dimension text.</param>
+        /// <param name="offset">The offset distance from the measured points.</param>
+        /// <param name="extensionLength">The length of extension lines.</param>
+        /// <param name="extensionOffset">The offset of extension lines from the measured points.</param>
+        /// <param name="extensionBeyond">The distance extension lines extend beyond the dimension line.</param>
+        /// <param name="scale">The overall scale factor for visual dimension sizes.</param>
+        /// <returns>The newly created dimension style, or null if a dimension style with the same name already exists.</returns>
+        public OpenCADDimensionStyle? CreateDimensionStyle(
+            string name,
+            ArrowType arrow = ArrowType.ClosedFilled,
+            float arrowSize = 0.1f,
+            Guid? textStyleId = null,
+            float textHeight = 0.1f,
+            float offset = 0.1f,
+            float extensionLength = 0.1f,
+            float extensionOffset = 0.1f,
+            float extensionBeyond = 0.1f,
+            float scale = 10.0f)
+        {
+            var container = GetDimensionStylesContainer();
+            return container?.CreateDimensionStyle(name, arrow, arrowSize, textStyleId, textHeight, offset, extensionLength, extensionOffset, extensionBeyond, scale);
+        }
+
+        /// <summary>
+        /// Gets a dimension style by name.
+        /// </summary>
+        public OpenCADDimensionStyle? GetDimensionStyle(string name)
+        {
+            var container = GetDimensionStylesContainer();
+            return container?.GetDimensionStyle(name);
+        }
+
+        /// <summary>
+        /// Gets a dimension style by ID.
+        /// </summary>
+        public OpenCADDimensionStyle? GetDimensionStyle(Guid dimStyleId)
+        {
+            var container = GetDimensionStylesContainer();
+            return container?.GetDimensionStyle(dimStyleId);
+        }
+
+        /// <summary>
+        /// Removes a dimension style from the document.
+        /// The default dimension style cannot be removed.
+        /// </summary>
+        public bool RemoveDimensionStyle(string name)
+        {
+            var container = GetDimensionStylesContainer();
+            return container?.RemoveDimensionStyle(name) ?? false;
+        }
+
+        /// <summary>
+        /// Gets all dimension styles in the document.
+        /// </summary>
+        public IEnumerable<OpenCADDimensionStyle> GetDimensionStyles()
+        {
+            var container = GetDimensionStylesContainer();
+            return container?.GetDimensionStyles() ?? Enumerable.Empty<OpenCADDimensionStyle>();
+        }
+
+        /// <summary>
+        /// Sets the current dimension style by name.
+        /// </summary>
+        public bool SetCurrentDimensionStyle(string name)
+        {
+            var dimStyle = GetDimensionStyle(name);
+            if (dimStyle != null)
+            {
+                CurrentDimensionStyle = dimStyle;
+                return true;
+            }
+            return false;
+        }
+
+        #endregion
+
+        [JsonIgnore, XmlIgnore]
+        public Guid DimensionStylesContainerID
+        {
+            get => GetPropertyValue<Guid>(PropertyType.ID, nameof(DimensionStylesContainerID));
+            private set => SetPropertyValue(PropertyType.ID, nameof(DimensionStylesContainerID), OpenCADStrings.DimensionStylesContainerID, value);
+        }
+
+        /// <summary>
+        /// Gets or sets the current active dimension style for new dimensions.
+        /// </summary>
+        [JsonIgnore]
+        public OpenCADDimensionStyle CurrentDimensionStyle
+        {
+            get
+            {
+                var container = GetDimensionStylesContainer();
+                return container?.GetDimensionStyle(CurrentDimensionStyleID) ?? new OpenCADDimensionStyle();
+            }
+            set => SetPropertyValue(PropertyType.ID, nameof(CurrentDimensionStyleID), OpenCADStrings.CurrentDimensionStyleID, value.ID);
+        }
+
+        /// <summary>
+        /// Gets or sets the current active dimension style's Id for new dimensions.
+        /// </summary>
+        [JsonIgnore]
+        public Guid CurrentDimensionStyleID
+        {
+            get => GetPropertyValue<Guid>(PropertyType.ID, nameof(CurrentDimensionStyleID));
+            set => SetPropertyValue(PropertyType.ID, nameof(CurrentDimensionStyleID), OpenCADStrings.CurrentDimensionStyleID, value);
+        }
 
         /// <summary>
         /// Applies the document's current properties to a new object.
@@ -699,6 +864,18 @@ namespace OpenCAD
                 foreach (var textStyle in textStylesContainer.GetTextStyles())
                 {
                     textStyle.Document = this;
+                }
+            }
+
+            // Rebuild the dimension style cache in the dimension styles container
+            var dimensionStylesContainer = GetDimensionStylesContainer();
+            if (dimensionStylesContainer != null)
+            {
+                dimensionStylesContainer.RebuildCache();
+
+                foreach (var dimStyle in dimensionStylesContainer.GetDimensionStyles())
+                {
+                    dimStyle.Document = this;
                 }
             }
         }

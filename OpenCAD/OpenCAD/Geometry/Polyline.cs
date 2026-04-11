@@ -48,14 +48,8 @@ namespace OpenCAD.Geometry
         [JsonIgnore, XmlIgnore]
         public bool IsClosed
         {
-            get
-            {
-                var vertices = GetOrderedVertices();
-                if (vertices.Count < 2)
-                    return false;
-
-                return vertices[0].Position.DistanceTo(vertices[^1].Position) < 1e-8;
-            }
+            get => GetPropertyValue<bool>(PropertyType.Boolean, nameof(IsClosed));
+            private set => SetPropertyValue(PropertyType.Boolean, nameof(IsClosed), "IsClosed", value);
         }
 
         [JsonIgnore, XmlIgnore]
@@ -732,8 +726,8 @@ namespace OpenCAD.Geometry
         {
             if (IsClosed || VertexCount < 2)
                 return;
-            var firstVertex = GetVertex(0);
-            AddVertex(firstVertex);
+            IsClosed = true;
+            MarkDirty();
         }
 
         /// <summary>
@@ -743,7 +737,8 @@ namespace OpenCAD.Geometry
         {
             if (!IsClosed)
                 return;
-            RemoveVertex(VertexCount - 1);
+            IsClosed = false;
+            MarkDirty();
         }
 
         #endregion
@@ -829,74 +824,91 @@ namespace OpenCAD.Geometry
         public IEnumerable<Segment> GetSegments(float maxSagitta = 0)
         {
             float widthMm = LineWeight.ToMillimeters();
-            var geo = new List<GeoSegment>();
-            var v1 = children[_verticies[0]] as PolylineVertex;
-            var cumulative = 0f;
+            float cumulative = 0f;
 
-            for (int i = 1; i < _verticies.Count; i++)
+            // Normal segments
+            for (int i = 0; i < _verticies.Count - 1; i++)
             {
-                var v2 = children[_verticies[i]] as PolylineVertex;
-                var widthA = MathF.Max((float)v1.StartWidth, widthMm);
-                var widthB = MathF.Max((float)v2.EndWidth, widthMm);
+                var v1 = (PolylineVertex)children[_verticies[i]];
+                var v2 = (PolylineVertex)children[_verticies[i + 1]];
 
-                if (Math.Abs(v1.Bulge) <= 1e-12)
+                foreach (var seg in GetSegment(v1, v2, cumulative, widthMm, maxSagitta))
                 {
-                    // Line segment
-                    var a = new Vector2((float)v1.Position.X, (float)v1.Position.Y);
-                    var b = new Vector2((float)v2.Position.X, (float)v2.Position.Y);
-                    float len = Vector2.Distance(a, b);
-
-                    yield return new Segment
-                    (
-                        a: a,
-                        b: b,
-                        widthA: widthA,
-                        widthB: widthB,
-                        d0: cumulative,
-                        d1: cumulative + len,
-                        lineTypeId: 0,
-                        color: ColorVector
-                    );
-
-                    cumulative += len;
-                    v1 = v2;
-                    continue;
+                    cumulative = seg.D1; // update cumulative from returned segment
+                    yield return seg;
                 }
-
-                // Arc segment
-                geo.Clear(); // IMPORTANT: avoid re-yielding segments from previous arcs
-
-                var pSegment = BulgeUtils.GetPolylineSegment(v1.Position, v2.Position, v1.Bulge);
-                CurveTessellator.TessellateArc(
-                    new Vector2((float)pSegment.Center.X, (float)pSegment.Center.Y),
-                    (float)pSegment.Radius,
-                    (float)pSegment.StartAngle,
-                    (float)pSegment.Sweep,
-                    maxSagitta,
-                    geo
-                );
-
-                foreach (var g in geo)
-                {
-                    float len = Vector2.Distance(g.A, g.B);
-
-                    yield return new Segment(
-                        g.A,
-                        g.B,
-                        widthA,
-                        widthB,
-                        cumulative,
-                        cumulative + len,
-                        0,
-                        ColorVector
-                    );
-
-                    cumulative += len;
-                }
-
-                v1 = v2;
             }
 
+            // Closing segment
+            if (IsClosed && _verticies.Count > 1)
+            {
+                var vLast = (PolylineVertex)children[_verticies[^1]];
+                var vFirst = (PolylineVertex)children[_verticies[0]];
+
+                foreach (var seg in GetSegment(vLast, vFirst, cumulative, widthMm, maxSagitta))
+                {
+                    cumulative = seg.D1;
+                    yield return seg;
+                }
+            }
+        }
+
+        private IEnumerable<Segment> GetSegment(
+                    PolylineVertex v1,
+                    PolylineVertex v2,
+                    float cumulative,
+                    float widthMm,
+                    float maxSagitta)
+        {
+            float widthA = MathF.Max((float)v1.StartWidth, widthMm);
+            float widthB = MathF.Max((float)v2.EndWidth, widthMm);
+
+            // LINE SEGMENT
+            if (Math.Abs(v1.Bulge) <= 1e-12)
+            {
+                var a = new Vector2((float)v1.Position.X, (float)v1.Position.Y);
+                var b = new Vector2((float)v2.Position.X, (float)v2.Position.Y);
+                float len = Vector2.Distance(a, b);
+
+                yield return new Segment(
+                    a, b,
+                    widthA, widthB,
+                    cumulative,
+                    cumulative + len,
+                    0,
+                    ColorVector
+                );
+                yield break;
+            }
+
+            // ARC SEGMENT
+            var geo = new List<GeoSegment>();
+            var pSeg = BulgeUtils.GetPolylineSegment(v1.Position, v2.Position, v1.Bulge);
+
+            CurveTessellator.TessellateArc(
+                new Vector2((float)pSeg.Center.X, (float)pSeg.Center.Y),
+                (float)pSeg.Radius,
+                (float)pSeg.StartAngle,
+                (float)pSeg.Sweep,
+                maxSagitta,
+                geo
+            );
+
+            foreach (var g in geo)
+            {
+                float len = Vector2.Distance(g.A, g.B);
+
+                yield return new Segment(
+                    g.A, g.B,
+                    widthA, widthB,
+                    cumulative,
+                    cumulative + len,
+                    0,
+                    ColorVector
+                );
+
+                cumulative += len;
+            }
         }
 
         public ProjectionResult ProjectPoint(Point3D point)

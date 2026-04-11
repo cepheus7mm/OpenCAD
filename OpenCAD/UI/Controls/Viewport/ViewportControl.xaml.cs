@@ -267,7 +267,7 @@ private bool _showDebugTooltip = false;
             try
             {
                 // Defer text metrics creation: do not resolve at startup
-                _renderEngine = new RenderEngine();
+                _renderEngine = new RenderEngine(new TextMetricsProvider(new FontProvider()));
 
                 _renderEngine.Initialize(GlWPFControl);
                 _viewModel.Initialize(_renderEngine.Camera);
@@ -527,8 +527,8 @@ private bool _showDebugTooltip = false;
                 var geoPoint = _viewModel.GetGeoPointAtCurrentMousePosition(screenPos, ScreenToWorld2);
                 if (geoPoint != null)
                 {
-                    var worldPos = ScreenToWorld(screenPos);
-                    var worldPos1 = ScreenToWorld(new Point(screenPos.X + 1, screenPos.Y));
+                    var worldPos = ScreenToWorld2(screenPos);
+                    var worldPos1 = ScreenToWorld2(new Point(screenPos.X + 1, screenPos.Y));
                     if (worldPos.HasValue && worldPos1.HasValue)
                     {
                         double screenToWorldScale = Math.Abs(worldPos1.Value.X - worldPos.Value.X);

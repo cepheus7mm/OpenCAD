@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 
 namespace OpenCAD.Geometry.Helpers.GeoPoints.GeoPointProviders
 {
+    [GeoPointProvider(typeof(Arc))]
     public sealed class ArcGeoPointProvider : IGeoPointProvider
     {
         public IEnumerable<GeoPoint> GetGeoPoints(Arc arc, GeoPointModes modes, Vector2 refPt)

@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 
 namespace OpenCAD.Geometry.Helpers.GeoPoints.GeoPointProviders
 {
+    [GeoPointProvider(typeof(Polyline))]
     public sealed class PolylineGeoPointProvider : IGeoPointProvider
     {
         public IEnumerable<GeoPoint> GetGeoPoints(

@@ -1,4 +1,4 @@
-using OpenCAD.Styles.LineTypes;
+using OpenCAD.Styles;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;

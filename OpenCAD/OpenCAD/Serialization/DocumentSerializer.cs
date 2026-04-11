@@ -1,5 +1,5 @@
 ﻿using OpenCAD.Settings;
-using OpenCAD.Styles.LineTypes;
+using OpenCAD.Styles;
 using System;
 using System.Drawing;
 using System.IO;

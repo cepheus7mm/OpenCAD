@@ -43,6 +43,10 @@ namespace UI.Commands
                     _commands[lowerAlias] = type;
                     _aliasToCanonical[lowerAlias] = canonicalName; // Map alias to canonical
                 }
+
+                // Debug trace
+                System.Diagnostics.Debug.WriteLine(
+                    $"[CommandRegistry] Registered command {canonicalName}");
             }
         }
 

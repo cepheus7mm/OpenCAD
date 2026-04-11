@@ -2,6 +2,7 @@
 using System.Linq;
 using System.Windows.Input;
 using OpenCAD;
+using OpenCAD.Styles;
 using OpenCAD.Styles.LineTypes;
 using UI.Controls.Viewport;
 

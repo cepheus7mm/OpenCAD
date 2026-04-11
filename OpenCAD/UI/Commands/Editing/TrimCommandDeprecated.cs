@@ -14,7 +14,7 @@ using UI.Controls.Viewport;
 
 namespace UI.Commands.Editing
 {
-    [InputCommand("trim", "Trim objects to cutting edges", "tr")]
+    //[InputCommand("trim", "Trim objects to cutting edges", "tr")]
     public class TrimCommand : CommandBase
     {
         private enum TrimPhase

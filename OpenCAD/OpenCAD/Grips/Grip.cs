@@ -9,17 +9,19 @@ namespace OpenCAD.Grips
 {
     public readonly struct Grip : IEquatable<Grip>
     {
-        public Vector2 Position { get; }
-        public GripKind Kind { get; }
-        public int SubIndex { get; }
-        public OpenCADObject Owner { get; } // add this!
+        public Vector2 Position { get; init; }
+        public GripKind Kind { get; init; }
+        public int SubIndex { get; init; }
+        public OpenCADObject Owner { get; init; }
+        public object? Tag { get; init; }
 
-        public Grip(OpenCADObject owner, Vector2 position, GripKind kind, int subIndex)
+        public Grip(OpenCADObject owner, Vector2 position, GripKind kind, int subIndex, object? tag = null)
         {
             Owner = owner;
             Position = position;
             Kind = kind;
             SubIndex = subIndex;
+            Tag = tag;
         }
 
         public bool Equals(Grip other)

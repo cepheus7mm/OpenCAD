@@ -1,6 +1,6 @@
 using OpenCAD.Geometry;
 using OpenCAD.Geometry.Helpers;
-using OpenCAD.Styles.LineTypes;
+using OpenCAD.Styles;
 using System.Drawing;
 
 namespace OpenCAD.Interfaces

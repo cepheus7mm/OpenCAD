@@ -243,7 +243,7 @@ namespace UI.Commands.Editing
             if (matrix == Matrix4D.Identity)
                 return;
 
-            if (document == null || viewport == null)
+            if (Document == null || viewport == null)
             {
                 Context?.OutputMessage(UnableToActOnObjectsMissingContext);
                 return;
@@ -261,10 +261,10 @@ namespace UI.Commands.Editing
                 var clones = new List<OpenCADObject>();
                 foreach (var obj in SelectedObjects!)
                 {
-                    var clone = obj.Clone(document);
+                    var clone = obj.Clone(Document);
                     if (clone != null)
                     {
-                        document.Add(clone);
+                        Document.Add(clone);
                         clones.Add(clone);
                     }
                 }

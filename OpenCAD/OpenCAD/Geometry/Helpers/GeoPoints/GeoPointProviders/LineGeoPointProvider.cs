@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 
 namespace OpenCAD.Geometry.Helpers.GeoPoints.GeoPointProviders
 {
+    [GeoPointProvider(typeof(Line))]
     public sealed class LineGeoPointProvider : IGeoPointProvider
     {
         public IEnumerable<GeoPoint> GetGeoPoints(Line line, GeoPointModes modes, Vector2 refPt)

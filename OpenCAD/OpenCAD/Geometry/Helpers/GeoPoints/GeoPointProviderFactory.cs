@@ -1,7 +1,9 @@
-﻿using OpenCAD.Interfaces;
+﻿using OpenCAD.Geometry.Helpers.GeoPoints.GeoPointProviders;
+using OpenCAD.Interfaces;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -12,11 +14,33 @@ namespace OpenCAD.Geometry.Helpers.GeoPoints
         private readonly Dictionary<Type, IGeoPointProvider> _providers =
             new Dictionary<Type, IGeoPointProvider>();
 
-        public void Register<T>(IGeoPointProvider provider)
-            where T : OpenCADObject
+        public GeoPointProviderFactory()
         {
-            _providers[typeof(T)] = provider;
+            AutoRegisterProviders();
         }
+
+        private void AutoRegisterProviders()
+        {
+            var providerTypes =
+                from asm in AppDomain.CurrentDomain.GetAssemblies()
+                from type in asm.GetTypes()
+                let attr = type.GetCustomAttribute<GeoPointProviderAttribute>()
+                where attr != null
+                where typeof(IGeoPointProvider).IsAssignableFrom(type)
+                where !type.IsAbstract
+                select new { ProviderType = type, attr.TargetType };
+
+            foreach (var entry in providerTypes)
+            {
+                var instance = (IGeoPointProvider)Activator.CreateInstance(entry.ProviderType)!;
+                _providers[entry.TargetType] = instance;
+
+                // Debug trace
+                System.Diagnostics.Debug.WriteLine(
+                    $"[GeoPointProviderFactory] Registered provider {entry.ProviderType.Name} for {entry.TargetType.Name}");
+            }
+        }
+
 
         public IGeoPointProvider? GetProvider(OpenCADObject obj)
         {

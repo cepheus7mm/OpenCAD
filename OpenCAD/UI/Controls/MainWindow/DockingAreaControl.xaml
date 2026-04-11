@@ -101,6 +101,9 @@
                     <xcad:LayoutAnchorable ContentId="textstyles" Title="Text Styles" CanHide="True" CanClose="False">
                         <local:TextStylesControl x:Name="textStylesControl"/>
                     </xcad:LayoutAnchorable>
+                    <xcad:LayoutAnchorable ContentId="dimstyles" Title="Dimension Styles" CanHide="True" CanClose="False">
+                        <local:DimensionStylesControl x:Name="dimensionStylesControl"/>
+                    </xcad:LayoutAnchorable>
                 </xcad:LayoutAnchorablePane>
 			</xcad:LayoutPanel>
 		</xcad:LayoutRoot>

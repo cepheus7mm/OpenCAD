@@ -66,8 +66,8 @@ namespace OpenCAD.Geometry
         [JsonIgnore, XmlIgnore]
         public uint Index
         {
-            get => GetPropertyValue<uint>(PropertyType.DoubleUnitLess, nameof(Index));
-            set => SetPropertyValue(PropertyType.DoubleUnitLess, nameof(Index), OpenCADStrings.Index, value);
+            get => GetPropertyValue<uint>(PropertyType.UInt, nameof(Index));
+            set => SetPropertyValue(PropertyType.UInt, nameof(Index), OpenCADStrings.Index, value);
         }
 
         /// <summary>

@@ -107,13 +107,17 @@ namespace GraphicsEngine
             bool isOrtho = MathF.Abs(projectionMatrix.M34) < 1e-6f && MathF.Abs(projectionMatrix.M44 - 1f) < 1e-6f;
 
             // Extract ortho parameters to convert world XY to NDC on CPU
+            // Use the combined view-projection matrix so panning (encoded in the
+            // view matrix) is taken into account alongside the projection scale.
             float centerX = 0f, centerY = 0f, halfW = 1f, halfH = 1f;
             if (isOrtho)
             {
-                float sx = projectionMatrix.M11;
-                float sy = projectionMatrix.M22;
-                float txRow = projectionMatrix.M41;
-                float tyRow = projectionMatrix.M42;
+                Matrix4x4 viewProj = viewMatrix * projectionMatrix;
+
+                float sx = viewProj.M11;
+                float sy = viewProj.M22;
+                float txRow = viewProj.M41;
+                float tyRow = viewProj.M42;
 
                 if (MathF.Abs(sx) > 1e-12f && MathF.Abs(sy) > 1e-12f)
                 {

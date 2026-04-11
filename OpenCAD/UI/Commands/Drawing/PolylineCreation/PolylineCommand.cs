@@ -45,7 +45,7 @@ namespace UI.Commands.Drawing.PolylineCreation
             await base.Initialize(context);
         }
 
-        public OpenCADDocument? GetDocument() => document;
+        public OpenCADDocument? GetDocument() => Document;
 
         public Point3D GetTarget() => TargetPoint;
 
@@ -86,6 +86,11 @@ namespace UI.Commands.Drawing.PolylineCreation
                 if (result.IsKeyword)
                 {
                     _mode = HandleKeyword(_mode, result.Keyword);
+                    if (_mode is CloseMode)
+                    {
+                        _mode = _mode.Apply(this);
+                        break;
+                    }
                     continue;
                 }
 
@@ -143,7 +148,7 @@ namespace UI.Commands.Drawing.PolylineCreation
             if (_vertices.Any())
                 _vertices[^1].StartWidth = CurrentStartWidth;
 
-            _vertices.Add(new PolylineVertex(document, point, 0));
+            _vertices.Add(new PolylineVertex(Document, point, 0));
 
             if (_vertices.Count > 1)
             {
@@ -162,16 +167,30 @@ namespace UI.Commands.Drawing.PolylineCreation
             _vertices[^1].Bulge = 0; // Clear bulge of new last vertex since it no longer has a segment after it.
         }
 
-        public void SetClosed(bool closed)
+        public void SetClosed(bool isArcMode)
         {
-            _isClosed = closed;
+            _isClosed = true;
+            if (!isArcMode)
+                return;
+
+            // Compute the bulge for the closing segment if we're in arc mode. We want to maintain the same curvature as the last segment,
+            // so we compute the angle between the tangent of the last segment and the chord of the closing segment, then convert that to a bulge.
+            var tanget = GetTangent();
+            var start = _vertices[^1].Position;
+            var end = _vertices[0].Position;
+            var chord = end - start;
+            var theta = Vector3D.SignedAngleBetween(tanget, chord, Vector3D.UnitZ) * 2;
+            _vertices[^1].Bulge = Math.Tan(theta / 4);
         }
 
         private void CreatePolyline()
         {
-            var poly = new Polyline(document!);
+            var poly = new Polyline(Document!);
             foreach (var vertex in _vertices)
                 poly.AddVertex(vertex);
+
+            if (_isClosed)
+                poly.Close();
 
             CreateObject(poly);
         }
@@ -212,7 +231,7 @@ namespace UI.Commands.Drawing.PolylineCreation
                 case "C":
                 case "CLOSE":
                     if (FirstPoint.HasValue && LastPoint.HasValue)
-                        return new CloseMode(LastPoint.Value, FirstPoint.Value);
+                        return new CloseMode(LastPoint.Value, FirstPoint.Value, mode is ArcMode);
                     break;
             }
 
@@ -245,14 +264,17 @@ namespace UI.Commands.Drawing.PolylineCreation
 
             if (_vertices.Count > 1)
             {
-                var polyline = new Polyline(document!);
+                var polyline = new Polyline(Document!);
                 foreach (var vertex in _vertices)
                     polyline.AddVertex(vertex);
 
                 var lastVert = polyline.Vertices.Last();
                 lastVert.Bulge = _previewVertex?.Bulge ?? 0;
                 lastVert.StartWidth = CurrentStartWidth;
-                polyline.AddVertex(_previewVertex ?? new PolylineVertex(document, TargetPoint, 0));
+                polyline.AddVertex(_previewVertex ?? new PolylineVertex(Document, TargetPoint, 0));
+
+                if (_isClosed)
+                    polyline.Close();
 
                 preview.Add(polyline);
             }
@@ -264,7 +286,7 @@ namespace UI.Commands.Drawing.PolylineCreation
 
         internal void SetPreviewVertex(Point3D point3D, double bulge = 0)
         {
-            _previewVertex = new PolylineVertex(document, point3D, bulge)
+            _previewVertex = new PolylineVertex(Document, point3D, bulge)
             {
                 StartWidth = CurrentStartWidth,
                 EndWidth = CurrentEndWidth,

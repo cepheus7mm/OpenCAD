@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 
 namespace OpenCAD.Grips.GripProviders
 {
+    [GripProvider(typeof(Circle))]
     public sealed class CircleGripProvider : GripProviderBase, IGripProvider
     {
         public IEnumerable<Grip> GetGrips(OpenCADObject owner)

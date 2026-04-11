@@ -116,6 +116,7 @@ namespace OpenCAD.Geometry.Helpers
         {
             return AreAlmostEqual(0, X) && AreAlmostEqual(0, Y);
         }
+
         public static double SignedAngleBetween(Vector3D v1, Vector3D v2, Vector3D normal)
         {
             // Normalize input vectors

@@ -1,9 +1,10 @@
+using OpenCAD.Styles.LineTypes;
 using System;
 using System.Drawing;
 using System.Text.Json.Serialization;
 using System.Xml.Serialization;
 
-namespace OpenCAD.Styles.LineTypes
+namespace OpenCAD.Styles
 {
     /// <summary>
     /// Represents a layer in the CAD document.

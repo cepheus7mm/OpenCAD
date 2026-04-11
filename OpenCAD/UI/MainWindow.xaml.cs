@@ -35,6 +35,9 @@ namespace UI
             InitializeComponent();
             InitializeDockingSystem();
             
+            // Restore window state from saved settings
+            RestoreWindowState();
+            
             // **ADD THIS: Set up the viewport provider for command input**
             dockingArea.CommandInput.SetActiveViewportProvider(() => dockingArea.GetActiveViewport());
             
@@ -74,6 +77,78 @@ namespace UI
             _autoSaveTimer.Tick += AutoSave_Tick;
             _autoSaveTimer.Start();
         }
+
+        #region Window State Persistence
+
+        /// <summary>
+        /// Restores the window position, size, state, and theme from user settings.
+        /// </summary>
+        private void RestoreWindowState()
+        {
+            var settings = Properties.Settings.Default;
+
+            if (settings.IsFirstRun)
+            {
+                // First launch — use defaults and center on screen
+                WindowStartupLocation = WindowStartupLocation.CenterScreen;
+                WindowState = WindowState.Maximized;
+                settings.IsFirstRun = false;
+                settings.Save();
+                return;
+            }
+
+            // Restore size
+            Width = settings.WindowWidth;
+            Height = settings.WindowHeight;
+
+            // Restore position — ensure it's within visible screen bounds
+            var left = settings.WindowLeft;
+            var top = settings.WindowTop;
+
+            // Clamp to virtual screen so the window isn't off-screen after monitor changes
+            if (left < SystemParameters.VirtualScreenLeft)
+                left = SystemParameters.VirtualScreenLeft;
+            if (top < SystemParameters.VirtualScreenTop)
+                top = SystemParameters.VirtualScreenTop;
+            if (left + Width > SystemParameters.VirtualScreenLeft + SystemParameters.VirtualScreenWidth)
+                left = SystemParameters.VirtualScreenLeft + SystemParameters.VirtualScreenWidth - Width;
+            if (top + Height > SystemParameters.VirtualScreenTop + SystemParameters.VirtualScreenHeight)
+                top = SystemParameters.VirtualScreenTop + SystemParameters.VirtualScreenHeight - Height;
+
+            Left = left;
+            Top = top;
+            WindowStartupLocation = WindowStartupLocation.Manual;
+
+            // Restore window state (avoid restoring Minimized)
+            var savedState = (WindowState)settings.WindowState;
+            WindowState = savedState == WindowState.Minimized ? WindowState.Normal : savedState;
+
+            // Restore theme
+            if (!string.IsNullOrEmpty(settings.Theme))
+            {
+                ApplyTheme(settings.Theme);
+                menuBar.UpdateThemeSelection(isLightTheme: settings.Theme.Contains("Light"));
+            }
+        }
+
+        /// <summary>
+        /// Saves the current window position, size, state, and theme to user settings.
+        /// </summary>
+        private void SaveWindowState()
+        {
+            var settings = Properties.Settings.Default;
+
+            // Save the Normal bounds (not maximized/minimized bounds)
+            settings.WindowLeft = RestoreBounds.Left;
+            settings.WindowTop = RestoreBounds.Top;
+            settings.WindowWidth = RestoreBounds.Width;
+            settings.WindowHeight = RestoreBounds.Height;
+            settings.WindowState = (int)WindowState;
+
+            settings.Save();
+        }
+
+        #endregion
 
         private void MenuBar_SettingsVisibilityChanged(object? sender, bool isVisible)
         {
@@ -669,6 +744,10 @@ namespace UI
             ApplyTheme("Themes/LightTheme.xaml");
             menuBar.UpdateThemeSelection(isLightTheme: true);
             statusBar.UpdateStatus("Light theme applied");
+
+            // Persist the theme choice
+            Properties.Settings.Default.Theme = "Themes/LightTheme.xaml";
+            Properties.Settings.Default.Save();
         }
 
         private void DarkTheme_Click(object sender, RoutedEventArgs e)
@@ -676,6 +755,10 @@ namespace UI
             ApplyTheme("Themes/DarkTheme.xaml");
             menuBar.UpdateThemeSelection(isLightTheme: false);
             statusBar.UpdateStatus("Dark theme applied");
+
+            // Persist the theme choice
+            Properties.Settings.Default.Theme = "Themes/DarkTheme.xaml";
+            Properties.Settings.Default.Save();
         }
 
         #endregion
@@ -801,6 +884,9 @@ namespace UI
                     }
                 }
             }
+
+            // Save window state before closing
+            SaveWindowState();
             
             base.OnClosing(e);
         }
