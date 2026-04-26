@@ -1,5 +1,6 @@
 using OpenCAD;
 using OpenCAD.Geometry;
+using OpenCAD.Interfaces;
 using OpenCAD.Undo;
 using UI.Controls.Viewport;
 
@@ -56,6 +57,11 @@ namespace UI.Commands.Interfaces
         /// Implementations should marshal to UI thread as required.
         /// </summary>
         ViewportViewModel? GetActiveViewportViewModel();
+
+        /// <summary>
+        /// Get the camera for the active viewport.
+        /// </summary>
+        ICamera? GetCamera();
 
         /// <summary>
         /// Post an action to the UI thread without blocking the caller.

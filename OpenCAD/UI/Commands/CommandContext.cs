@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Threading;
 using OpenCAD;
 using OpenCAD.Geometry;
+using OpenCAD.Interfaces;
 using OpenCAD.Undo;
 using UI.Commands.Interfaces;
 using UI.Controls.Viewport;
@@ -85,6 +86,11 @@ namespace UI.Commands
         public OpenCADDocument? GetDocument()
         {
             return InvokeOnUI(() => _getDocument());
+        }
+
+        public ICamera? GetCamera()
+        {
+            return InvokeOnUI(() => _getActiveViewport()?.Camera);
         }
 
         /// <summary>

@@ -22,6 +22,9 @@ namespace UI.Commands.InputHelpers
         public void CompleteWithKeyword(string kw)
             => _tcs.TrySetResult(InputResult.FromKeyword(kw));
 
+        public void CompleteWithDouble(double d)
+            => _tcs.TrySetResult(InputResult.FromDouble(d));
+
         public void CompleteWithCancel()
             => _tcs.TrySetResult(InputResult.Cancel);
 

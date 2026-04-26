@@ -92,8 +92,9 @@ private bool _showDebugTooltip = false;
 
             GlWPFControl.Start(settings);
 
-            // Subscribe to ViewModel events
-            _viewModel.RefreshRequested += (s, e) => Refresh();
+            // Subscribe to ViewModel events — always dispatch to UI thread so this
+            // handler is safe to invoke from background threads (e.g. async continuations).
+            _viewModel.RefreshRequested += (s, e) => Dispatcher.InvokeAsync(Refresh);
             _viewModel.PropertyChanged += (s, e) =>
             {
                 if (e.PropertyName == nameof(ViewportViewModel.CurrentCursor))
@@ -178,6 +179,11 @@ private bool _showDebugTooltip = false;
         public void AddObject(OpenCADObject obj) => _viewModel.AddObject(obj);
         public void RemoveObject(OpenCADObject obj) => _viewModel.RemoveObject(obj);
         public void ClearSelection() => _viewModel.SelectionManager.ClearSelection();
+
+        /// <summary>
+        /// Gets the active camera for this viewport, or null if not yet initialized.
+        /// </summary>
+        public OpenCAD.Interfaces.ICamera? Camera => _renderEngine?.Camera;
 
         /// <summary>
         /// Gets the document being displayed in this viewport
@@ -486,11 +492,12 @@ private bool _showDebugTooltip = false;
             //var frameSw = Stopwatch.StartNew();
             var overlayObjects = new List<OpenCADObject>();
 
-            // Add preview line if available (for point picking)
+            // Add preview line if available (for point picking).
+            // Suppress it when a rectangle preview is active — the rectangle replaces the drag line.
             var previewPoint = _viewModel.PreviewPoint;
             var tempPoints = _viewModel.TempPoints;
 
-            if (previewPoint != null && tempPoints.Count > 0)
+            if (previewPoint != null && tempPoints.Count > 0 && _viewModel.RectanglePreviewStartPoint == null)
             {
                 var lastPoint = tempPoints[tempPoints.Count - 1];
                 var previewLine = new Line(lastPoint, previewPoint.Value, _document);
@@ -503,14 +510,34 @@ private bool _showDebugTooltip = false;
                 _viewModel.WindowSelectionStartPoint != null &&
                 _viewModel.WindowSelectionCurrentPoint != null)
             {
+                var selEdgeColor = _viewportSettings.Crosshair?.Color ?? System.Drawing.Color.LightBlue;
+                var selFillColor = System.Drawing.Color.FromArgb(76, 0, 255, 0); // 30% green
+
                 RenderWindowSelectionFill(
                     _viewModel.WindowSelectionStartPoint.Value,
-                    _viewModel.WindowSelectionCurrentPoint.Value);
-                
+                    _viewModel.WindowSelectionCurrentPoint.Value,
+                    selFillColor);
+
                 var selectionRectLines = CreateWindowSelectionRectangle(
                     _viewModel.WindowSelectionStartPoint.Value,
-                    _viewModel.WindowSelectionCurrentPoint.Value);
+                    _viewModel.WindowSelectionCurrentPoint.Value,
+                    selEdgeColor);
                 overlayObjects.AddRange(selectionRectLines);
+            }
+
+            if (_viewModel.RectanglePreviewStartPoint != null &&
+                _viewModel.RectanglePreviewCurrentPoint != null)
+            {
+                RenderWindowSelectionFill(
+                    _viewModel.RectanglePreviewStartPoint.Value,
+                    _viewModel.RectanglePreviewCurrentPoint.Value,
+                    _viewModel.RectanglePreviewFillColor);
+
+                var rectLines = CreateWindowSelectionRectangle(
+                    _viewModel.RectanglePreviewStartPoint.Value,
+                    _viewModel.RectanglePreviewCurrentPoint.Value,
+                    _viewModel.RectanglePreviewEdgeColor);
+                overlayObjects.AddRange(rectLines);
             }
             //windowSelSw.Stop();
 
@@ -586,76 +613,66 @@ private bool _showDebugTooltip = false;
         /// <summary>
         /// Creates the visual rectangle for window selection
         /// </summary>
-        private List<Line> CreateWindowSelectionRectangle(Point3D startPoint, Point3D currentPoint)
+        private List<Line> CreateWindowSelectionRectangle(Point3D startPoint, Point3D currentPoint, System.Drawing.Color edgeColor)
         {
             var lines = new List<Line>();
 
-            // Calculate rectangle corners
             double minX = Math.Min(startPoint.X, currentPoint.X);
             double maxX = Math.Max(startPoint.X, currentPoint.X);
             double minY = Math.Min(startPoint.Y, currentPoint.Y);
             double maxY = Math.Max(startPoint.Y, currentPoint.Y);
 
-            var bottomLeft = new Point3D(minX, minY, 0);
+            var bottomLeft  = new Point3D(minX, minY, 0);
             var bottomRight = new Point3D(maxX, minY, 0);
-            var topRight = new Point3D(maxX, maxY, 0);
-            var topLeft = new Point3D(minX, maxY, 0);
+            var topRight    = new Point3D(maxX, maxY, 0);
+            var topLeft     = new Point3D(minX, maxY, 0);
 
-            // Create rectangle lines with distinct styling
-            lines.Add(CreateWindowSelectionLine(bottomLeft, bottomRight));
-            lines.Add(CreateWindowSelectionLine(bottomRight, topRight));
-            lines.Add(CreateWindowSelectionLine(topRight, topLeft));
-            lines.Add(CreateWindowSelectionLine(topLeft, bottomLeft));
+            lines.Add(CreateWindowSelectionLine(bottomLeft,  bottomRight, edgeColor));
+            lines.Add(CreateWindowSelectionLine(bottomRight, topRight,    edgeColor));
+            lines.Add(CreateWindowSelectionLine(topRight,    topLeft,     edgeColor));
+            lines.Add(CreateWindowSelectionLine(topLeft,     bottomLeft,  edgeColor));
 
             return lines;
         }
 
         /// <summary>
-        /// Creates a line for the window selection rectangle with appropriate styling
+        /// Creates a line for a selection rectangle with the given color.
         /// </summary>
-        private Line CreateWindowSelectionLine(Point3D start, Point3D end)
+        private Line CreateWindowSelectionLine(Point3D start, Point3D end, System.Drawing.Color edgeColor)
         {
             var line = new Line(start, end, _document);
+            line.Color = edgeColor;
 
-            // Style the window selection rectangle (bright blue, dashed)
             var crosshairSettings = _viewportSettings.Crosshair;
             if (crosshairSettings != null)
             {
-                line.Color = crosshairSettings.Color;
-                line.LineTypeID = crosshairSettings.LineTypeID;
-                line.LineWeight = crosshairSettings.LineWeight;
+                line.LineTypeID  = crosshairSettings.LineTypeID;
+                line.LineWeight  = crosshairSettings.LineWeight;
             }
 
             return line;
         }
 
         /// <summary>
-        /// Renders a filled semi-transparent rectangle for window selection
+        /// Renders a filled semi-transparent rectangle.
         /// </summary>
-        private void RenderWindowSelectionFill(Point3D startPoint, Point3D currentPoint)
+        private void RenderWindowSelectionFill(Point3D startPoint, Point3D currentPoint, System.Drawing.Color fillColor)
         {
             if (_renderEngine == null) return;
 
-            // Calculate rectangle corners
             double minX = Math.Min(startPoint.X, currentPoint.X);
             double maxX = Math.Max(startPoint.X, currentPoint.X);
             double minY = Math.Min(startPoint.Y, currentPoint.Y);
             double maxY = Math.Max(startPoint.Y, currentPoint.Y);
 
-            // Create the four vertices of the rectangle (counter-clockwise order)
             var vertices = new[]
             {
-                new Point3D(minX, minY, 0),  // Bottom-left
-                new Point3D(maxX, minY, 0),  // Bottom-right
-                new Point3D(maxX, maxY, 0),  // Top-right
-                new Point3D(minX, maxY, 0)   // Top-left
+                new Point3D(minX, minY, 0),
+                new Point3D(maxX, minY, 0),
+                new Point3D(maxX, maxY, 0),
+                new Point3D(minX, maxY, 0)
             };
 
-            // Create a semi-transparent green color (30% opacity)
-            var fillColor = System.Drawing.Color.FromArgb(76, 0, 255, 0); // 76 = 30% of 255
-
-            // Use the RenderEngine's polygon renderer to draw the filled rectangle
-            // Note: You may need to add this method to RenderEngine if it doesn't exist
             _renderEngine.RenderFilledPolygon(vertices, fillColor);
         }
 

@@ -1,4 +1,6 @@
 ﻿using GraphicsEngine.Interfaces;
+using OpenCAD.Geometry.Helpers;
+using OpenCAD.Geometry;
 using OpenCAD.Interfaces;
 using System;
 using System.Buffers;
@@ -13,6 +15,40 @@ namespace GraphicsEngine
 {
     public sealed class OrthoCamera : ICamera
     {
+        // -------------------------
+        // Camera state history
+        // -------------------------
+        private record struct CameraState(Vector3 Position, Vector3 Target, float WorldWidth);
+        private const int MaxHistoryDepth = 50;
+        private readonly Stack<CameraState> _stateHistory = new();
+
+        public bool CanZoomPrevious => _stateHistory.Count > 0;
+
+        public void PushState()
+        {
+            if (_stateHistory.Count >= MaxHistoryDepth)
+            {
+                // Trim the oldest entry by rebuilding without it
+                var entries = _stateHistory.ToArray(); // top-first
+                _stateHistory.Clear();
+                for (int i = entries.Length - 2; i >= 0; i--)
+                    _stateHistory.Push(entries[i]);
+            }
+            _stateHistory.Push(new CameraState(Position, Target, WorldWidth));
+        }
+
+        public bool PopState()
+        {
+            if (!_stateHistory.TryPop(out var state))
+                return false;
+
+            Position = state.Position;
+            Target = state.Target;
+            WorldWidth = state.WorldWidth;
+            UpdateProjection(ViewportWidthPx / ViewportHeightPx);
+            return true;
+        }
+
         // -------------------------
         // Camera state
         // -------------------------
@@ -97,6 +133,7 @@ namespace GraphicsEngine
         // -------------------------
         public void Zoom(float zoomFactor)
         {
+            PushState();
             WorldWidth /= zoomFactor;
             WorldWidth = Math.Clamp(WorldWidth, 1f, 1e9f);
 
@@ -106,6 +143,7 @@ namespace GraphicsEngine
 
         public void Pan(Vector2 deltaPixels)
         {
+            PushState();
             float dxWorld = (deltaPixels.X / ViewportWidthPx) * WorldWidth;
             float dyWorld = -(deltaPixels.Y / ViewportHeightPx) * WorldHeight;
 
@@ -120,6 +158,45 @@ namespace GraphicsEngine
         {
             Position += delta;
             Target += delta;
+            UpdateProjection(ViewportWidthPx / ViewportHeightPx);
+        }
+
+        public void ZoomToExtents(Extents extents, float padding = 1.05f)
+        {
+            PushState();
+            float extW = (float)(extents.Max.X - extents.Min.X);
+            float extH = (float)(extents.Max.Y - extents.Min.Y);
+
+            if (extW < 1e-6f && extH < 1e-6f)
+                return;
+
+            float aspect = ViewportWidthPx / ViewportHeightPx;
+
+            // Pick WorldWidth so both dimensions fit, then apply padding
+            float widthFromW = extW * padding;
+            float widthFromH = (extH * padding) * aspect;
+            WorldWidth = Math.Max(widthFromW, widthFromH);
+            WorldWidth = Math.Clamp(WorldWidth, 1e-3f, 1e9f);
+
+            float cx = (float)((extents.Min.X + extents.Max.X) * 0.5);
+            float cy = (float)((extents.Min.Y + extents.Max.Y) * 0.5);
+            var offset = new Vector3(cx, cy, 0) - new Vector3(Target.X, Target.Y, 0);
+            Position += offset;
+            Target += offset;
+
+            UpdateProjection(aspect);
+        }
+
+        public void ZoomToCenter(Point3D center, float worldWidth)
+        {
+            PushState();
+            worldWidth = Math.Clamp(worldWidth, 1e-3f, 1e9f);
+            WorldWidth = worldWidth;
+
+            var offset = new Vector3((float)center.X, (float)center.Y, 0) - new Vector3(Target.X, Target.Y, 0);
+            Position += offset;
+            Target += offset;
+
             UpdateProjection(ViewportWidthPx / ViewportHeightPx);
         }
 

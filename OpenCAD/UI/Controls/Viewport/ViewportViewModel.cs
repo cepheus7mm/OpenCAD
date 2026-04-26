@@ -58,6 +58,12 @@ namespace UI.Controls.Viewport
         //private bool _isPointPickingMode = false;
         private readonly List<Point3D> _tempPoints = new();
         private Action<Point3D>? _previewCallback;
+
+        // Rectangle preview state (used by GetRectangleInput)
+        private Point3D? _rectanglePreviewStartPoint;
+        private Point3D? _rectanglePreviewCurrentPoint;
+        private System.Drawing.Color _rectanglePreviewEdgeColor;
+        private System.Drawing.Color _rectanglePreviewFillColor;
         private Point3D? _previewPoint;
 
         private IHitTester? _hitTester;
@@ -211,7 +217,8 @@ namespace UI.Controls.Viewport
                     _previewPoint = value;
                     OnPropertyChanged();
                     RefreshRequested?.Invoke(this, EventArgs.Empty);
-                    PreviewPointChanged?.Invoke(this, new PointPickedEventArgs(value.Value));
+                    if (value.HasValue)
+                        PreviewPointChanged?.Invoke(this, new PointPickedEventArgs(value.Value));
 #if DEBUG
                     if (value.HasValue)
                     {
@@ -295,6 +302,32 @@ namespace UI.Controls.Viewport
         public Point3D? WindowSelectionStartPoint => _selectionManager.WindowSelectionStart;
         public Point3D? WindowSelectionCurrentPoint => _selectionManager.WindowSelectionCurrent;
         public IReadOnlyList<OpenCADObject> WindowSelectionPreviewObjects => _selectionManager.PreviewObjects.ToList();
+
+        public Point3D? RectanglePreviewStartPoint => _rectanglePreviewStartPoint;
+        public Point3D? RectanglePreviewCurrentPoint => _rectanglePreviewCurrentPoint;
+        public System.Drawing.Color RectanglePreviewEdgeColor => _rectanglePreviewEdgeColor;
+        public System.Drawing.Color RectanglePreviewFillColor => _rectanglePreviewFillColor;
+
+        public void BeginRectanglePreview(Point3D start, System.Drawing.Color edgeColor, System.Drawing.Color fillColor)
+        {
+            _rectanglePreviewStartPoint = start;
+            _rectanglePreviewCurrentPoint = null;
+            _rectanglePreviewEdgeColor = edgeColor;
+            _rectanglePreviewFillColor = fillColor;
+        }
+
+        public void UpdateRectanglePreview(Point3D current)
+        {
+            _rectanglePreviewCurrentPoint = current;
+            RefreshRequested?.Invoke(this, EventArgs.Empty);
+        }
+
+        public void EndRectanglePreview()
+        {
+            _rectanglePreviewStartPoint = null;
+            _rectanglePreviewCurrentPoint = null;
+            RefreshRequested?.Invoke(this, EventArgs.Empty);
+        }
 
         public bool IsShiftKeyPressed 
         { 

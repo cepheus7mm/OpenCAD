@@ -40,5 +40,16 @@ namespace OpenCAD.Interfaces
         // NEW: canonical transforms
         Vector3 ScreenToWorld(Point screenDip);
         Point WorldToScreen(Vector3 world);
+
+        // Zoom operations
+        float WorldWidth { get; }
+        float WorldHeight { get; }
+        void ZoomToExtents(OpenCAD.Geometry.Helpers.Extents extents, float padding = 1.05f);
+        void ZoomToCenter(OpenCAD.Geometry.Point3D center, float worldWidth);
+
+        // Previous-state stack
+        bool CanZoomPrevious { get; }
+        void PushState();
+        bool PopState();
     }
 }

@@ -309,6 +309,35 @@ namespace UI.Commands
         }
 
         /// <summary>
+        /// Get a numeric value via keyboard input only (no point picking).
+        /// Use this instead of <see cref="GetDistance"/> when only a typed number is needed.
+        /// </summary>
+        protected async Task<InputResult> GetDouble(InputParams inputParams)
+        {
+            var viewModel = Context?.GetActiveViewportViewModel();
+            var badResult = new InputResult() { ResultType = InputResult.InputResultType.None, DoubleValue = double.NaN };
+            if (viewModel == null || Context == null)
+                return badResult;
+            _cancellationTokenSource ??= new CancellationTokenSource();
+            _inputHelper = new GetDoubleInput(Context, viewModel);
+            if (inputParams.Context == null)
+                inputParams.Context = Context;
+            CurrentPrompt = inputParams.Prompt;
+            try
+            {
+                return await ((GetDoubleInput)_inputHelper).GetDoubleAsync(inputParams);
+            }
+            catch (OperationCanceledException)
+            {
+                return badResult;
+            }
+            finally
+            {
+                CurrentPrompt = string.Empty;
+            }
+        }
+
+        /// <summary>
         /// Get an angle value. Returns angle in radians, or double.NaN on cancel/invalid input.
         /// Supports numeric/keyword input (unit-aware) or a single point pick (angle from BasePoint to picked point).
         /// Caller should set BasePoint before calling if using point picks.
@@ -690,6 +719,37 @@ namespace UI.Commands
             }
 
             Context?.OutputMessage(createString);
+        }
+
+        protected async Task<InputResult> GetRectangle(InputParams inputParams,
+            System.Drawing.Color edgeColor,
+            System.Drawing.Color fillColor)
+        {
+            var viewModel = Context?.GetActiveViewportViewModel();
+            var badResult = new InputResult { ResultType = InputResult.InputResultType.Cancel };
+            if (viewModel == null || Context == null)
+                return badResult;
+
+            _cancellationTokenSource ??= new CancellationTokenSource();
+            _inputHelper = new GetRectangleInput(Context, viewModel, edgeColor, fillColor);
+
+            if (inputParams.Context == null)
+                inputParams.Context = Context;
+
+            CurrentPrompt = inputParams.Prompt;
+
+            try
+            {
+                return await ((GetRectangleInput)_inputHelper).GetRectangleAsync(inputParams);
+            }
+            catch (OperationCanceledException)
+            {
+                return badResult;
+            }
+            finally
+            {
+                CurrentPrompt = string.Empty;
+            }
         }
 
         protected async Task<InputResult> GetEnum<TEnum>(InputParams inputParams) where TEnum : struct, Enum
