@@ -13,32 +13,10 @@ namespace UI.Commands.Editing
     public class MoveCommand : EditCommandBase
     {
 
-        public override async Task Initialize(ICommandContext context)
+        public override async Task Initialize(ICommandContext context, CommandArgs? args = null)
         {
-            await base.Initialize(context);
+            await base.Initialize(context, args);
             _commandName = OpenCADStrings.MoveCommandName;
-        }
-
-        protected override async Task OnObjectsSelected()
-        {
-            await base.OnObjectsSelected();
-        }
-
-        public override bool ProcessInput(string input)
-        {
-            // During selection phase, let EditCommandBase handle it
-            if (_currentInputMode == InputMode.ObjectSelection)
-            {
-                return base.ProcessInput(input);
-            }
-
-            // During point picking phase, pass to PointInputHelper
-            if (_inputHelper != null)
-            {
-                return _inputHelper.ProcessKeyboardInput(input);
-            }
-
-            return false;
         }
 
         protected override Matrix4D GetTransformation()

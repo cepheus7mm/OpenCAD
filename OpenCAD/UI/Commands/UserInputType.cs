@@ -12,5 +12,7 @@ namespace UI.Commands
         Point,
         Distance,
         Angle,
+        Entity,
+        Enum,
     }
 }

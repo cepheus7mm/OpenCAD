@@ -393,9 +393,23 @@ namespace UI.Controls.MainWindow
             _activeCommand.PromptChanged += OnCommandPromptChanged;
             _activeCommand.CommandCompletedEvent += OnCommandCompleted;
 
+            // Prepare command arguments (if any) - for now we just pass the raw input, but this can be extended to support structured args
+            CommandArgs? args = null;
+
+            if (parts.Length > 1)
+            {
+                args = new CommandArgs();
+
+                // Example: ARC CSE
+                args.EntryPoint = parts[1];
+
+                // Future: parse key=value pairs
+            }
+
+
             try
             {
-                await command.Initialize(_commandContext);
+                await command.Initialize(_commandContext, args);
                 await command.Execute();
                 await command.CommandCompleted();
             }

@@ -9,9 +9,9 @@ namespace UI.Commands.Editing
     [InputCommand("erase", "Erase selected objects (or prompts for selection)", "e")]
     public class EraseCommand : EditCommandBase
     {
-        public override async Task Initialize(ICommandContext context)
+        public override async Task Initialize(ICommandContext context, CommandArgs? args = null)
         {
-            await base.Initialize(context);
+            await base.Initialize(context, args);
             _commandName = OpenCADStrings.EraseCommandName;
         }
 

@@ -20,26 +20,17 @@ namespace UI.Commands.Editing
     /// </summary>
     public abstract class EditCommandBase : CommandBase
     {
-        protected enum InputMode
-        {
-            ObjectSelection,
-            PointInput
-        }
-        protected InputMode _currentInputMode = InputMode.ObjectSelection;
+        private TaskCompletionSource<List<OpenCADObject>>? _selectionTcs;
 
-        private bool _needsSelection = false;
-        private int _initialSelectionCount = 0;
         protected string _commandName = string.Empty;
         protected bool _preserveOriginal = false;
         protected bool _isRepeatable = false;
-
-        public string SelectObjectsPrompt => string.Format(OpenCADStrings.SelectObjectsToActOnPrompt, _commandName);
 
         public string SelectObjectsMessage => string.Format(OpenCADStrings.SelectObjectsToActOnMessage, _commandName);
 
         public string NoObjectsMessage => OpenCADStrings.NoObjectsSelectedToActOnCancelled;
 
-        public string UnableToActOnObjectsMissingContext => OpenCADStrings.UnableToActOnObjectsMissingContext;
+        public string UnableToActOnObjectsMissingContext => string.Format(OpenCADStrings.UnableToActOnObjectsMissingContext, _commandName);
 
         public string NoObjectsSelectedToActOnCancelled => OpenCADStrings.NoObjectsSelectedToActOnCancelled;
 
@@ -49,13 +40,13 @@ namespace UI.Commands.Editing
 
         public string InvalidPointInput => OpenCADStrings.InvalidPointInput;
 
-        public override bool IsMultiStep => _needsSelection;
+        public override bool IsMultiStep => true;
 
         public override bool RequiresSelection => true;
 
-        public override async Task Initialize(ICommandContext context)
+        public override async Task Initialize(ICommandContext context, CommandArgs? args = null)
         {
-            await base.Initialize(context);
+            await base.Initialize(context, args);
         }
 
         public override async Task Execute()
@@ -67,86 +58,99 @@ namespace UI.Commands.Editing
                 return;
             }
 
-            if (viewModel.SelectedObjects.Count > 0)
-            {
-                // Pre-selected objects - proceed immediately
-                SelectedObjects = new List<OpenCADObject>(viewModel.SelectedObjects);
-                _needsSelection = false;
-                await OnObjectsSelected();
-                // Derived class will call RaiseCommandCompleted when done
-            }
-            else
-            {
-                // No selection - prompt user
-                _needsSelection = true;
-                _initialSelectionCount = 0;
-                //CurrentPrompt = SelectObjectsPrompt;
-                Context?.OutputMessage(SelectObjectsMessage);
+            _cancellationTokenSource = new CancellationTokenSource();
+            SelectedObjects = await GetSelection(viewModel);
 
-                // Ensure subscription happens on UI thread
-                Context?.PostToUI(() => viewModel.SelectionChanged += OnSelectionChanged);
+            if (SelectedObjects.Count == 0)
+            {
+                Context?.OutputMessage(NoObjectsMessage);
+                return;
             }
+
+            await OnObjectsSelected();
         }
 
-        private void OnSelectionChanged(object? sender, EventArgs e)
+        /// <summary>
+        /// Awaits the user's object selection. Returns immediately with pre-selected objects,
+        /// or suspends until the user presses Enter to confirm a new selection.
+        /// </summary>
+        private async Task<List<OpenCADObject>> GetSelection(ViewportViewModel viewModel)
         {
-            var viewModel = Context?.GetActiveViewportViewModel();
-            if (viewModel == null) 
-                return;
+            if (viewModel.SelectedObjects.Count > 0)
+                return new List<OpenCADObject>(viewModel.SelectedObjects);
 
+            Context?.OutputMessage(SelectObjectsMessage);
 
-            int count = viewModel.SelectedObjects.Count;
-            if (count != _initialSelectionCount)
+            _selectionTcs = new TaskCompletionSource<List<OpenCADObject>>();
+            var capturedTcs = _selectionTcs;
+            _cancellationTokenSource!.Token.Register(() =>
+                capturedTcs.TrySetResult(new List<OpenCADObject>()));
+
+            int lastCount = 0;
+
+            void onSelectionChanged(object? sender, EventArgs e)
             {
-                Context?.OutputMessage($"Selected {count} object(s). Press ENTER to continue, or continue selecting objects.");
-                _initialSelectionCount = count;
+                var vm = Context?.GetActiveViewportViewModel();
+                if (vm == null) return;
+                int count = vm.SelectedObjects.Count;
+                if (count != lastCount)
+                {
+                    Context?.OutputMessage($"Selected {count} object(s). Press ENTER to continue, or continue selecting objects.");
+                    lastCount = count;
+                }
+            }
+
+            Context?.PostToUI(() => viewModel.SelectionChanged += onSelectionChanged);
+
+            try
+            {
+                return await _selectionTcs.Task.ConfigureAwait(false);
+            }
+            finally
+            {
+                Context?.PostToUI(() => viewModel.SelectionChanged -= onSelectionChanged);
+                _selectionTcs = null;
             }
         }
 
         public override bool ProcessInput(string input)
         {
-            if (!_needsSelection)
-                return base.ProcessInput(input);  // Let derived class handle it
-
-            // User pressed ENTER to confirm selection
-            if (string.IsNullOrWhiteSpace(input))
+            // Selection phase: Enter confirms the current selection
+            if (_selectionTcs != null)
             {
-
-                var viewmodel = Context?.GetActiveViewportViewModel();
-                if (viewmodel == null || viewmodel.SelectedObjects.Count == 0)
+                if (string.IsNullOrWhiteSpace(input))
                 {
-                    Context?.OutputMessage(NoObjectsMessage);
-                    return false;
+                    var viewModel = Context?.GetActiveViewportViewModel();
+                    if (viewModel == null || viewModel.SelectedObjects.Count == 0)
+                    {
+                        Context?.OutputMessage(NoObjectsMessage);
+                        return false;
+                    }
+                    _selectionTcs.TrySetResult(new List<OpenCADObject>(viewModel.SelectedObjects));
                 }
-
-                _currentInputMode = InputMode.PointInput;
-
-                // Unsubscribe on UI thread and capture selected objects
-                Context?.PostToUI(() => viewmodel.SelectionChanged -= OnSelectionChanged);
-                SelectedObjects = new List<OpenCADObject>(viewmodel.SelectedObjects);
-                _needsSelection = false;
-
-                Task.Run(async () => { await OnObjectsSelected(); });
-                return true;
+                return false;
             }
 
-            return false;
+            // Point-picking phase: route keyboard input to the active input helper.
+            // Do not forward the helper's return value — it signals "input was handled",
+            // not "command is complete". Returning IsCommandCompleted matches the pattern
+            // used by draw commands and prevents premature CompleteActiveCommand() calls.
+            if (_inputHelper != null)
+                _inputHelper.ProcessKeyboardInput(input);
+
+            return IsCommandCompleted;
         }
 
         protected override void PostCommandCleanup()
         {
             base.PostCommandCleanup();
+            _selectionTcs?.TrySetResult(new List<OpenCADObject>());
+            _selectionTcs = null;
             Context?.PostToUI(() =>
             {
-                var viewmodel = Context.GetActiveViewportViewModel();
-                if (viewmodel != null)
-                {
-                    viewmodel.SelectionChanged -= OnSelectionChanged;
-                    viewmodel.SelectionManager.ClearSelection();
-                }
+                var viewModel = Context.GetActiveViewportViewModel();
+                viewModel?.SelectionManager.ClearSelection();
             });
-            _needsSelection = false;
-            _initialSelectionCount = 0;
         }
 
         /// <summary>
@@ -200,8 +204,8 @@ namespace UI.Commands.Editing
             }
             finally
             {
-                // Ensure preview is cleaned up if something goes wrong
-                CommitPreview();
+                // Preview is no longer needed — the undo action committed the real objects
+                CancelPreview();
             }
         }
 
@@ -253,47 +257,51 @@ namespace UI.Commands.Editing
             if (undo == null)
                 return;
 
-            // Determine which objects we are transforming
-            List<OpenCADObject> objectsToTransform = SelectedObjects!;
-
             if (_preserveOriginal)
             {
-                var clones = new List<OpenCADObject>();
+                // Copy: add a transformed clone of each object as a new document object
+                int copied = 0;
                 foreach (var obj in SelectedObjects!)
                 {
-                    var clone = obj.Clone(Document);
-                    if (clone != null)
+                    if (obj is ICurve curve)
                     {
-                        Document.Add(clone);
-                        clones.Add(clone);
+                        var transformed = curve.Transform(matrix) as OpenCADObject;
+                        if (transformed != null)
+                        {
+                            undo.ExecuteAction(new AddGeometryAction(transformed, $"{GetCommandName(true)}"));
+                            copied++;
+                        }
+                    }
+                    else
+                    {
+                        Context?.OutputMessage($"Cannot copy object of type {obj.GetType().Name}");
                     }
                 }
-                objectsToTransform = clones;
+                Context?.OutputMessage($"{copied} object(s) copied");
+                return;
             }
 
-            // Apply transform using ReplaceGeometryAction
-            foreach (var obj in objectsToTransform)
+            // Move/rotate/scale: replace each original with its transformed version
+            int transformed_count = 0;
+            foreach (var obj in SelectedObjects!)
             {
                 if (obj is ICurve curve)
                 {
-                    var transformed = curve.Transform(matrix) as OpenCADObject; // returns new object
+                    var transformed = curve.Transform(matrix) as OpenCADObject;
                     if (transformed != null)
                     {
-                        var action = new ReplaceGeometryAction(obj, transformed,
-                            $"Transform {GetCommandName(true)}");
-
-                        undo.ExecuteAction(action);
+                        undo.ExecuteAction(new ReplaceGeometryAction(obj, transformed,
+                            $"{GetCommandName(true)}"));
+                        transformed_count++;
                     }
                 }
                 else
                 {
-                    // Non-curve objects may need their own transform logic
                     Context?.OutputMessage($"Cannot transform object of type {obj.GetType().Name}");
                 }
             }
 
-            Context?.OutputMessage(
-                $"{objectsToTransform.Count} object(s) transformed by {GetCommandName(true, true)}");
+            Context?.OutputMessage($"{transformed_count} object(s) {GetCommandName(pastTense: true)}");
         }
 
         private object? GetCommandName(bool capitized = false, bool pastTense = false)

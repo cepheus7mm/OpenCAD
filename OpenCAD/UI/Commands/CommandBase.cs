@@ -59,7 +59,7 @@ namespace UI.Commands
         public event EventHandler? PromptChanged;
         public event EventHandler? CommandCompletedEvent;
 
-        public virtual async Task Initialize(ICommandContext context)
+        public virtual async Task Initialize(ICommandContext context, CommandArgs? args = null)
         {
             Context = context;
             if (Context != null && Context.GetActiveViewportViewModel() != null)
@@ -78,6 +78,8 @@ namespace UI.Commands
                 };
             }
             Document = Context?.GetDocument();
+
+            _commandArgs = args;
         }
 
         public abstract Task Execute();
@@ -462,59 +464,47 @@ namespace UI.Commands
 
         protected Task<InputResult> GetEntity(string prompt, bool allowHover = false)
         {
-            if (Context == null)
-                throw new InvalidOperationException("No command context available.");
-
-            var viewport = Context.GetActiveViewportViewModel()
-                ?? throw new InvalidOperationException("No active viewport viewmodel available.");
-
-            Context.SetCommandPrompt(prompt);
-
-            var tcs = new TaskCompletionSource<InputResult>();
-            InputResult result = new();
-
-            EventHandler<ObjectSelectedEventArgs>? clickHandler = null;
-            EventHandler<ObjectHoverEventArgs>? hoverHandler = null;
-
-            // --- CLICK HANDLER ----------------------------------------------------
-            clickHandler = (s, e) =>
+            return GetEntity(new InputParams
             {
-                viewport.ObjectSelected -= clickHandler;
-                if (allowHover)
-                    viewport.ObjectHovered -= hoverHandler;
+                Prompt = prompt,
+                CancellationToken = (_cancellationTokenSource ??= new CancellationTokenSource()).Token,
+                Context = Context
+            }, allowHover);
+        }
 
-                result.ResultType = InputResult.InputResultType.ObjectAndPoint;
-                result.Object = e.Object;
-                result.Point = e.PickedPoint;
+        protected async Task<InputResult> GetEntity(
+            InputParams inputParams,
+            bool allowHover = false,
+            Func<OpenCADObject, (bool accepted, string? rejection)>? filter = null)
+        {
+            var viewModel = Context?.GetActiveViewportViewModel();
+            var badResult = new InputResult { ResultType = InputResult.InputResultType.Cancel };
+            if (viewModel == null || Context == null)
+                return badResult;
 
-                tcs.TrySetResult(result);
-            };
+            _cancellationTokenSource ??= new CancellationTokenSource();
+            _inputHelper = new GetEntityInput(Context, viewModel);
 
-            // --- HOVER HANDLER ----------------------------------------------------
-            if (allowHover)
+            if (inputParams.Context == null)
+                inputParams.Context = Context;
+
+            CurrentPrompt = inputParams.Prompt;
+
+            try
             {
-                hoverHandler = (s, e) =>
-                {
-                    if (e.Object != null && e.PickedPoint != Point3D.NotAPoint)
-                    {
-                        result.ResultType = InputResult.InputResultType.Hover;
-                        result.Object = e.Object;
-                        result.Point = e.PickedPoint; 
-                    }
-                    else
-                    {
-                        result.ResultType = InputResult.InputResultType.None;
-                    }
-
-                        tcs.TrySetResult(result);
-                };
-
-                viewport.ObjectHovered += hoverHandler;
+                return await ((GetEntityInput)_inputHelper).GetEntityAsync(
+                    inputParams,
+                    filter: filter,
+                    allowHover: allowHover);
             }
-
-            viewport.ObjectSelected += clickHandler;
-
-            return tcs.Task;
+            catch (OperationCanceledException)
+            {
+                return badResult;
+            }
+            finally
+            {
+                CurrentPrompt = string.Empty;
+            }
         }
 
         #region Preview support (shared)
@@ -533,6 +523,9 @@ namespace UI.Commands
         // Cached providers captured when preview starts (so awaits won't lose them)
         protected ViewportControl? viewport { get; private set; }
         protected OpenCADDocument? Document { get; private set; }
+
+        protected CommandArgs? _commandArgs;
+
         protected UndoRedoManager? CachedUndoManager { get; private set; }
 
         protected ViewportViewModel? CachedViewModel { get; private set; }
@@ -543,6 +536,9 @@ namespace UI.Commands
         /// </summary>
         public void BeginPreview()
         {
+            viewport = Context?.GetActiveViewport();
+            CachedUndoManager = Context?.GetUndoRedoManager();
+            CachedViewModel = Context?.GetActiveViewportViewModel();
             PreviewManager?.Begin();
         }
 
@@ -694,6 +690,35 @@ namespace UI.Commands
             }
 
             Context?.OutputMessage(createString);
+        }
+
+        protected async Task<InputResult> GetEnum<TEnum>(InputParams inputParams) where TEnum : struct, Enum
+        {
+            var viewModel = Context?.GetActiveViewportViewModel();
+            var badResult = new InputResult { ResultType = InputResult.InputResultType.Cancel };
+            if (viewModel == null || Context == null)
+                return badResult;
+
+            _cancellationTokenSource ??= new CancellationTokenSource();
+            _inputHelper = new GetEnumInput<TEnum>(Context, viewModel);
+
+            if (inputParams.Context == null)
+                inputParams.Context = Context;
+
+            CurrentPrompt = inputParams.Prompt;
+
+            try
+            {
+                return await ((GetEnumInput<TEnum>)_inputHelper).GetEnumAsync(inputParams);
+            }
+            catch (OperationCanceledException)
+            {
+                return badResult;
+            }
+            finally
+            {
+                CurrentPrompt = string.Empty;
+            }
         }
 
 #if DEBUG

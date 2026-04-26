@@ -64,8 +64,28 @@ namespace OpenCAD.Dimensions
             return new Line(new Point3D(d1.X, d1.Y, 0), new Point3D(d2.X, d2.Y, 0), _document);
         }
 
-        protected IDrawable TextDrawable(Vector2 textPos, float angle)
+        protected IDrawable TextDrawable(Vector2 textPos, Vector2 lineDirection)
         {
+            float angle = MathF.Atan2(lineDirection.Y, lineDirection.X);
+
+            // Normalize angle to [0, 2π)
+            float twoPi = MathF.PI * 2f;
+            angle = ((angle % twoPi) + twoPi) % twoPi;
+
+            // Flip text if angle falls outside the readable range.
+            // Readable range: [270° - overshoot, 90° + overshoot] i.e. right-side-up.
+            // Flip when angle > 90° + overshoot AND angle < 270° - overshoot.
+            float overshootRad = Style.TextAngleOvershoot * (MathF.PI / 180f);
+            float upperLimit = MathF.PI * 0.5f + overshootRad;   // 90° + overshoot
+            float lowerLimit = MathF.PI * 1.5f - overshootRad;   // 270° - overshoot
+
+            bool flip = angle > upperLimit && angle < lowerLimit;
+            if (flip)
+            {
+                angle -= MathF.PI; // rotate 180°
+                lineDirection = -lineDirection;
+            }
+
             var text = ComputeMeasurement().FormattedResult(_document);
             var sText = new SText(_document, text, new Point3D(textPos.X, textPos.Y, 0), angle);
             sText.FontSize = Style.ScaledTextHeight;
@@ -73,9 +93,9 @@ namespace OpenCAD.Dimensions
             float halfHeight = Style.ScaledTextHeight * 0.5f;
             float halfWidth = (float)sText.Length * 0.5f;
 
-            // Shift back along Direction to center, shift along Normal to raise above line
+            // Shift back along line direction to center, shift along Normal to raise above line
             Vector2 adjustedPos = textPos
-                - halfWidth * Direction
+                - halfWidth * lineDirection
                 + halfHeight * Normal;
 
             sText.BasePoint = new Point3D(adjustedPos.X, adjustedPos.Y, 0);

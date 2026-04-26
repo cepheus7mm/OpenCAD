@@ -12,9 +12,9 @@ namespace UI.Commands.Editing
     [InputCommand("copy", "Copy selected objects", "cp")]
     public class CopyCommand : EditCommandBase
     {
-        public override async Task Initialize(ICommandContext context)
+        public override async Task Initialize(ICommandContext context, CommandArgs? args = null)
         {
-            await base.Initialize(context);
+            await base.Initialize(context, args);
             _commandName = OpenCADStrings.CopyCommandName;
         }
 
@@ -23,23 +23,6 @@ namespace UI.Commands.Editing
             _preserveOriginal = true;
             _isRepeatable = true;
             await base.OnObjectsSelected();
-        }
-
-        public override bool ProcessInput(string input)
-        {
-            // During selection phase, let EditCommandBase handle it
-            if (SelectedObjects == null)
-            {
-                return base.ProcessInput(input);
-            }
-
-            // During point picking phase, pass to PointInputHelper
-            if (_inputHelper != null)
-            {
-                return _inputHelper.ProcessKeyboardInput(input);
-            }
-
-            return false;
         }
 
         protected override Matrix4D GetTransformation()

@@ -35,7 +35,12 @@ namespace OpenCAD.Dimensions
             var p2 = Ref2.ResolvePoint(Document);
 
             var delta = p2 - p1;
-            double value = Math.Abs(Vector2.Dot(delta, Direction));
+
+            Vector2 dir = Definition.DimensionType == DimensionTypeLinear.Aligned
+                ? Vector2.Normalize(delta)
+                : Direction;
+
+            double value = Math.Abs(Vector2.Dot(delta, dir));
 
             return new MeasurementResult(value, OpenCADDocument.UnitFormatType.Linear);
         }
@@ -45,45 +50,64 @@ namespace OpenCAD.Dimensions
         // -----------------------------
         public override IEnumerable<IDrawable> GenerateGeometry()
         {
-            // 1. Resolve points
+            // 1. Resolve extension line origins
             var p1 = Ref1.ResolvePoint(Document);
             var p2 = Ref2.ResolvePoint(Document);
 
-            // 2. Compute projection
-            // Scalar projections onto dimension direction
-            float s1 = Vector2.Dot(p1, Direction);
-            float s2 = Vector2.Dot(p2, Direction);
+            // For Aligned type, recompute direction from resolved points
+            // so the dimension stays aligned when the entity is dragged.
+            Vector2 dir = Direction;
+            Vector2 nrm = Normal;
+            if (Definition.DimensionType == DimensionTypeLinear.Aligned)
+            {
+                var delta = p2 - p1;
+                if (delta.LengthSquared() > 1e-12f)
+                {
+                    dir = Vector2.Normalize(delta);
+                    nrm = new Vector2(-dir.Y, dir.X);
+                }
+            }
 
-            // Foot points on the dimension axis
-            Vector2 f1 = s1 * Direction;
-            Vector2 f2 = s2 * Direction;
+            // 2. Compute dimension line endpoints
+            //    Offset is a signed distance along Normal.
+            Vector2 d1 = p1 + Offset * nrm;
+            Vector2 d2 = p2 + Offset * nrm;
 
-            // 3. Compute dimension line
-            Vector2 d1 = f1 + Offset * Normal;
-            Vector2 d2 = f2 + Offset * Normal;
+            // Project d2 onto the dimension direction passing through d1
+            // so the dimension line is always parallel to Direction.
+            float projectedLength = Vector2.Dot(p2 - p1, dir);
+            d2 = d1 + projectedLength * dir;
+
             yield return LineDrawable(d1, d2);
 
-            // 4. Compute extension lines
-            Vector2 ext1Start = p1 + Normal * Style.ScaledExtensionOffset;
-            Vector2 ext2Start = p2 + Normal * Style.ScaledExtensionOffset;
-            Vector2 ext1End = d1 + Normal * Style.ScaledExtensionBeyond;
-            Vector2 ext2End = d2 + Normal * Style.ScaledExtensionBeyond;
+            // 3. Extension lines
+            float offsetSign = MathF.Sign(Offset);
+            Vector2 extDir = offsetSign * nrm;
+
+            Vector2 ext1Start = p1 + extDir * Style.ScaledExtensionOffset;
+            Vector2 ext2Start = p2 + extDir * Style.ScaledExtensionOffset;
+
+            Vector2 ext1End = d1 + extDir * Style.ScaledExtensionBeyond;
+            Vector2 ext2End = d2 + extDir * Style.ScaledExtensionBeyond;
+
             yield return LineDrawable(ext1Start, ext1End);
             yield return LineDrawable(ext2Start, ext2End);
 
-            // 5. Compute arrows
-            Arrowhead arrow1 = ComputeArrowhead(d1, Direction, Normal, Style.ScaledArrowSize);
-            Arrowhead arrow2 = ComputeArrowhead(d2, -Direction, Normal, Style.ScaledArrowSize);
+            // 4. Arrowheads
+            //    Arrows must point inward along the dimension line (from each end toward the other).
+            Vector2 arrowDir1 = Vector2.Normalize(d2 - d1);   // d1 arrow points toward d2
+            Vector2 arrowDir2 = Vector2.Normalize(d1 - d2);   // d2 arrow points toward d1
+
+            Arrowhead arrow1 = ComputeArrowhead(d1, arrowDir1, nrm, Style.ScaledArrowSize);
+            Arrowhead arrow2 = ComputeArrowhead(d2, arrowDir2, nrm, Style.ScaledArrowSize);
             foreach (var drawable in arrow1.GenerateDrawables(Color, _document))
                 yield return drawable;
             foreach (var drawable in arrow2.GenerateDrawables(Color, _document))
                 yield return drawable;
 
-            // 6. Compute text
+            // 5. Text
             Vector2 textPos = 0.5f * (d1 + d2);
-            float angle = MathF.Atan2(Direction.Y, Direction.X);
-            yield return TextDrawable(textPos, angle);
-            // 7. Return drawables
+            yield return TextDrawable(textPos, arrowDir1);
         }
 
 

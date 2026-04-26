@@ -1,0 +1,107 @@
+{
+  "commands": [
+    { "id": "line",        "label": "Line",                    "icon": "Icons/Line.png",        "command": "LINE" },
+    { "id": "polyline",    "label": "Polyline",                "icon": "Icons/polyline.png",    "command": "POLYLINE" },
+    { "id": "arc_sce",     "label": "Arc – Start, Center, End",   "icon": "Icons/arc_sce.png",  "command": "ARC", "entryPoint": "StartCenterEnd" },
+    { "id": "arc_sca",     "label": "Arc – Start, Center, Angle", "icon": "Icons/arc_sca.png",  "command": "ARC", "entryPoint": "StartCenterAngle" },
+    { "id": "arc_sed",     "label": "Arc – Start, End, Direction","icon": "Icons/arc_sed.png",  "command": "ARC", "entryPoint": "StartEndDirection" },
+    { "id": "arc_ser",     "label": "Arc – Start, End, Radius",   "icon": "Icons/arc_ser.png",  "command": "ARC", "entryPoint": "StartEndRadius" },
+    { "id": "arc_sel",     "label": "Arc – Start, End, Length",   "icon": "Icons/arc_sel.png",  "command": "ARC", "entryPoint": "StartEndLength" },
+    { "id": "arc_3pt",     "label": "Arc – 3-Point",              "icon": "Icons/arc_3pt.png",  "command": "ARC", "entryPoint": "ThreePoint" },
+    { "id": "arc_cont",    "label": "Arc – Continue",             "icon": "Icons/arc_cont.png", "command": "ARC", "entryPoint": "Continue" },
+    { "id": "circle_cr",   "label": "Circle – Center, Radius",    "icon": "Icons/circle_cr.png",  "command": "CIRCLE", "entryPoint": "CenterRadius" },
+    { "id": "circle_cd",   "label": "Circle – Center, Diameter",  "icon": "Icons/circle_cd.png",  "command": "CIRCLE", "entryPoint": "CenterDiameter" },
+    { "id": "circle_2pt",  "label": "Circle – 2-Point",           "icon": "Icons/circle_2pt.png", "command": "CIRCLE", "entryPoint": "TwoPoint" },
+    { "id": "circle_3pt",  "label": "Circle – 3-Point",           "icon": "Icons/circle_3pt.png", "command": "CIRCLE", "entryPoint": "ThreePoint" },
+    { "id": "text",        "label": "Text",                    "icon": "Icons/text.png",        "command": "TEXT" },
+    { "id": "dim_linear",  "label": "Linear Dimension",        "icon": "Icons/dim_linear.png",  "command": "DIMLINEAR" },
+    { "id": "erase",       "label": "Erase",                   "icon": "Icons/erase.png",       "command": "ERASE" },
+    { "id": "move",        "label": "Move",                    "icon": "Icons/move.png",        "command": "MOVE" },
+    { "id": "copy",        "label": "Copy",                    "icon": "Icons/copy.png",        "command": "COPY" },
+    { "id": "rotate",      "label": "Rotate",                  "icon": "Icons/rotate.png",      "command": "ROTATE" },
+    { "id": "scale",       "label": "Scale",                   "icon": "Icons/scale.png",       "command": "SCALE" },
+    { "id": "offset",      "label": "Offset",                  "icon": "Icons/offset.png",      "command": "OFFSET" },
+    { "id": "fillet",      "label": "Fillet",                  "icon": "Icons/fillet.png",      "command": "FILLET" }
+  ],
+  "menuBar": [
+    {
+      "label": "Draw",
+      "items": [
+        { "commandId": "line" },
+        { "commandId": "polyline" },
+        { "separator": true },
+        {
+          "label": "Arc",
+          "items": [
+            { "commandId": "arc_sce" },
+            { "commandId": "arc_sca" },
+            { "commandId": "arc_sed" },
+            { "commandId": "arc_ser" },
+            { "commandId": "arc_sel" },
+            { "commandId": "arc_3pt" },
+            { "commandId": "arc_cont" }
+          ]
+        },
+        {
+          "label": "Circle",
+          "items": [
+            { "commandId": "circle_cr" },
+            { "commandId": "circle_cd" },
+            { "commandId": "circle_2pt" },
+            { "commandId": "circle_3pt" }
+          ]
+        },
+        { "separator": true },
+        { "commandId": "text" },
+        { "separator": true },
+        {
+          "label": "Dimension",
+          "items": [
+            { "commandId": "dim_linear" }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "Modify",
+      "items": [
+        { "commandId": "erase" },
+        { "commandId": "move" },
+        { "commandId": "copy" },
+        { "commandId": "rotate" },
+        { "commandId": "scale" },
+        { "separator": true },
+        { "commandId": "offset" },
+        { "commandId": "fillet" }
+      ]
+    }
+  ],
+  "toolBar": [
+    {
+      "label": "Draw",
+      "items": [
+        { "commandId": "line" },
+        { "commandId": "polyline" },
+        { "separator": true },
+        { "commandId": "arc_sce" },
+        { "commandId": "circle_cr" },
+        { "separator": true },
+        { "commandId": "text" },
+        { "commandId": "dim_linear" }
+      ]
+    },
+    {
+      "label": "Modify",
+      "items": [
+        { "commandId": "erase" },
+        { "commandId": "move" },
+        { "commandId": "copy" },
+        { "commandId": "rotate" },
+        { "commandId": "scale" },
+        { "separator": true },
+        { "commandId": "offset" },
+        { "commandId": "fillet" }
+      ]
+    }
+  ]
+}

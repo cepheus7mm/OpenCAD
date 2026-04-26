@@ -76,6 +76,10 @@ namespace UI
             };
             _autoSaveTimer.Tick += AutoSave_Tick;
             _autoSaveTimer.Start();
+
+            // Hook up command requested event
+            menuBar.CommandRequested += OnCommandRequested;
+            toolBar.CommandRequested += OnCommandRequested;
         }
 
         #region Window State Persistence
@@ -126,8 +130,10 @@ namespace UI
             // Restore theme
             if (!string.IsNullOrEmpty(settings.Theme))
             {
+                bool isLight = settings.Theme.Contains("Light");
                 ApplyTheme(settings.Theme);
-                menuBar.UpdateThemeSelection(isLightTheme: settings.Theme.Contains("Light"));
+                dockingArea.ApplyAvalonDockTheme(isLight);
+                menuBar.UpdateThemeSelection(isLightTheme: isLight);
             }
         }
 
@@ -742,6 +748,7 @@ namespace UI
         private void LightTheme_Click(object sender, RoutedEventArgs e)
         {
             ApplyTheme("Themes/LightTheme.xaml");
+            dockingArea.ApplyAvalonDockTheme(isLightTheme: true);
             menuBar.UpdateThemeSelection(isLightTheme: true);
             statusBar.UpdateStatus("Light theme applied");
 
@@ -753,6 +760,7 @@ namespace UI
         private void DarkTheme_Click(object sender, RoutedEventArgs e)
         {
             ApplyTheme("Themes/DarkTheme.xaml");
+            dockingArea.ApplyAvalonDockTheme(isLightTheme: false);
             menuBar.UpdateThemeSelection(isLightTheme: false);
             statusBar.UpdateStatus("Dark theme applied");
 
@@ -889,6 +897,16 @@ namespace UI
             SaveWindowState();
             
             base.OnClosing(e);
+        }
+
+        private async void OnCommandRequested(object? sender, string fullCommand)
+        {
+            // Route to the command input view model so the command line system handles it
+            var vm = dockingArea.CommandInput.DataContext as CommandInputViewModel;
+            if (vm != null)
+            {
+                await vm.ExecuteCommandProgrammatically(fullCommand);
+            }
         }
     }
 }

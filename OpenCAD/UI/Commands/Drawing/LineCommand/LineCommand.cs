@@ -22,9 +22,9 @@ namespace UI.Commands.Drawing.LineCommand
 
         public override bool IsMultiStep => true;
 
-        public override async Task Initialize(ICommandContext context)
+        public override async Task Initialize(ICommandContext context, CommandArgs? args = null)
         {
-            await base.Initialize(context);
+            await base.Initialize(context, args);
         }
 
         public override async Task Execute()
@@ -37,16 +37,22 @@ namespace UI.Commands.Drawing.LineCommand
             {
                 BasePoint = mode.GetBasePoint();
 
-                var result = await GetPoint(new InputParams
+                var inputParams = new InputParams
                 {
                     Prompt = mode.Prompt,
                     BasePoint = BasePoint,
                     Keywords = mode.Keywords,
                     AllowLastPoint = true,
+                    DefaultValue = mode is NextPointMode ? "done" : null,
                     CancellationToken = _cancellationTokenSource.Token
-                });
+                };
+
+                var result = await GetPoint(inputParams);
 
                 if (result.IsCancel)
+                    break;
+
+                if (result.IsDefault && mode is NextPointMode)
                     break;
 
                 if (result.IsKeyword)

@@ -46,9 +46,10 @@ namespace UI.Commands.Drawing.Dimensions.Linear.Modes
         public override IEnumerable<OpenCADObject> GetPreview(LinearDimensionCommand command)
         {
             var offset = ComputeOffset(command.GetTarget());
-            command.SetOffset(offset);
-            var dimDef = command.GetDimensionDefinition();
-            var dimension = new LinearDimension(dimDef);
+
+            // Build a preview definition without mutating command state
+            var previewDef = command.GetDimensionDefinition((float)offset);
+            var dimension = new LinearDimension(previewDef);
             foreach (var item in dimension.GenerateGeometry())
             {
                 yield return (OpenCADObject)item;

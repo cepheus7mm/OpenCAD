@@ -26,6 +26,7 @@ namespace OpenCAD.Undo
             {
                 _original = original ?? throw new ArgumentNullException(nameof(original));
                 _replacement = replacement ?? throw new ArgumentNullException(nameof(replacement));
+                _replacement.ID = _original.ID;
                 Description = description;
             }
 

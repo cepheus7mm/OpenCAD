@@ -24,34 +24,44 @@ namespace OpenCAD.Dimensions
         }
         public Vector2 ResolvePoint(OpenCADDocument? document = null)
         {
+            // 1. Try resolving from the associated entity first
+            if (document is not null && EntityId != Guid.Empty)
+            {
+                var curve = document.GetChild(EntityId) as ICurve;
+                if (curve is not null)
+                {
+                    if (SubEntity is null)
+                        return ResolveDefaultPoint(curve);
+
+                    var parts = SubEntity.Split(':');
+                    var resolved = parts[0] switch
+                    {
+                        "Start" => ResolveStartPoint(curve),
+                        "End" => ResolveEndPoint(curve),
+                        "Center" => ResolveCenterPoint(curve),
+                        "Point" => ResolvePointEntity(curve),
+                        "Vertex" => ResolveVertex(curve, int.Parse(parts[1])),
+                        "Param" => ResolveCurveParam(curve, double.Parse(parts[1])),
+                        _ => (Vector2?)null
+                    };
+
+                    if (resolved.HasValue)
+                        return resolved.Value;
+                }
+            }
+
+            // 2. Fall back to cached point
             if (Point.HasValue)
                 return Point.Value;
-            if (document is null || EntityId == Guid.Empty)
-                return Vector2.Zero; // non-associative fallback
-            // 1. Lookup entity
-            var curve = document.GetChild(EntityId) as ICurve;
 
-            if (curve is null)
-                return Vector2.Zero; // non-associative fallback
+            return Vector2.Zero;
+        }
 
-            // 2. No sub-entity? Try default point
-            if (SubEntity is null)
-                return ResolveDefaultPoint(curve);
-
-            // 3. Parse sub-entity
-            var parts = SubEntity.Split(':');
-
-            return parts[0] switch
-            {
-                "Start" => ResolveStartPoint(curve),
-                "End" => ResolveEndPoint(curve),
-                "Center" => ResolveCenterPoint(curve),
-                "Point" => ResolvePointEntity(curve),
-                "Vertex" => ResolveVertex(curve, int.Parse(parts[1])),
-                "Param" => ResolveCurveParam(curve, double.Parse(parts[1])),
-
-                _ => Vector2.Zero
-            };
+        public bool IsAssociative(OpenCADDocument? document)
+        {
+            return EntityId != Guid.Empty
+                && document is not null
+                && document.GetChild(EntityId) is ICurve;
         }
 
         private Vector2 ResolveCurveParam(ICurve curve, double v)

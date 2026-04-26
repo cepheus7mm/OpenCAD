@@ -54,7 +54,7 @@ namespace OpenCAD.Geometry.Helpers.GeoPoints
             {
                 var provider = _geoPointProviderFactory.GetProvider(obj);
 
-                foreach (var gp in provider.GetGeoPoints(obj, activeModes, cursorWorld))
+                foreach (var gp in provider?.GetGeoPoints(obj, activeModes, cursorWorld) ?? Enumerable.Empty<GeoPoint>())
                 {
                     double distSq = (gp.Position - cursorWorld).LengthSquared;
                     if (gp.PointType == GeoPointModes.Center && gp.Owner != null)

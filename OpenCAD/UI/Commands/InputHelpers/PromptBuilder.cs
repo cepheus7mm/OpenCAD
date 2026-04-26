@@ -73,12 +73,20 @@ namespace UI.Commands.InputHelpers
 
         private static string FormatDefault(InputParams inputParams)
         {
+            if (inputParams.DefaultValue == null)
+                return string.Empty;
+
             if (inputParams.Context != null && inputParams.UnitFormatType != null && inputParams.DefaultValue is double def)
             {
                 string formatted = inputParams.Context.GetDocument()?.ValueToString(def, inputParams.UnitFormatType.Value) ?? string.Empty;
                 if (!string.IsNullOrEmpty(formatted))
                     return $" <{formatted}>";
             }
+
+            // Fallback for non-numeric defaults (e.g. enum values, strings)
+            string text = inputParams.DefaultValue.ToString() ?? string.Empty;
+            if (!string.IsNullOrEmpty(text))
+                return $" <{text}>";
 
             return string.Empty;
         }

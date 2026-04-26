@@ -330,6 +330,7 @@
         public const string DimExtensionLength = "Extension Length";
         public const string DimExtensionOffset = "Extension Offset";
         public const string DimExtensionBeyond = "Extension Beyond";
+        public const string DimTextAngleOvershoot = "Text Angle Overshoot";
 
         public const string DefaultDimensionStyleName = "Standard";
 

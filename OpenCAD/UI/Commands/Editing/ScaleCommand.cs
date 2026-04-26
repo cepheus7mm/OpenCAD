@@ -13,26 +13,10 @@ namespace UI.Commands.Editing
     [InputCommand("scale", "Scale selected objects", "sc")]
     public class ScaleCommand : EditCommandBase
     {
-        public override async Task Initialize(ICommandContext context)
+        public override async Task Initialize(ICommandContext context, CommandArgs? args = null)
         {
-            await base.Initialize(context);
+            await base.Initialize(context, args);
             _commandName = OpenCADStrings.ScaleCommandName;
-        }
-
-        protected override async Task OnObjectsSelected()
-        {
-            await base.OnObjectsSelected();
-        }
-
-        public override bool ProcessInput(string input)
-        {
-            if (SelectedObjects == null)
-                return base.ProcessInput(input);
-
-            if (_inputHelper != null)
-                return _inputHelper.ProcessKeyboardInput(input);
-
-            return false;
         }
 
         protected override Matrix4D GetTransformation()

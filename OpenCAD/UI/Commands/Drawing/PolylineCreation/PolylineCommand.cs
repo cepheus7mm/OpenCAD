@@ -40,9 +40,9 @@ namespace UI.Commands.Drawing.PolylineCreation
         public Point3D? FirstPoint => _vertices.Count > 0 ? _vertices[0].Position : null;
         public Point3D? LastPoint => _vertices.Count > 0 ? _vertices[^1].Position : null;
 
-        public override async Task Initialize(ICommandContext context)
+        public override async Task Initialize(ICommandContext context, CommandArgs? args = null)
         {
-            await base.Initialize(context);
+            await base.Initialize(context, args);
         }
 
         public OpenCADDocument? GetDocument() => Document;

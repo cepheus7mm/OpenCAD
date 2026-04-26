@@ -21,9 +21,9 @@ namespace UI.Commands.Editing.Fillet
         private readonly FilletSolver _solver = new();
         private UndoRedoManager? _undoRedoManager;
 
-        public override async Task Initialize(ICommandContext context)
+        public override async Task Initialize(ICommandContext context, CommandArgs? args = null)
         {
-            await base.Initialize(context);
+            await base.Initialize(context, args);
             _commandName = OpenCADStrings.FilletCommandName;
             var doc = context.GetDocument();
             if (doc != null)

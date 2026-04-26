@@ -174,6 +174,17 @@ namespace OpenCAD.Styles
             set => SetPropertyValue(PropertyType.DoubleUnitLess, nameof(Scale), OpenCADStrings.DimScale, (double)value);
         }
 
+        /// <summary>
+        /// Gets or sets the allowable overshoot angle (in degrees) beyond the 90°/270° readability
+        /// boundary before dimension text is flipped. Default is 5°.
+        /// </summary>
+        [JsonIgnore, XmlIgnore]
+        public float TextAngleOvershoot
+        {
+            get => (float)GetPropertyValue<double>(PropertyType.DoubleUnitLess, nameof(TextAngleOvershoot));
+            set => SetPropertyValue(PropertyType.DoubleUnitLess, nameof(TextAngleOvershoot), OpenCADStrings.DimTextAngleOvershoot, (double)value);
+        }
+
         // -------------------------------------------------
         // Scaled accessors – rendering code should use these
         // -------------------------------------------------

@@ -6,7 +6,7 @@
 	xmlns:local="clr-namespace:UI.Controls.MainWindow"
     mc:Ignorable="d"
 	d:DesignHeight="25" d:DesignWidth="800">
-	<Menu Height="25" Background="{DynamicResource MenuBackgroundBrush}"
+	<Menu x:Name="mainMenu" Height="25" Background="{DynamicResource MenuBackgroundBrush}"
           Foreground="{DynamicResource PrimaryTextBrush}">
 		<MenuItem Header="_File">
 			<MenuItem Header="_New" Click="NewFile_Click" />
@@ -32,6 +32,7 @@
 				<MenuItem Header="_Dark Theme" Name="DarkThemeMenuItem" Click="DarkTheme_Click" IsCheckable="True" />
 			</MenuItem>
 		</MenuItem>
+		<!-- Dynamic menus (Draw, Modify, etc.) injected here by code-behind -->
 		<MenuItem Header="_Help">
 			<MenuItem Header="_About" />
 		</MenuItem>

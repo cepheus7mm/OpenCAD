@@ -32,14 +32,20 @@ namespace UI.Commands.Drawing.Dimensions.Linear
         private double _offset;
         private OpenCADDimensionStyle? _dimensionStyle;
         private DimensionUnits? _dimensionUnits;
+        private DimensionTypeLinear _dimensionType = DimensionTypeLinear.Aligned;
+
+        // -------------------------
+        // Associative state
+        // -------------------------
+        private Guid _associatedEntityId = Guid.Empty;
 
         public LinearDimensionCommand()
         {
         }
 
-        public override async Task Initialize(ICommandContext context)
+        public override async Task Initialize(ICommandContext context, CommandArgs? args = null)
         {
-            await base.Initialize(context);
+            await base.Initialize(context, args);
             CreateDimensionStyle();
             CreateDimensionUnits();
         }
@@ -53,6 +59,14 @@ namespace UI.Commands.Drawing.Dimensions.Linear
         public Point3D GetTarget() => TargetPoint;
 
         // -------------------------
+        // Entity filter for AssociateMode
+        // -------------------------
+        private static readonly Func<OpenCADObject, (bool, string?)> _lineFilter =
+            obj => obj is Line
+                ? (true, null)
+                : (false, "Object is not a line.");
+
+        // -------------------------
         // Execute loop
         // -------------------------
         public override async Task Execute()
@@ -62,8 +76,9 @@ namespace UI.Commands.Drawing.Dimensions.Linear
             _secondPoint = null;
             _direction = null;
             _offset = 0;
+            _associatedEntityId = Guid.Empty;
 
-            _mode = new FirstPointMode();
+            _mode = new AssociateMode();
 
             while (_mode is not FinishedMode)
             {
@@ -86,6 +101,8 @@ namespace UI.Commands.Drawing.Dimensions.Linear
                     UserInputType.Point => await GetPoint(inputParams),
                     UserInputType.Distance => await GetDistance(inputParams),
                     UserInputType.Angle => await GetAngle(inputParams),
+                    UserInputType.Entity => await GetEntity(inputParams, filter: _lineFilter),
+                    UserInputType.Enum => await GetEnum<DimensionTypeLinear>(inputParams),
                     _ => throw new InvalidOperationException("Unsupported input type")
                 };
 
@@ -94,7 +111,25 @@ namespace UI.Commands.Drawing.Dimensions.Linear
 
                 if (result.IsKeyword)
                 {
+                    if (_mode is TypeMode typeMode && Enum.TryParse<DimensionTypeLinear>(result.Keyword, true, out var dimType))
+                    {
+                        typeMode.SetType(dimType);
+                        if (_mode.IsComplete)
+                            _mode = _mode.Apply(this);
+                        continue;
+                    }
+
                     _mode = HandleKeyword(_mode, result.Keyword);
+                    continue;
+                }
+
+                if (result.IsObject && _mode is AssociateMode associateMode)
+                {
+                    associateMode.SetEntity(result.Object!);
+
+                    if (_mode.IsComplete)
+                        _mode = _mode.Apply(this);
+
                     continue;
                 }
 
@@ -121,7 +156,7 @@ namespace UI.Commands.Drawing.Dimensions.Linear
                 }
             }
 
-            if (_firstPoint.HasValue && _secondPoint.HasValue && _direction.HasValue)
+            if (_mode is FinishedMode && _firstPoint.HasValue && _secondPoint.HasValue && _direction.HasValue)
                 CreateDimension();
         }
 
@@ -172,6 +207,19 @@ namespace UI.Commands.Drawing.Dimensions.Linear
 
         public void SetOffset(double offset) => _offset = offset;
 
+        public void SetDimensionType(DimensionTypeLinear type) => _dimensionType = type;
+
+        /// <summary>
+        /// Sets both extension line origins and the associated entity ID from a selected line.
+        /// Called by AssociateMode when the user selects a line for associative dimensioning.
+        /// </summary>
+        public void SetAssociatedEntity(ICurve curve)
+        {
+            _firstPoint = curve.StartPoint;
+            _secondPoint = curve.EndPoint;
+            _associatedEntityId = ((OpenCADObject)curve).ID;
+        }
+
         // -------------------------
         // Dimension creation
         // -------------------------
@@ -184,21 +232,22 @@ namespace UI.Commands.Drawing.Dimensions.Linear
             CreateObject(dimension);
         }
 
-        internal DimensionDefinition GetDimensionDefinition()
+        internal DimensionDefinition GetDimensionDefinition(float? offsetOverride = null)
         {
             var dir2 = new Vector2((float)_direction!.Value.X, (float)_direction!.Value.Y);
             var normal = new Vector2(-dir2.Y, dir2.X);
 
             var definition = new DimensionDefinition
             {
-                Ref1 = new EntityReference(Guid.Empty, null, _firstPoint),
-                Ref2 = new EntityReference(Guid.Empty, null, _secondPoint),
+                Ref1 = new EntityReference(_associatedEntityId, "Start", _firstPoint),
+                Ref2 = new EntityReference(_associatedEntityId, "End", _secondPoint),
                 Direction = dir2,
                 Normal = normal,
-                Offset = (float)_offset,
+                Offset = offsetOverride ?? (float)_offset,
                 Style = _dimensionStyle,
                 Units = _dimensionUnits,
-                Document = Document
+                Document = Document,
+                DimensionType = _dimensionType
             };
             return definition;
         }
@@ -213,29 +262,9 @@ namespace UI.Commands.Drawing.Dimensions.Linear
 
             switch (keyword)
             {
-                case "H":
-                case "HORIZONTAL":
-                    SetDirection(Vector3D.UnitX);
-                    if (_firstPoint.HasValue && _secondPoint.HasValue)
-                        return new OffsetMode(_firstPoint.Value, _secondPoint.Value, Vector3D.UnitX);
-                    break;
-
-                case "V":
-                case "VERTICAL":
-                    SetDirection(Vector3D.UnitY);
-                    if (_firstPoint.HasValue && _secondPoint.HasValue)
-                        return new OffsetMode(_firstPoint.Value, _secondPoint.Value, Vector3D.UnitY);
-                    break;
-
-                case "A":
-                case "ALIGNED":
-                    if (_firstPoint.HasValue && _secondPoint.HasValue)
-                    {
-                        var aligned = (_secondPoint.Value - _firstPoint.Value).Normalized;
-                        SetDirection(aligned);
-                        return new OffsetMode(_firstPoint.Value, _secondPoint.Value, aligned);
-                    }
-                    break;
+                case "P":
+                case "POINTS":
+                    return new FirstPointMode();
             }
 
             return mode;

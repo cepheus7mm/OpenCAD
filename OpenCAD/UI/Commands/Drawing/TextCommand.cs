@@ -23,9 +23,9 @@ namespace UI.Commands.Drawing
 
         public override bool IsMultiStep => true;
 
-        public override async Task Initialize(ICommandContext context)
+        public override async Task Initialize(ICommandContext context, CommandArgs? args = null)
         {
-            await base.Initialize(context);
+            await base.Initialize(context, args);
         }
 
         public override async Task Execute()

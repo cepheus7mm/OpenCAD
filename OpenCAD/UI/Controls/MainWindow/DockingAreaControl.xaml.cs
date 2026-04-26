@@ -303,6 +303,21 @@ namespace UI.Controls.MainWindow
 		}
 
 		/// <summary>
+		/// Switches the AvalonDock chrome theme to match the application theme.
+		/// </summary>
+		public void ApplyAvalonDockTheme(bool isLightTheme)
+		{
+			string component = isLightTheme ? "BlueTheme.xaml" : "DarkTheme.xaml";
+			var uri = new Uri(
+				$"pack://application:,,,/AvalonDock.Themes.VS2013;component/{component}",
+				UriKind.Absolute);
+
+			var themeDict = new ResourceDictionary { Source = uri };
+			dockingManager.Resources.MergedDictionaries.Clear();
+			dockingManager.Resources.MergedDictionaries.Add(themeDict);
+		}
+
+		/// <summary>
 		/// Applies theme to all TextBox controls in the docking area
 		/// </summary>
 		public void ApplyThemeToDocuments()

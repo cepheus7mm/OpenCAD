@@ -26,9 +26,7 @@ namespace UI.Commands.Drawing.Dimensions.Linear.Modes
         public override ILinearDimensionMode Apply(LinearDimensionCommand command)
         {
             command.SetSecondPoint(InputPoint!.Value);
-            command.SetDirection(InputPoint.Value - _firstPoint);
-
-            return new DirectionMode(_firstPoint, InputPoint!.Value);
+            return new TypeMode(_firstPoint, InputPoint!.Value);
         }
     }
 }

@@ -16,6 +16,36 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Remove="Resources\Icons\arc.png" />
+    <None Remove="Resources\Icons\arc_3pt.png" />
+    <None Remove="Resources\Icons\arc_cont.png" />
+    <None Remove="Resources\Icons\arc_sca.png" />
+    <None Remove="Resources\Icons\arc_sce.png" />
+    <None Remove="Resources\Icons\arc_sed.png" />
+    <None Remove="Resources\Icons\arc_sel.png" />
+    <None Remove="Resources\Icons\arc_ser.png" />
+    <None Remove="Resources\Icons\circle.png" />
+    <None Remove="Resources\Icons\circle_2pt.png" />
+    <None Remove="Resources\Icons\circle_3pt.png" />
+    <None Remove="Resources\Icons\circle_cd.png" />
+    <None Remove="Resources\Icons\circle_cr.png" />
+    <None Remove="Resources\Icons\copy.png" />
+    <None Remove="Resources\Icons\dimesion.png" />
+    <None Remove="Resources\Icons\dim_linear.png" />
+    <None Remove="Resources\Icons\erase.png" />
+    <None Remove="Resources\Icons\fillet.png" />
+    <None Remove="Resources\Icons\Line.png" />
+    <None Remove="Resources\Icons\move.png" />
+    <None Remove="Resources\Icons\offset.png" />
+    <None Remove="Resources\Icons\polyline.png" />
+    <None Remove="Resources\Icons\rotate.png" />
+    <None Remove="Resources\Icons\scale.png" />
+    <None Remove="Resources\Icons\text.png" />
+    <None Remove="Resources\menus.json" />
+    <None Remove="Resources\OpenCAD.jpg" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Page Remove="Themes\DarkTheme.xaml" />
     <Page Remove="Themes\LightTheme.xaml" />
     <Page Remove="Themes\WindowChrome.xaml" />
@@ -36,6 +66,33 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Resource Include="Resources\Icons\arc.png" />
+    <Resource Include="Resources\Icons\arc_3pt.png" />
+    <Resource Include="Resources\Icons\arc_cont.png" />
+    <Resource Include="Resources\Icons\arc_sca.png" />
+    <Resource Include="Resources\Icons\arc_sce.png" />
+    <Resource Include="Resources\Icons\arc_sed.png" />
+    <Resource Include="Resources\Icons\arc_sel.png" />
+    <Resource Include="Resources\Icons\arc_ser.png" />
+    <Resource Include="Resources\Icons\circle.png" />
+    <Resource Include="Resources\Icons\circle_2pt.png" />
+    <Resource Include="Resources\Icons\circle_3pt.png" />
+    <Resource Include="Resources\Icons\circle_cd.png" />
+    <Resource Include="Resources\Icons\circle_cr.png" />
+    <Resource Include="Resources\Icons\copy.png" />
+    <Resource Include="Resources\Icons\dimesion.png" />
+    <Resource Include="Resources\Icons\dim_linear.png" />
+    <Resource Include="Resources\Icons\erase.png" />
+    <Resource Include="Resources\Icons\fillet.png" />
+    <Resource Include="Resources\Icons\Line.png" />
+    <Resource Include="Resources\Icons\move.png" />
+    <Resource Include="Resources\Icons\offset.png" />
+    <Resource Include="Resources\Icons\polyline.png" />
+    <Resource Include="Resources\Icons\rotate.png" />
+    <Resource Include="Resources\Icons\scale.png" />
+    <Resource Include="Resources\Icons\text.png" />
+    <Resource Include="Resources\menus.json" />
+    <Resource Include="Resources\OpenCAD.jpg" />
     <Resource Include="Themes\DarkTheme.xaml" />
     <Resource Include="Themes\LightTheme.xaml" />
     <Resource Include="Themes\WindowChrome.xaml" />

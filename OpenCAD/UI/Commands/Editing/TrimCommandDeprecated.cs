@@ -42,7 +42,7 @@ namespace UI.Commands.Editing
             }
         }
 
-        public override async Task Initialize(ICommandContext context)
+        public override async Task Initialize(ICommandContext context, CommandArgs? args = null)
         {
             await base.Initialize(context);
             _undoTransaction = Context?.GetUndoRedoManager()?.BeginTransaction("Trim");

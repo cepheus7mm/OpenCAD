@@ -16,6 +16,6 @@ namespace OpenCAD.Dimensions
         public bool IsTextFlipped { get; init; }
         public bool IsDragged { get; init; }
         public OpenCADDocument? Document { get; init; }
-
+        public DimensionTypeLinear DimensionType { get; init; }
     }
 }

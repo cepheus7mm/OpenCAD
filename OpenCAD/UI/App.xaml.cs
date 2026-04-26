@@ -17,6 +17,9 @@ namespace UI
 
         protected override void OnStartup(StartupEventArgs e)
         {
+            var splashScreen = new SplashScreen("Resources/OpenCAD.jpg");
+            splashScreen.Show(autoClose: true, topMost: true);
+
             base.OnStartup(e);
 
             var services = new ServiceCollection();

@@ -20,7 +20,7 @@
 		<converters:ColorToPickerVisibilityConverter x:Key="ColorToPickerVisibilityConverter"/>
 
 		<!-- Style for Value column cells - No selection highlight -->
-		<Style x:Key="ValueCellStyle" TargetType="DataGridCell">
+		<Style x:Key="ValueCellStyle" TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
 			<Setter Property="BorderThickness" Value="0"/>
 			<Setter Property="FocusVisualStyle" Value="{x:Null}"/>
 			<Style.Triggers>
